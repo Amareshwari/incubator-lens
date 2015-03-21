@@ -1,0 +1,126 @@
+~~
+~~ Licensed to the Apache Software Foundation (ASF) under one
+~~ or more contributor license agreements.  See the NOTICE file
+~~ distributed with this work for additional information
+~~ regarding copyright ownership.  The ASF licenses this file
+~~ to you under the Apache License, Version 2.0 (the
+~~ "License"); you may not use this file except in compliance
+~~ with the License.  You may obtain a copy of the License at
+~~
+~~   http://www.apache.org/licenses/LICENSE-2.0
+~~
+~~ Unless required by applicable law or agreed to in writing,
+~~ software distributed under the License is distributed on an
+~~ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+~~ KIND, either express or implied.  See the License for the
+~~ specific language governing permissions and limitations
+~~ under the License.
+~~
+
+Branching and Release Guide
+
+%{toc}
+
+  This page provides necessary guidelines for branching, releasing of Apache Lens.
+
+* Main Branches
+
+  Lens has two main branches - <<master>> and <<current-release-line>>. All the day to day development happens on
+  <<master>> branch. <<current-release-line>> branch is used to make releases. When <<master>> branch is ready for
+  release (all issues marked for release are fixed and all tests passing), <<master>> will be merged to
+  <<current-release-line>> and release will be triggered from <<current-release-line>>. The version number on <<master>>
+  will be incremented to next development version. Once the release is done on <<current-release-line>> will be merged
+  back into <<master>> for any other changes done on the release line, conflicts to do with version number will be
+  resolved by release manager, patches would be requested for master, if there are conflicts wrt other changes done on
+  release line.
+
+ If a critical release (not pulling code from master) needs to be made, a new branch will be created with release number, by checking out <current-release-line> branch. And changes will be put on the branch. Once the branch is ready they will merged to <current-release-line> and released. The changes should be merged back into <master> from <current-release-line> once the release is made and resolving conflicts in <master> if any.
+
+  There can feature branches created from <master>, if feature is not actively developed in <master> branch directly.
+
+  Having two main branches makes all release tags to be created on <current-release-line> branch and removes the pile up of old and stale branches, which are created by one for each release. And merging of issues done by critical patch release is already taken care.
+
+ For major version increments, <current-release-line> will be branched to a a <$major.x-line> and <current-release-line> and master will be moved to next major version.
+
+* Release guides
+
+http://incubator.apache.org/guides/releasemanagement.html
+
+http://www.apache.org/dev/release.html
+http://incubator.apache.org/incubation/Incubation_Policy.html#Releases
+
+Refer https://uima.apache.org/release.html
+
+http://wiki.apache.org/hadoop/HowToRelease
+* Verifying a release
+
+* Preparing for release
+http://incubator.apache.org/guides/releasemanagement.html#best-practice
+ - Analyze bugs
+ - Prepare documentation
+ 
+* How to release
+http://www.apache.org/dev/publishing-maven-artifacts.html
+
+mvn clean install -Papache-release
+
+mvn release:clean
+mvn release:prepare -DdryRun=true
+mvn release:clean
+mvn release:prepare
+
+cd target/
+gpg --armor --output apache-lens-2.0.1-beta-incubating-source-release.zip.asc --detach-sig apache-lens-2.0.1-beta-incubating-source-release.zip 
+gpg --print-md SHA512 apache-lens-2.0.1-beta-incubating-source-release.zip > apache-lens-2.0.1-beta-incubating-source-release.zip.sha512
+gpg --print-md MD5  apache-lens-2.0.1-beta-incubating-source-release.zip > apache-lens-2.0.1-beta-incubating-source-release.zip.md5
+
+mkdir ../../apache-lens-2.0.1-beta-incubating-rc1
+cp apache-lens-2.0.1-beta-incubating-source-release.zip* ../../apache-lens-2.0.1-beta-incubating-rc1
+
+cd ../lens-dist/target/
+gpg --armor --output apache-lens-2.0.1-beta-incubating-bin.tar.gz.asc --detach-sig apache-lens-2.0.1-beta-incubating-bin.tar.gz
+gpg --print-md SHA512 apache-lens-2.0.1-beta-incubating-bin.tar.gz > apache-lens-2.0.1-beta-incubating-bin.tar.gz.sha512
+gpg --print-md MD5 apache-lens-2.0.1-beta-incubating-bin.tar.gz > apache-lens-2.0.1-beta-incubating-bin.tar.gz.md5
+
+cd ../..
+scp -r apache-lens-2.0.1-beta-incubating-rc1/ amareshwaris@databusdev1.mkhoj.com:
+
+// verify
+
+cd lens-dist-dev/
+
+cp -r ../apache-lens-2.0.1-beta-incubating-rc1 .
+svn add apache-lens-2.0.1-beta-incubating-rc1
+svn commit -m "Release candidate for 2.0.1-beta-incubating rc1"
+
+* Vote mail
+http://www.apache.org/dev/release.html#what-must-every-release-contain
+
+http://people.apache.org/committers-by-project.html#incubator-pmc
+ Upload a release - http://www.apache.org/dev/release.html#upload-ci
+ 
+dev thread
+result thread
+ipmc thead
+result thread
+
+* Publish
+
+> Release for apache 2.0
+* Update RESULT for VOTE on IPMC - DONE
+* Copy artifacts from dev/dist to release/dist - DONE
+* Update docs and push - DONE
+* Push maven artifacts to maven repo. - DONE
+* Send announce mail once dist and maven artifacts are available in mirrors - DONE
+
+http://www.apache.org/dev/publishing-maven-artifacts.html
+
+Check https://repository.apache.org/content/repositories/releases/org/apache/
+Check http://www.apache.org/dyn/closer.cgi/incubator/lens/2.0-beta-incubating
+
+* Announcing a release
+
+  check - http://www.apache.org/dev/release.html#release-announcements
+  Please ensure that you wait at least 24 hours after uploading a new release before updating the project download page
+ and sending the announcement email(s). This is so that mirrors have sufficient time to catch up.
+  Send announcements to - announce.AT.apache.DOT.org; It is recommended that an SHA-1 OpenPGP compatible signature is added to the announcement mail. 
