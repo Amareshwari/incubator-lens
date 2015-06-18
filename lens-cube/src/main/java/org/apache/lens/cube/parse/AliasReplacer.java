@@ -37,6 +37,8 @@ import org.apache.hadoop.hive.ql.parse.SemanticException;
 
 import org.antlr.runtime.CommonToken;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * Finds queried column to table alias. Finds queried dim attributes and queried measures.
  * <p/>
@@ -44,6 +46,7 @@ import org.antlr.runtime.CommonToken;
  * <p/>
  * Replaces all the columns in all expressions with tablealias.column
  */
+@Slf4j
 class AliasReplacer implements ContextRewriter {
 
   public AliasReplacer(Configuration conf) {
@@ -172,6 +175,7 @@ class AliasReplacer implements ContextRewriter {
       String colName = HQLParser.getColName(node);
       String newAlias = colToTableAlias.get(colName.toLowerCase());
 
+      log.info("colName:" + colName + " newAlias:" + newAlias); 
       if (StringUtils.isBlank(newAlias)) {
         return;
       }
@@ -185,22 +189,26 @@ class AliasReplacer implements ContextRewriter {
       } else {
         // Just a column ref, we need to make it alias.col
         // '.' will become the parent node
-        ASTNode dot = new ASTNode(new CommonToken(HiveParser.DOT, "."));
         ASTNode aliasIdentNode = new ASTNode(new CommonToken(HiveParser.Identifier, newAlias));
         ASTNode tabRefNode = new ASTNode(new CommonToken(HiveParser.TOK_TABLE_OR_COL, "TOK_TABLE_OR_COL"));
 
         tabRefNode.addChild(aliasIdentNode);
         aliasIdentNode.setParent(tabRefNode);
-        dot.addChild(tabRefNode);
-        tabRefNode.setParent(dot);
-
         ASTNode colIdentNode = new ASTNode(new CommonToken(HiveParser.Identifier, colName));
-
-        dot.addChild(colIdentNode);
-
         ASTNode parent = (ASTNode) node.getParent();
-
-        parent.setChild(nodePos, dot);
+        if (parent != null) {
+          ASTNode dot = new ASTNode(new CommonToken(HiveParser.DOT, "."));
+          dot.addChild(tabRefNode);
+          tabRefNode.setParent(dot);
+          dot.addChild(colIdentNode);
+          parent.setChild(nodePos, dot);
+        } else {
+          node.getToken().setType(HiveParser.DOT);
+          node.getToken().setText(".");
+          node.setChild(0, tabRefNode);
+          tabRefNode.setParent(node);
+          node.addChild(colIdentNode);
+        }
       }
     } else {
       // recurse down

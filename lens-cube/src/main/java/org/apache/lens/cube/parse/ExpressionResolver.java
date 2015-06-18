@@ -43,6 +43,8 @@ import org.apache.hadoop.hive.ql.parse.SemanticException;
 
 import org.antlr.runtime.CommonToken;
 
+import lombok.Setter;
+
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NonNull;
@@ -85,7 +87,7 @@ class ExpressionResolver implements ContextRewriter {
         allExprs.add(new ExprSpecContext(es, cubeql));
       }
       resolveColumnsAndAlias(cubeql);
-      log.debug("All exprs for {} are {}", exprCol.getName(), allExprs);
+      log.info("All exprs for {} are {}", exprCol.getName(), allExprs);
     }
     private void resolveColumnsAndAlias(CubeQueryContext cubeql) throws SemanticException {
       for (ExprSpecContext esc : allExprs) {
@@ -171,17 +173,17 @@ class ExpressionResolver implements ContextRewriter {
       if (evalSet == null) {
         evalSet = new LinkedHashSet<ExprSpecContext>();
         evaluableExpressions.put(cTable, evalSet);
-        // add optional dimensions involved in expressions
-        for (String table : esc.getTblAliasToColumns().keySet()) {
-          try {
-            if (!CubeQueryContext.DEFAULT_TABLE.equalsIgnoreCase(table) && !srcAlias.equals(table)) {
-              cubeql.addOptionalDimTable(table, cTable,
-                false, esc.getTblAliasToColumns().get(table).toArray(new String[0]));
-              esc.exprDims.add((Dimension) cubeql.getCubeTableForAlias(table));
-            }
-          } catch (HiveException e) {
-            throw new SemanticException(e);
+      }
+      // add optional dimensions involved in expressions
+      for (String table : esc.getTblAliasToColumns().keySet()) {
+        try {
+          if (!CubeQueryContext.DEFAULT_TABLE.equalsIgnoreCase(table) && !srcAlias.equals(table)) {
+            cubeql.addOptionalDimTable(table, cTable,
+              false, esc.getTblAliasToColumns().get(table).toArray(new String[0]));
+            esc.exprDims.add((Dimension) cubeql.getCubeTableForAlias(table));
           }
+        } catch (HiveException e) {
+          throw new SemanticException(e);
         }
       }
       evalSet.add(esc);
@@ -209,6 +211,7 @@ class ExpressionResolver implements ContextRewriter {
     @Getter
     private Set<ExprSpec> exprSpecs = new LinkedHashSet<ExprSpec>();
     @Getter
+    @Setter
     private ASTNode finalAST;
     private Set<Dimension> exprDims = new HashSet<Dimension>();
     // for each expression store alias to columns queried
@@ -366,7 +369,9 @@ class ExpressionResolver implements ContextRewriter {
         ec.addDirectlyAvailable(cTable);
       }
       for (ExprSpecContext esc : ec.allExprs) {
+        log.info("esc.getTblAliasToColumns() dump:" + esc.getTblAliasToColumns());
         if (esc.getTblAliasToColumns().get(alias) == null) {
+          log.info("{} = {} is evaluable in {}", expr, esc, cTable);
           ec.addEvaluable(cubeql, cTable, esc);
         } else {
           Set<String> columns = esc.getTblAliasToColumns().get(alias);
@@ -375,14 +380,14 @@ class ExpressionResolver implements ContextRewriter {
             if (!cTable.getColumns().contains(col.toLowerCase())) {
               if (!cubeql.getDeNormCtx().addRefUsage(cTable, col, cTable.getBaseTable().getName())) {
                 // check if it is available as reference, if not expression is not evaluable
-                log.debug("{} = {} is not evaluable in {}", expr, esc, cTable);
+                log.info("{} = {} is not evaluable in {}", expr, esc, cTable);
                 isEvaluable = false;
                 break;
               }
             }
           }
           if (isEvaluable) {
-            log.debug("{} = {} is evaluable in {}", expr, esc, cTable);
+            log.info("{} = {} is evaluable in {}", expr, esc, cTable);
             ec.addEvaluable(cubeql, cTable, esc);
           }
         }
@@ -724,7 +729,7 @@ class ExpressionResolver implements ContextRewriter {
           parent = visited.getParent().getNode();
         }
 
-        if (node.getToken().getType() == TOK_TABLE_OR_COL && (parent != null && parent.getToken().getType() == DOT)) {
+        if (node.getToken().getType() == TOK_TABLE_OR_COL && (parent == null || parent.getToken().getType() == DOT)) {
           ASTNode current = (ASTNode) node.getChild(0);
           if (current.getToken().getType() == Identifier) {
             String tableName = current.getToken().getText().toLowerCase();

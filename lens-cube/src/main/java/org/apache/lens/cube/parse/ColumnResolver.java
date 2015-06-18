@@ -33,6 +33,9 @@ import org.apache.hadoop.hive.ql.parse.SemanticException;
 
 import com.google.common.base.Optional;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 class ColumnResolver implements ContextRewriter {
 
   public ColumnResolver(Configuration conf) {
@@ -82,6 +85,7 @@ class ColumnResolver implements ContextRewriter {
     if (tree == null) {
       return;
     }
+    log.info("getColsForTree tree dump:" + tree.dump());
     // Traverse the tree to get column names
     // We are doing a complete traversal so that expressions of columns
     // are also captured ex: f(cola + colb/tab1.colc)
@@ -93,15 +97,18 @@ class ColumnResolver implements ContextRewriter {
         if (visited.getParent() != null) {
           parent = visited.getParent().getNode();
         }
+        log.info("getColsForTree node dump:" + node.dump());
 
-        if (node.getToken().getType() == TOK_TABLE_OR_COL && (parent != null && parent.getToken().getType() != DOT)) {
+        if (node.getToken().getType() == TOK_TABLE_OR_COL && (parent == null || parent.getToken().getType() != DOT)) {
           // Take child ident.totext
           ASTNode ident = (ASTNode) node.getChild(0);
           String column = ident.getText().toLowerCase();
+          log.info("cubeql.getExprToAliasMap()  dump:" + cubeql.getExprToAliasMap());
           if (cubeql.getExprToAliasMap().values().contains(column)) {
             // column is an existing alias
             return;
           }
+          log.info("getColsForTree adding columns queried to default: " + column);
           tqc.addColumnsQueried(CubeQueryContext.DEFAULT_TABLE, column);
         } else if (node.getToken().getType() == DOT) {
           // This is for the case where column name is prefixed by table name
@@ -122,7 +129,7 @@ class ColumnResolver implements ContextRewriter {
   // find columns in where tree
   // if where expression is timerange function, then time range columns are
   // added
-  // only if timerange clause shouldn't be replaced with its correspodning
+  // only if timerange clause shouldn't be replaced with its corresponding
   // partition column
   private void getColsForWhereTree(final CubeQueryContext cubeql) throws SemanticException {
     if (cubeql.getWhereAST() == null) {

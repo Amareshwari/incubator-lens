@@ -26,6 +26,7 @@ import java.util.Iterator;
 
 import org.apache.lens.cube.metadata.CubeMeasure;
 import org.apache.lens.cube.parse.CandidateTablePruneCause.CandidateTablePruneCode;
+import org.apache.lens.cube.parse.ExpressionResolver.ExprSpecContext;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
@@ -124,9 +125,9 @@ class AggregateResolver implements ContextRewriter {
     return HQLParser.getString(clause);
   }
 
-  private void transform(CubeQueryContext cubeql, ASTNode parent, ASTNode node, int nodePos) throws SemanticException {
+  private ASTNode transform(CubeQueryContext cubeql, ASTNode parent, ASTNode node, int nodePos) throws SemanticException {
     if (node == null) {
-      return;
+      return node;
     }
     int nodeType = node.getToken().getType();
 
@@ -146,6 +147,8 @@ class AggregateResolver implements ContextRewriter {
               expr = HQLParser.getString(wrapped);
             }
             cubeql.addAggregateExpr(expr.trim());
+          } else {
+            return wrapped;
           }
         }
       } else {
@@ -155,6 +158,7 @@ class AggregateResolver implements ContextRewriter {
         }
       }
     }
+    return node;
   }
 
   // Wrap an aggregate function around the node if its a measure, leave it
@@ -176,23 +180,30 @@ class AggregateResolver implements ContextRewriter {
     }
 
     String msrname = StringUtils.isBlank(tabname) ? colname : tabname + "." + colname;
+    LOG.info("msrName:" + msrname);
 
     if (cubeql.isCubeMeasure(msrname)) {
       if (cubeql.getQueriedExprs().contains(colname)) {
+        LOG.info("msrName is expression:" + msrname);
         String alias = cubeql.getAliasForTableName(cubeql.getCube().getName());
-        for (ASTNode exprNode : cubeql.getExprCtx().getExpressionContext(colname, alias).getAllASTNodes()) {
-          transform(cubeql, null, exprNode, 0);
+        for (ExprSpecContext esc : cubeql.getExprCtx().getExpressionContext(colname, alias).getAllExprs()) {
+          ASTNode transformedNode = transform(cubeql, null, esc.getFinalAST(), 0);
+          esc.setFinalAST(transformedNode);
         }
+        LOG.info("all exprs after aggregate resolver :" + cubeql.getExprCtx().getExpressionContext(colname, alias).getAllExprs());
         return node;
       } else {
+        LOG.info("msrName is measure:" + msrname);
         CubeMeasure measure = cubeql.getCube().getMeasureByName(colname);
         String aggregateFn = measure.getAggregate();
 
         if (StringUtils.isBlank(aggregateFn)) {
           throw new SemanticException(ErrorMsg.NO_DEFAULT_AGGREGATE, colname);
         }
-        ASTNode fnroot = new ASTNode(new CommonToken(HiveParser.TOK_FUNCTION));
-        fnroot.setParent(node.getParent());
+        ASTNode fnroot = new ASTNode(new CommonToken(HiveParser.TOK_FUNCTION, "TOK_FUNCTION"));
+        if (node.getParent() != null) {
+          fnroot.setParent(node.getParent());
+        }
 
         ASTNode fnIdentNode = new ASTNode(new CommonToken(HiveParser.Identifier, aggregateFn));
         fnIdentNode.setParent(fnroot);
@@ -200,6 +211,7 @@ class AggregateResolver implements ContextRewriter {
 
         node.setParent(fnroot);
         fnroot.addChild(node);
+        LOG.info("returning is fnroot:" + fnroot.dump());
 
         return fnroot;
       }

@@ -664,6 +664,9 @@ public class CubeTestSetup {
 
     exprs = new HashSet<ExprColumn>();
     exprs.add(new ExprColumn(new FieldSchema("avgmsr", "double", "avg measure"), "Avg Msr", "avg(msr1 + msr2)"));
+    exprs.add(new ExprColumn(new FieldSchema("singlecolmsr2expr", "double", "measure2"), "Msr2", "msr2)"));
+    exprs.add(new ExprColumn(new FieldSchema("singlecolmsr2qualifiedexpr", "double", "testcube.measure2"),
+      "Msr2", "msr2)"));
     exprs.add(new ExprColumn(new FieldSchema("summsrs", "double", "sum measures"), "Sum Msrs",
       "(1000 + sum(msr1) + sum(msr2))/100"));
     exprs.add(new ExprColumn(new FieldSchema("msr5", "double", "materialized in some facts"), "Fifth Msr",

@@ -19,6 +19,11 @@
 
 package org.apache.lens.cube.parse;
 
+import static org.apache.lens.cube.parse.CubeTestSetup.TWO_DAYS_RANGE;
+import static org.apache.lens.cube.parse.CubeTestSetup.getExpectedQuery;
+import static org.apache.lens.cube.parse.CubeTestSetup.getWhereForDailyAndHourly2days;
+import static org.testng.Assert.assertNotNull;
+
 import static org.apache.lens.cube.parse.CubeTestSetup.*;
 
 import org.apache.lens.cube.parse.CandidateTablePruneCause.CandidateTablePruneCode;
@@ -436,6 +441,54 @@ public class TestExpressionResolver extends TestQueryRewrite {
         + " \":\",(countrydim.name),  \":\" , ( zipdim . code )) caddr FROM ", joinExpr, null, null, "c1_citytable",
         true);
     TestCubeRewriter.compareQueries(hqlQuery, expected);
+  }
+
+  @Test
+  public void testSingleColExpression() throws Exception {
+    Configuration tconf = new Configuration(conf);
+    tconf.set(CubeQueryConfUtil.DRIVER_SUPPORTED_STORAGES, "C2");
+    CubeQueryContext rewrittenQuery =
+      rewriteCtx("cube select singlecolmsr2expr from testCube where " + TWO_DAYS_RANGE, tconf);
+    String expected =
+      getExpectedQuery(cubeName, "select sum(testcube.msr2) FROM ", null, null,
+        getWhereForDailyAndHourly2days(cubeName, "C2_testfact"));
+    TestCubeRewriter.compareQueries(rewrittenQuery.toHQL(), expected);
+  }
+
+  @Test
+  public void testSingleColExpressionWithAlias() throws Exception {
+    Configuration tconf = new Configuration(conf);
+    tconf.set(CubeQueryConfUtil.DRIVER_SUPPORTED_STORAGES, "C2");
+    CubeQueryContext rewrittenQuery =
+      rewriteCtx("cube select singlecolmsr2expr as msr2 from testCube where " + TWO_DAYS_RANGE, tconf);
+    String expected =
+      getExpectedQuery(cubeName, "select sum(testcube.msr2) msr2 FROM ", null, null,
+        getWhereForDailyAndHourly2days(cubeName, "C2_testfact"));
+    TestCubeRewriter.compareQueries(rewrittenQuery.toHQL(), expected);
+  }
+
+  @Test
+  public void testSingleColQualifiedExpression() throws Exception {
+    Configuration tconf = new Configuration(conf);
+    tconf.set(CubeQueryConfUtil.DRIVER_SUPPORTED_STORAGES, "C2");
+    CubeQueryContext rewrittenQuery =
+      rewriteCtx("cube select singlecolmsr2qualifiedexpr from testCube where " + TWO_DAYS_RANGE, tconf);
+    String expected =
+      getExpectedQuery(cubeName, "select sum(testcube.msr2) FROM ", null, null,
+        getWhereForDailyAndHourly2days(cubeName, "C2_testfact"));
+    TestCubeRewriter.compareQueries(rewrittenQuery.toHQL(), expected);
+  }
+
+  @Test
+  public void testSingleColQualifiedExpressionWithAlias() throws Exception {
+    Configuration tconf = new Configuration(conf);
+    tconf.set(CubeQueryConfUtil.DRIVER_SUPPORTED_STORAGES, "C2");
+    CubeQueryContext rewrittenQuery =
+      rewriteCtx("cube select singlecolmsr2qualifiedexpr from testCube tc where " + TWO_DAYS_RANGE, tconf);
+    String expected =
+      getExpectedQuery("tc", "select sum(tc.msr2) FROM ", null, null,
+        getWhereForDailyAndHourly2days(cubeName, "C2_testfact"));
+    TestCubeRewriter.compareQueries(rewrittenQuery.toHQL(), expected);
   }
 
 }
