@@ -97,7 +97,7 @@ class ExpressionResolver implements ContextRewriter {
           try {
             if (!CubeQueryContext.DEFAULT_TABLE.equalsIgnoreCase(table) && !srcAlias.equals(table)) {
               cubeql.addOptionalDimTable(table, null,
-                false, esc.getTblAliasToColumns().get(table).toArray(new String[0]));
+                false, null, false, esc.getTblAliasToColumns().get(table).toArray(new String[0]));
               esc.exprDims.add((Dimension) cubeql.getCubeTableForAlias(table));
             }
           } catch (HiveException e) {
@@ -134,7 +134,7 @@ class ExpressionResolver implements ContextRewriter {
         for (String table : esc.getTblAliasToColumns().keySet()) {
           try {
             if (!CubeQueryContext.DEFAULT_TABLE.equalsIgnoreCase(table) && !srcAlias.equals(table)) {
-              cubeql.addOptionalDimTable(table, null, false,
+              cubeql.addOptionalDimTable(table, null, false, null, false,
                 esc.getTblAliasToColumns().get(table).toArray(new String[0]));
               esc.exprDims.add((Dimension) cubeql.getCubeTableForAlias(table));
             }
@@ -179,7 +179,7 @@ class ExpressionResolver implements ContextRewriter {
         try {
           if (!CubeQueryContext.DEFAULT_TABLE.equalsIgnoreCase(table) && !srcAlias.equals(table)) {
             cubeql.addOptionalDimTable(table, cTable,
-              false, esc.getTblAliasToColumns().get(table).toArray(new String[0]));
+              false, exprCol.getName(), false, esc.getTblAliasToColumns().get(table).toArray(new String[0]));
             esc.exprDims.add((Dimension) cubeql.getCubeTableForAlias(table));
           }
         } catch (HiveException e) {

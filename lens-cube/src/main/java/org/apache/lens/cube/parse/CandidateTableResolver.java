@@ -32,6 +32,8 @@ import org.apache.hadoop.hive.ql.ErrorMsg;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.parse.SemanticException;
 
+import com.google.common.collect.Sets;
+
 /**
  * This resolver prunes the candidate tables for following cases
  * <p/>
@@ -493,39 +495,113 @@ class CandidateTableResolver implements ContextRewriter {
       return;
     }
     // check for source columns for denorm columns
-    Map<CandidateTable, Collection<String>> removedCandidates = new HashMap<CandidateTable, Collection<String>>();
+    Map<Dimension, Set<CandidateTable>> removedCandidates = new HashMap<Dimension, Set<CandidateTable>>();
     for (Map.Entry<Dimension, OptionalDimCtx> optdimEntry : cubeql.getOptionalDimensionMap().entrySet()) {
       Dimension dim = optdimEntry.getKey();
       OptionalDimCtx optdim = optdimEntry.getValue();
       Iterator<CandidateTable> iter = optdim.requiredForCandidates.iterator();
+      // remove candidates from each optional dim if the dimension is not reachable from candidate
+      Set<CandidateTable> cTableSet = Sets.newHashSet();
+      removedCandidates.put(dim, cTableSet);
       while (iter.hasNext()) {
         CandidateTable candidate = iter.next();
         boolean remove = false;
         if (cubeql.getAutoJoinCtx().getJoinPathFromColumns().get(dim) == null) {
-          LOG.info("Removing candidate" + candidate + " from requiredForCandidates of" + dim + ", as no join paths"
+          LOG.info("Removing candidate " + candidate + " from requiredForCandidates of " + dim + ", as no join paths"
             + " exist");
           remove = true;
-          removedCandidates.put(candidate, optdim.colQueried);
         } else {
           List<String> colSet = cubeql.getAutoJoinCtx().getJoinPathFromColumns().get(dim).get(candidate.getBaseTable());
           if (!checkForColumnExists(candidate, colSet)) {
-            LOG.info("Removing candidate" + candidate + " from requiredForCandidates of" + dim + ", as columns:"
+            LOG.info("Removing candidate " + candidate + " from requiredForCandidates of " + dim + ", as columns:"
               + colSet + " do not exist");
             remove = true;
-            removedCandidates.put(candidate, colSet);
           }
         }
         if (remove) {
           iter.remove();
+          cTableSet.add(candidate);
         }
       }
     }
-    Set<CandidateTable> candidatesReachableThroughRefs = new HashSet<CandidateTable>();
+    // For each ref column required in cube query
+    // remove candidates which are not reachable
+    // For example:
+    // CTable | Col1 | Col2
+    // F1 | reachable through D1 | Not reachable
+    // F2 | Reachable through D2 |  Reachable through D5
+    // F3 | Not reachable | Not reachable
+    // F4 | Not reachable | Reachable through D6
+    // F5 | Directly available | Directly available
+    // F6 | Directly available | Not reachable
+    // F3 and F4 will get pruned while iterating over col1 and F1, F6 will get pruned while iterating over col2.
+    for (Map.Entry<String, Set<Dimension>> dimColEntry : cubeql.getRefColToDim().entrySet()) {
+      Set<CandidateTable> candidatesReachableThroughRefs = new HashSet<CandidateTable>();
+      String col = dimColEntry.getKey();
+      Set<Dimension> dimSet = dimColEntry.getValue();
+      for (Dimension dim : dimSet) {
+        OptionalDimCtx optdim = cubeql.getOptionalDimensionMap().get(dim);
+        candidatesReachableThroughRefs.addAll(optdim.requiredForCandidates);
+      }
+      for (Dimension dim : dimSet) {
+        for (CandidateTable candidate : removedCandidates.get(dim)) {
+          if (!candidatesReachableThroughRefs.contains(candidate)) {
+            if (candidate instanceof CandidateFact) {
+              if (cubeql.getCandidateFacts().contains(candidate)) {
+                LOG.info("Not considering fact:" + candidate + " as is not reachable through any optional dim");
+                cubeql.getCandidateFacts().remove(candidate);
+                cubeql.addFactPruningMsgs(((CandidateFact) candidate).fact,
+                  CandidateTablePruneCause.columnNotFound(col));
+              }
+            } else if (cubeql.getCandidateDimTables().containsKey(((CandidateDim) candidate).getBaseTable())) {
+              LOG.info("Not considering dimtable:" + candidate + " as is not reachable through any optional dim");
+              cubeql.getCandidateDimTables().get(((CandidateDim) candidate).getBaseTable()).remove(candidate);
+              cubeql.addDimPruningMsgs((Dimension) candidate.getBaseTable(), (CubeDimensionTable) candidate.getTable(),
+                CandidateTablePruneCause.columnNotFound(col));
+            }
+          }
+        }
+      }
+    }
+
+    // For each expression column required in cube query
+    // remove candidates in which expressions are not evaluable - for expression column all dimensions accessed in
+    // expression should be reachable from candidate.
+    // For example:
+    // CTable | Col1 | Col2
+    // F1 | evaluable through D1, D3 | Not evaluable
+    // F2 | evaluable through D2, D4 |  evaluable through D5
+    // F3 | Not evaluable | Not evaluable
+    // F4 | Not evaluable | evaluable through D6
+    // F5 | Directly available | Directly available
+    // F6 | Directly available | Not evaluable
+    for (Map.Entry<String, Set<Dimension>> dimColEntry : cubeql.getExprColToDim().entrySet()) {
+      String col = dimColEntry.getKey();
+      Set<Dimension> dimSet = dimColEntry.getValue();
+      for (Dimension dim : dimSet) {
+        for (CandidateTable candidate : removedCandidates.get(dim)) {
+          if (candidate instanceof CandidateFact) {
+            if (cubeql.getCandidateFacts().contains(candidate)) {
+              LOG.info("Not considering fact:" + candidate + " as is not reachable through any optional dim");
+              cubeql.getCandidateFacts().remove(candidate);
+              cubeql.addFactPruningMsgs(((CandidateFact) candidate).fact,
+                CandidateTablePruneCause.columnNotFound(col));
+            }
+          } else if (cubeql.getCandidateDimTables().containsKey(((CandidateDim) candidate).getBaseTable())) {
+            LOG.info("Not considering dimtable:" + candidate + " as is not reachable through any optional dim");
+            cubeql.getCandidateDimTables().get(((CandidateDim) candidate).getBaseTable()).remove(candidate);
+            cubeql.addDimPruningMsgs((Dimension) candidate.getBaseTable(), (CubeDimensionTable) candidate.getTable(),
+              CandidateTablePruneCause.columnNotFound(col));
+          }
+        }
+      }
+    }
+
+    // remove optional dims which are not required any more.
     Set<Dimension> tobeRemoved = new HashSet<Dimension>();
     for (Map.Entry<Dimension, OptionalDimCtx> optdimEntry : cubeql.getOptionalDimensionMap().entrySet()) {
       Dimension dim = optdimEntry.getKey();
       OptionalDimCtx optdim = optdimEntry.getValue();
-      candidatesReachableThroughRefs.addAll(optdim.requiredForCandidates);
       if ((!optdim.colQueried.isEmpty() && optdim.requiredForCandidates.isEmpty()) && !optdim.isRequiredInJoinChain) {
         LOG.info("Not considering optional dimension " + dim + " as all requiredForCandidates are removed");
         tobeRemoved.add(dim);
@@ -533,23 +609,6 @@ class CandidateTableResolver implements ContextRewriter {
     }
     for (Dimension dim : tobeRemoved) {
       removeOptionalDim(cubeql, dim);
-    }
-    for (CandidateTable candidate : removedCandidates.keySet()) {
-      if (!candidatesReachableThroughRefs.contains(candidate)) {
-        if (candidate instanceof CandidateFact) {
-          if (cubeql.getCandidateFacts().contains(candidate)) {
-            LOG.info("Not considering fact:" + candidate + " as is not reachable through any optional dim");
-            cubeql.getCandidateFacts().remove(candidate);
-            cubeql.addFactPruningMsgs(((CandidateFact) candidate).fact,
-              CandidateTablePruneCause.columnNotFound(removedCandidates.get(candidate)));
-          }
-        } else if (cubeql.getCandidateDimTables().containsKey(((CandidateDim) candidate).getBaseTable())) {
-          LOG.info("Not considering dimtable:" + candidate + " as is not reachable through any optional dim");
-          cubeql.getCandidateDimTables().get(((CandidateDim) candidate).getBaseTable()).remove(candidate);
-          cubeql.addDimPruningMsgs((Dimension) candidate.getBaseTable(), (CubeDimensionTable) candidate.getTable(),
-            CandidateTablePruneCause.columnNotFound(removedCandidates.get(candidate)));
-        }
-      }
     }
   }
 

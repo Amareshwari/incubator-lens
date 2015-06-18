@@ -45,6 +45,7 @@ import org.apache.hadoop.hive.ql.parse.*;
 import org.codehaus.jackson.map.ObjectMapper;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import lombok.Getter;
 import lombok.Setter;
@@ -346,11 +347,37 @@ public class CubeQueryContext implements TrackQueriedColumns {
     return partsQueried;
   }
 
+  // map of ref column in query to set of Dimension that have the column - which are added as optional dims
+  @Getter
+  private Map<String, Set<Dimension>>  refColToDim = Maps.newHashMap();
+
+  public void updateRefColDim(String col, Dimension dim) {
+    Set<Dimension> refDims = refColToDim.get(col.toLowerCase());
+    if (refDims == null) {
+      refDims = Sets.newHashSet();
+      refColToDim.put(col.toLowerCase(), refDims);
+    }
+    refDims.add(dim);
+  }
+
+  // map of expression column in query to set of Dimension that are accessed in the expression column - which are added
+  // as optional dims
+  @Getter
+  private Map<String, Set<Dimension>>  exprColToDim = Maps.newHashMap();
+
+  public void updateExprColDim(String col, Dimension dim) {
+    Set<Dimension> exprDims = exprColToDim.get(col.toLowerCase());
+    if (exprDims == null) {
+      exprDims = Sets.newHashSet();
+      exprColToDim.put(col.toLowerCase(), exprDims);
+    }
+    exprDims.add(dim);
+  }
+
   // Holds the context of optional dimension
   // A dimension is optional if it is not queried directly by the user, but is
   // required by a candidate table to get a denormalized field from reference
   // or required in a join chain
-
   @ToString
   static class OptionalDimCtx {
     OptionalDimCtx() {
@@ -361,8 +388,12 @@ public class CubeQueryContext implements TrackQueriedColumns {
     boolean isRequiredInJoinChain = false;
   }
 
-  public void addOptionalDimTable(String alias, CandidateTable candidate, boolean isRequiredInJoin, String... cols)
-    throws SemanticException {
+  public void addOptionalJoinDimTable(String alias, boolean isRequired) throws SemanticException {
+    addOptionalDimTable(alias, null, isRequired, null, false, (String[])null);
+  }
+
+  public void addOptionalDimTable(String alias, CandidateTable candidate, boolean isRequiredInJoin, String cubeCol,
+    boolean isRef, String... cols) throws SemanticException {
     alias = alias.toLowerCase();
     try {
       if (!addQueriedTable(alias, true)) {
@@ -380,10 +411,18 @@ public class CubeQueryContext implements TrackQueriedColumns {
         }
         optDim.requiredForCandidates.add(candidate);
       }
+      if (cubeCol != null) {
+        if (isRef) {
+          updateRefColDim(cubeCol, dim);
+        } else {
+          updateExprColDim(cubeCol, dim);
+        }
+      }
       if (!optDim.isRequiredInJoinChain) {
         optDim.isRequiredInJoinChain = isRequiredInJoin;
       }
-      LOG.info("Adding optional dimension:" + dim + " optDim:" + optDim);
+      LOG.info("Adding optional dimension:" + dim + " optDim:" + optDim
+        + (cubeCol == null ? "" : " for column:" + cubeCol + " isRef:" + isRef));
     } catch (HiveException e) {
       throw new SemanticException(e);
     }
