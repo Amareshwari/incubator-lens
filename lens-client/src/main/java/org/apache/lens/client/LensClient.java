@@ -37,6 +37,8 @@ import lombok.Getter;
 
 public class LensClient {
   private static final Log LOG = LogFactory.getLog(LensClient.class);
+
+  public static final String CLILOGGER =  "cliLogger";
   private static final String DEFAULT_PASSWORD = "";
   private final LensClientConfig conf;
   @Getter
@@ -47,6 +49,10 @@ public class LensClient {
   private final HashMap<QueryHandle, LensStatement> statementMap =
     Maps.newHashMap();
   private final LensStatement statement;
+
+  public static Log getCliLooger() {
+    return LogFactory.getLog(CLILOGGER);
+  }
 
   public LensClient() {
     this(new LensClientConfig());
@@ -74,6 +80,10 @@ public class LensClient {
 
   public LensClient(Credentials cred) {
     this(cred.getUsername(), cred.getPassword());
+  }
+
+  public LensMetadataClient getMetadataClient() {
+    return mc;
   }
 
   public QueryHandle executeQueryAsynch(String sql, String queryName) {
@@ -270,9 +280,9 @@ public class LensClient {
     return result.getStatus() == APIResult.Status.SUCCEEDED;
   }
 
-  public APIResult dropDatabase(String database) {
-    LOG.debug("Dropping database " + database);
-    APIResult result = mc.dropDatabase(database);
+  public APIResult dropDatabase(String database, boolean cascade) {
+    LOG.debug("Dropping database " + database + ", cascade: " + cascade);
+    APIResult result = mc.dropDatabase(database, cascade);
     LOG.debug("Return status of dropping " + database + " result " + result);
     return result;
   }
