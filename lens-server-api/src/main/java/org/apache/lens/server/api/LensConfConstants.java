@@ -892,4 +892,7 @@ public final class LensConfConstants {
   public static final String ESTIMATE_POOL_KEEP_ALIVE_MILLIS = SERVER_PFX + "estimate.pool.keepalive.millis";
   public static final int DEFAULT_ESTIMATE_POOL_KEEP_ALIVE_MILLIS = 60000; // 1 minute
 
+  public static final String SERVE_LOGS_OVER_REST = SERVER_PFX + "server.logs.over.http";
+  public static final boolean DEFAULT_SERVE_LOGS_OVER_REST = true; 
+
 }

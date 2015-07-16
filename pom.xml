@@ -58,6 +58,7 @@
     <guava.version>13.0.1</guava.version>
     <lombok.version>1.12.4</lombok.version>
     <typesafe.config.version>1.2.1</typesafe.config.version>
+    <logback.version>1.0.1</logback.version>
 
     <jackson.asl.version>1.9.13</jackson.asl.version>
     <opencsv.version>2.3</opencsv.version>
@@ -720,6 +721,16 @@
         <groupId>log4j</groupId>
         <artifactId>log4j</artifactId>
         <version>${log4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>ch.qos.logback</groupId>
+        <artifactId>logback-classic</artifactId>
+        <version>${logback.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>ch.qos.logback</groupId>
+        <artifactId>logback-core</artifactId>
+        <version>${logback.version}</version>
       </dependency>
       <dependency>
         <groupId>commons-logging</groupId>
