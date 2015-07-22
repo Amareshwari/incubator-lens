@@ -28,8 +28,6 @@ import org.apache.lens.cube.metadata.CubeMeasure;
 import org.apache.lens.cube.parse.CandidateTablePruneCause.CandidateTablePruneCode;
 
 import org.apache.commons.lang.StringUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.ql.ErrorMsg;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
@@ -46,8 +44,6 @@ import org.antlr.runtime.CommonToken;
  * been added to all columns. </p>
  */
 class AggregateResolver implements ContextRewriter {
-  public static final Log LOG = LogFactory.getLog(AggregateResolver.class.getName());
-
   public AggregateResolver(Configuration conf) {
   }
 
