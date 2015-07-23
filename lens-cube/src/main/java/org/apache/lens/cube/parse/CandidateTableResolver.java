@@ -436,7 +436,7 @@ class CandidateTableResolver implements ContextRewriter {
               .getAllJoinPathColumnsOfTable(dim).toString());
           } else {
             // remove it from optional tables
-            log.info("Not considering optional dimension {} as, No dimension table has the queried columns:{}" 
+            log.info("Not considering optional dimension {} as, No dimension table has the queried columns:{}"
               + " Clearing the required for candidates:{}", dim, optdim.colQueried, optdim.requiredForCandidates);
             removeOptionalDim(cubeql, dim);
           }
