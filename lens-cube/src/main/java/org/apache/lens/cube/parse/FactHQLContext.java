@@ -42,7 +42,7 @@ public class FactHQLContext extends DimHQLContext {
       .getHavingTree(), null);
     this.fact = fact;
     this.factDims = factDims;
-    log.info("factDims:" + factDims + " for fact:" + fact);
+    log.info("factDims:{} for fact:{}", factDims, fact);
   }
 
   @Override
