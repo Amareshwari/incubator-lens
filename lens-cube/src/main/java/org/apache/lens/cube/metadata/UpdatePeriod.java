@@ -23,10 +23,13 @@ import static java.util.Calendar.*;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Comparator;
 import java.util.Date;
 
 import org.apache.lens.cube.parse.DateUtil;
+
+import org.apache.commons.lang3.time.DateUtils;
 
 public enum UpdatePeriod implements Named {
   SECONDLY(SECOND, 1000, 1.4f, "yyyy-MM-dd-HH-mm-ss"),
@@ -36,7 +39,8 @@ public enum UpdatePeriod implements Named {
   WEEKLY(WEEK_OF_YEAR, 7 * DAILY.weight(), 0.7f, "yyyy-'W'ww"),
   MONTHLY(MONTH, 30 * DAILY.weight(), 0.6f, "yyyy-MM"),
   QUARTERLY(MONTH, 3 * MONTHLY.weight(), 0.55f, "yyyy-MM"),
-  YEARLY(YEAR, 12 * MONTHLY.weight(), 0.52f, "yyyy");
+  YEARLY(YEAR, 12 * MONTHLY.weight(), 0.52f, "yyyy"),
+  CONTINUOUS(Calendar.SECOND, 1, 1.5f, "yyyy-MM-dd-HH-mm-ss");
 
   public static final long MIN_INTERVAL = values()[0].weight();
   private final int calendarField;
@@ -176,6 +180,8 @@ public enum UpdatePeriod implements Named {
 
   public DateFormat format() {
     switch (this) {
+    case CONTINUOUS:
+      return getSecondlyFormat();
     case SECONDLY:
       return getSecondlyFormat();
     case MINUTELY:
@@ -212,6 +218,22 @@ public enum UpdatePeriod implements Named {
 
   public float getNormalizationFactor() {
     return normalizationFactor;
+  }
+
+  public Date truncate(Date date) {
+    if (this.equals(UpdatePeriod.WEEKLY)) {
+      Date truncDate = DateUtils.truncate(date, Calendar.DAY_OF_MONTH);
+      Calendar cal = Calendar.getInstance();
+      cal.setTime(truncDate);
+      cal.set(Calendar.DAY_OF_WEEK, cal.getFirstDayOfWeek());
+      return cal.getTime();
+    } else if (this.equals(UpdatePeriod.QUARTERLY)) {
+      Date dt = DateUtils.truncate(date, this.calendarField());
+      dt.setMonth(dt.getMonth() - dt.getMonth() % 3);
+      return dt;
+    } else {
+      return DateUtils.truncate(date, this.calendarField());
+    }
   }
 
   public static class UpdatePeriodComparator implements Comparator<UpdatePeriod> {

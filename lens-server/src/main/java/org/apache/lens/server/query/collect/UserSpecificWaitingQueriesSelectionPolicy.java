@@ -16,32 +16,29 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.lens.server.api.user;
+package org.apache.lens.server.query.collect;
 
-import java.util.Map;
+import java.util.Set;
 
-import org.apache.lens.server.api.error.LensException;
+import org.apache.lens.server.api.query.FinishedLensQuery;
 import org.apache.lens.server.api.query.QueryContext;
+import org.apache.lens.server.api.query.collect.EstimatedImmutableQueryCollection;
+import org.apache.lens.server.api.query.collect.WaitingQueriesSelectionPolicy;
 
-import org.apache.hadoop.hive.conf.HiveConf;
+public class UserSpecificWaitingQueriesSelectionPolicy implements WaitingQueriesSelectionPolicy {
 
-import com.beust.jcommander.internal.Maps;
 
-public class MockUserConfigLoader extends UserConfigLoader {
-  public static final String KEY = "TEST_KEY";
-  public static final String VALUE = "TEST_VALUE";
-
-  public MockUserConfigLoader(HiveConf conf) {
-    super(conf);
-  }
-
+  /**
+   *
+   * @param finishedQuery
+   * @param waitingQueries current waiting queries
+   * @return
+   */
   @Override
-  public Map<String, String> getUserConfig(String loggedInUser) throws UserConfigLoaderException {
-    return Maps.newHashMap();
-  }
+  public Set<QueryContext> selectQueries(final FinishedLensQuery finishedQuery,
+      final EstimatedImmutableQueryCollection waitingQueries) {
 
-  @Override
-  public void preSubmit(QueryContext ctx) throws LensException {
-    ctx.getSelectedDriverConf().set(KEY, VALUE);
+    String user = finishedQuery.getSubmitter();
+    return waitingQueries.getQueries(user);
   }
 }

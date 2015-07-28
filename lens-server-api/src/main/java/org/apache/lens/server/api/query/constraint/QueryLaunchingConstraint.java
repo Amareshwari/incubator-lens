@@ -1,4 +1,3 @@
-
 /**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -17,34 +16,19 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.lens.server.api.query;
+package org.apache.lens.server.api.query.constraint;
 
-import org.apache.lens.server.api.error.LensException;
+import org.apache.lens.server.api.query.QueryContext;
+import org.apache.lens.server.api.query.collect.EstimatedImmutableQueryCollection;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hive.conf.HiveConf;
-
-/**
- * The Interface QueryRewriter.
- */
-public interface QueryRewriter {
+public interface QueryLaunchingConstraint {
 
   /**
-   * Rewrite.
-   * @param query     the query
-   * @param queryConf the query configuration
-   * @param metastoreConf The metastore configuration. If rewriters requires to access metastore, this configuration
-   *  needs to passed
+   * Returns whether this constraint allows candidate query to be launched.
    *
-   * @return the string
-   * @throws LensException the lens exception
+   * @param candidateQuery The query which is the next candidate to be launched.
+   * @param launchedQueries Current launched queries
+   * @return
    */
-  String rewrite(String query, Configuration queryConf, HiveConf metastoreConf) throws LensException;
-
-  /**
-   * Set conf for the rewriter
-   *
-   * @param rewriteConf Configuration required for rewriter init
-   */
-  void init(Configuration rewriteConf);
+  boolean allowsLaunchOf(final QueryContext candidateQuery, final EstimatedImmutableQueryCollection launchedQueries);
 }

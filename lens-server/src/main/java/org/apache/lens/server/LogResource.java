@@ -18,9 +18,10 @@
  */
 package org.apache.lens.server;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.Arrays;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -28,20 +29,18 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.StreamingOutput;
 
-import org.apache.lens.server.api.error.LensException;
-import org.apache.lens.server.error.LensServerErrorCode;
 import org.apache.lens.server.util.UtilityMethods;
-
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * The logs resource
  */
 @Path("/logs")
-@Slf4j
 public class LogResource {
+
+  private static final String LOG_FILE_EXTN = ".log";
 
   /**
    * Tells whether log resource if up or not
@@ -60,32 +59,28 @@ public class LogResource {
    * @param logSegregrationStr log segregation string - can be request id for all requests; query handle for queries
    *
    * @return streaming log
-   * @throws LensException 
    */
   @GET
   @Path("/{logSegregrationStr}")
   @Produces({MediaType.APPLICATION_OCTET_STREAM})
-  public Response getLogs(@PathParam("logSegregrationStr") String logSegregrationStr) throws LensException {
-    String[] command = { "bash", "-c", "grep -e '" + logSegregrationStr + "' "
-      + System.getProperty("lens.log.dir") + "/*.*" };
-    log.info("Running command {}", Arrays.asList(command));
-    final ProcessBuilder pb = new ProcessBuilder(command);
-    pb.redirectErrorStream(true);
-    final Process process;
-    try {
-      process = pb.start();
-    } catch (IOException e) {
-      throw new LensException(LensServerErrorCode.LOG_SERVING_ERROR.getValue(), e, e.getLocalizedMessage());
+  public Response getLogs(@PathParam("logSegregrationStr") String logSegregrationStr) {
+    String logFileName = System.getProperty("lens.log.dir") + "/" + logSegregrationStr + LOG_FILE_EXTN;
+    final File logFile = new File(logFileName);
+    if (!logFile.exists()) {
+      return Response.status(Status.NOT_FOUND).entity("Log file for '" + logSegregrationStr + "' not found").build();
     }
 
     StreamingOutput stream = new StreamingOutput() {
       @Override
       public void write(OutputStream os) throws IOException {
-        UtilityMethods.pipe(process.getInputStream(), os);        
+        FileInputStream fin = new FileInputStream(logFile);
+        try {
+          UtilityMethods.pipe(fin, os);
+        } finally {
+          fin.close();
+        }
       }
     };
-//    return Response.ok(stream).header("content-disposition", "attachment; filename = lenslog.log")
-//      .type(MediaType.APPLICATION_OCTET_STREAM).build();
     return Response.ok(stream).type(MediaType.APPLICATION_OCTET_STREAM).build();
   }
 

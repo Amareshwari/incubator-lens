@@ -18,9 +18,6 @@
  */
 package org.apache.lens.driver.jdbc;
 
-import static org.apache.lens.server.api.user.MockUserConfigLoader.KEY;
-import static org.apache.lens.server.api.user.MockUserConfigLoader.VALUE;
-
 import static org.testng.Assert.*;
 
 import java.sql.*;
@@ -40,7 +37,7 @@ import org.apache.lens.server.api.query.ExplainQueryContext;
 import org.apache.lens.server.api.query.PreparedQueryContext;
 import org.apache.lens.server.api.query.QueryContext;
 import org.apache.lens.server.api.query.cost.QueryCost;
-import org.apache.lens.server.api.user.MockUserConfigLoader;
+import org.apache.lens.server.api.user.MockDriverQueryHook;
 import org.apache.lens.server.api.util.LensUtil;
 
 import org.apache.hadoop.conf.Configuration;
@@ -52,6 +49,7 @@ import org.testng.Assert;
 import org.testng.annotations.*;
 
 import com.codahale.metrics.MetricRegistry;
+import com.google.common.collect.Lists;
 import com.mchange.v2.c3p0.ComboPooledDataSource;
 import lombok.extern.slf4j.Slf4j;
 
@@ -83,19 +81,16 @@ public class TestJdbcDriver {
     baseConf.set(JDBCDriverConfConstants.JDBC_USER, "SA");
     baseConf.set(JDBCDriverConfConstants.JDBC_PASSWORD, "");
     baseConf.set(JDBCDriverConfConstants.JDBC_EXPLAIN_KEYWORD_PARAM, "explain plan for ");
+    baseConf.setClass(JDBCDriverConfConstants.JDBC_QUERY_HOOK_CLASS, MockDriverQueryHook.class, DriverQueryHook.class);
     hConf = new HiveConf(baseConf, this.getClass());
 
     driver = new JDBCDriver();
     driver.configure(baseConf);
-    driver.registerUserConfigLoader(new MockUserConfigLoader(hConf));
+
     assertNotNull(driver);
     assertTrue(driver.configured);
 
-    drivers = new ArrayList<LensDriver>() {
-      {
-        add(driver);
-      }
-    };
+    drivers = Lists.<LensDriver>newArrayList(driver);
   }
 
   /**
@@ -266,7 +261,7 @@ public class TestJdbcDriver {
       driver.getEstimateConnectionConf().getInt(JDBCDriverConfConstants.JDBC_POOL_MAX_SIZE, 50);
     for (int i = 0; i < maxEstimateConnections + 10; i++) {
       try {
-        log.info("Iteration#" + (i + 1));
+        log.info("Iteration#{}", (i + 1));
         String query = i > maxEstimateConnections ? "SELECT * FROM estimate_test" : "CREATE TABLE FOO(ID INT)";
         ExplainQueryContext context = createExplainContext(query, baseConf);
         cost = driver.estimate(context);
@@ -650,7 +645,7 @@ public class TestJdbcDriver {
 
   private void executeAsync(QueryContext ctx) throws LensException {
     driver.executeAsync(ctx);
-    assertEquals(ctx.getSelectedDriverConf().get(KEY), VALUE);
+    assertEquals(ctx.getSelectedDriverConf().get(MockDriverQueryHook.KEY), MockDriverQueryHook.VALUE);
   }
 
   /**
@@ -812,8 +807,8 @@ public class TestJdbcDriver {
     DataSourceConnectionProvider.DriverConfig queryCfg =
       queryCp.getDriverConfigfromConf(driver.getConf());
 
-    log.info("@@@ ESTIMATE_CFG " + estimateCfg);
-    log.info("@@@ QUERY CFG " + queryCfg);
+    log.info("@@@ ESTIMATE_CFG {}", estimateCfg);
+    log.info("@@@ QUERY CFG {}", queryCfg);
 
     // Get connection from each so that pools get initialized
     try {
