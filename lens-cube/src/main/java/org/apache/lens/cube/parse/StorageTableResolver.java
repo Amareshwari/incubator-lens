@@ -554,7 +554,7 @@ class StorageTableResolver implements ContextRewriter {
         part = new FactPartition(partCol, toDate, interval, null, partWhereClauseFormat);
         partitions.add(part);
         part.getStorageTables().add(storageTbl);
-        log.info("Added continuous fact partition for storage table " + storageTbl);
+        log.info("Added continuous fact partition for storage table {}", storageTbl);
       }
       return true;
     }
