@@ -919,7 +919,7 @@ public class CubeQueryContext implements TrackQueriedColumns {
       }
       dimsToQuery.putAll(pickCandidateDimsToQuery(joiningTables));
     }
-    log.info("Picked Fact:{} dimsToQuery: {}" + dimsToQuery, cfacts);
+    log.info("Picked Fact:{} dimsToQuery: {}", cfacts, dimsToQuery);
     pickedDimTables = dimsToQuery.values();
     pickedFacts = cfacts;
     if (cfacts != null) {
