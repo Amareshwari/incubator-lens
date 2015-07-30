@@ -19,21 +19,19 @@
 package org.apache.lens.client;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.Date;
 import java.util.List;
 
 import javax.ws.rs.client.*;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MediaType;
-import javax.xml.XMLConstants;
 import javax.xml.bind.*;
-import javax.xml.validation.Schema;
-import javax.xml.validation.SchemaFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.parsers.SAXParserFactory;
+import javax.xml.transform.sax.SAXSource;
 
 import org.apache.lens.api.APIResult;
 import org.apache.lens.api.DateTime;
@@ -41,7 +39,9 @@ import org.apache.lens.api.StringList;
 import org.apache.lens.api.metastore.*;
 
 import org.glassfish.jersey.media.multipart.*;
+import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
+import org.xml.sax.XMLReader;
 
 import com.google.common.base.Joiner;
 import lombok.extern.slf4j.Slf4j;
@@ -54,18 +54,19 @@ public class LensMetadataClient {
   private final ObjectFactory objFact;
 
   public static final Unmarshaller JAXB_UNMARSHALLER;
+  public static final XMLReader XML_READER;
 
   static {
     try {
-      ClassLoader classLoader = LensMetadataClient.class.getClassLoader();
-      SchemaFactory sf = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
-      URI uri = classLoader.getResource("cube-0.1.xsd").toURI();
-      log.info("URI for cube schema: {}", uri.toString());
-      Schema schema = sf.newSchema(uri.toURL());
       JAXBContext jaxbContext = JAXBContext.newInstance(ObjectFactory.class);
       JAXB_UNMARSHALLER = jaxbContext.createUnmarshaller();
-      JAXB_UNMARSHALLER.setSchema(schema);
-    } catch (JAXBException | URISyntaxException | MalformedURLException | SAXException e) {
+
+      SAXParserFactory spf = SAXParserFactory.newInstance();
+      spf.setNamespaceAware(true);
+      spf.setXIncludeAware(true);
+      XML_READER = spf.newSAXParser().getXMLReader();
+      //XML_READER.setContentHandler(JAXB_UNMARSHALLER.getUnmarshallerHandler());
+    } catch (JAXBException | SAXException | ParserConfigurationException e) {
       log.error("Could not initialize JAXBContext. ", e);
       throw new RuntimeException("Could not initialize JAXBContext. ", e);
     }
@@ -184,23 +185,25 @@ public class LensMetadataClient {
     return result;
   }
 
-  private <T> T readFromXML(String filename) throws JAXBException, IOException {
+  private <T> T readFromXML(String filename) throws JAXBException, IOException, SAXException {
+    InputStream is;
     if (filename.startsWith("/")) {
-      return ((JAXBElement<T>) JAXB_UNMARSHALLER.unmarshal(new File(filename))).getValue();
+      is = new FileInputStream(new File(filename));
     } else {
       // load from classpath
-      InputStream file = Thread.currentThread().getContextClassLoader().getResourceAsStream(filename);
-      if (file == null) {
+      is = Thread.currentThread().getContextClassLoader().getResourceAsStream(filename);
+      if (is == null) {
         throw new IOException("File not found:" + filename);
       }
-      return ((JAXBElement<T>) JAXB_UNMARSHALLER.unmarshal(file)).getValue();
     }
+    SAXSource source = new SAXSource(XML_READER, new InputSource(is));
+    return ((JAXBElement<T>) JAXB_UNMARSHALLER.unmarshal(source)).getValue();
   }
 
   public APIResult createCube(String cubeSpec) {
     try {
       return createCube(this.<XCube>readFromXML(cubeSpec));
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
@@ -217,7 +220,7 @@ public class LensMetadataClient {
   public APIResult updateCube(String cubeName, String cubeSpec) {
     try {
       return updateCube(cubeName, this.<XCube>readFromXML(cubeSpec));
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
@@ -286,7 +289,7 @@ public class LensMetadataClient {
   public APIResult createDimension(String dimSpec) {
     try {
       return createDimension(this.<XDimension>readFromXML(dimSpec));
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
@@ -303,7 +306,7 @@ public class LensMetadataClient {
   public APIResult updateDimension(String dimName, String dimSpec) {
     try {
       return updateDimension(dimName, this.<XDimension>readFromXML(dimSpec));
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
@@ -347,7 +350,7 @@ public class LensMetadataClient {
   public APIResult createNewStorage(String storage) {
     try {
       return createNewStorage(this.<XStorage>readFromXML(storage));
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
@@ -373,7 +376,7 @@ public class LensMetadataClient {
   public APIResult updateStorage(String storageName, String storage) {
     try {
       return updateStorage(storageName, this.<XStorage>readFromXML(storage));
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
@@ -461,7 +464,7 @@ public class LensMetadataClient {
   public APIResult createFactTable(String factSpec) {
     try {
       return createFactTable(this.<XFactTable>readFromXML(factSpec));
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
@@ -478,7 +481,7 @@ public class LensMetadataClient {
   public APIResult updateFactTable(String factName, String table) {
     try {
       return updateFactTable(factName, this.<XFactTable>readFromXML(table));
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
@@ -527,7 +530,7 @@ public class LensMetadataClient {
   public APIResult addStorageToFactTable(String factname, String storageSpec) {
     try {
       return addStorageToFactTable(factname, this.<XStorageTableElement>readFromXML(storageSpec));
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
@@ -640,7 +643,7 @@ public class LensMetadataClient {
   public APIResult createDimensionTable(String tableXml) {
     try {
       return createDimensionTable(this.<XDimensionTable>readFromXML(tableXml));
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
@@ -661,7 +664,7 @@ public class LensMetadataClient {
       XDimensionTable dimensionTable = readFromXML(dimSpec);
       dimensionTable.setTableName(dimTblName);
       return updateDimensionTable(dimensionTable);
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
@@ -712,7 +715,7 @@ public class LensMetadataClient {
   public APIResult addStorageToDimTable(String dimTblName, String table) {
     try {
       return addStorageToDimTable(dimTblName, this.<XStorageTableElement>readFromXML(table));
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
@@ -809,7 +812,7 @@ public class LensMetadataClient {
     String partitionSpec) {
     try {
       return addPartitionToDimensionTable(dimTblName, storage, (XPartition) readFromXML(partitionSpec));
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
@@ -829,7 +832,7 @@ public class LensMetadataClient {
     String partitionsSpec) {
     try {
       return addPartitionsToDimensionTable(dimTblName, storage, (XPartitionList) readFromXML(partitionsSpec));
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
@@ -849,7 +852,7 @@ public class LensMetadataClient {
     String partitionSpec) {
     try {
       return addPartitionToFactTable(fact, storage, (XPartition) readFromXML(partitionSpec));
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
@@ -869,7 +872,7 @@ public class LensMetadataClient {
     String partitionsSpec) {
     try {
       return addPartitionsToFactTable(fact, storage, (XPartitionList) readFromXML(partitionsSpec));
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
@@ -889,7 +892,7 @@ public class LensMetadataClient {
     String partitionSpec) {
     try {
       return updatePartitionOfDimensionTable(dimTblName, storage, (XPartition) readFromXML(partitionSpec));
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
@@ -909,7 +912,7 @@ public class LensMetadataClient {
     String partitionsSpec) {
     try {
       return updatePartitionsOfDimensionTable(dimTblName, storage, (XPartitionList) readFromXML(partitionsSpec));
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
@@ -929,7 +932,7 @@ public class LensMetadataClient {
     String partitionSpec) {
     try {
       return updatePartitionOfFactTable(fact, storage, (XPartition) readFromXML(partitionSpec));
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
@@ -949,7 +952,7 @@ public class LensMetadataClient {
     String partitionsSpec) {
     try {
       return updatePartitionsOfFactTable(fact, storage, (XPartitionList) readFromXML(partitionsSpec));
-    } catch (JAXBException | IOException e) {
+    } catch (JAXBException | IOException | SAXException e) {
       return failureAPIResult(e);
     }
   }
