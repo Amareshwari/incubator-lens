@@ -54,20 +54,20 @@ class JoinResolver implements ContextRewriter {
       return "";
     }
     switch (joinType) {
-      case FULLOUTER:
-        return " full outer";
-      case INNER:
-        return " inner";
-      case LEFTOUTER:
-        return " left outer";
-      case LEFTSEMI:
-        return " left semi";
-      case UNIQUE:
-        return " unique";
-      case RIGHTOUTER:
-        return " right outer";
-      default:
-        return "";
+    case FULLOUTER:
+      return " full outer";
+    case INNER:
+      return " inner";
+    case LEFTOUTER:
+      return " left outer";
+    case LEFTSEMI:
+      return " left semi";
+    case UNIQUE:
+      return " unique";
+    case RIGHTOUTER:
+      return " right outer";
+    default:
+      return "";
     }
   }
 
