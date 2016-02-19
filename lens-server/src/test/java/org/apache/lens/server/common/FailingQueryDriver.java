@@ -19,6 +19,8 @@
 
 package org.apache.lens.server.common;
 
+import javax.ws.rs.NotFoundException;
+
 import org.apache.lens.server.api.driver.DriverQueryPlan;
 import org.apache.lens.server.api.driver.MockDriver;
 import org.apache.lens.server.api.error.LensException;
@@ -42,6 +44,9 @@ public class FailingQueryDriver extends MockDriver {
   public DriverQueryPlan explain(AbstractQueryContext explainCtx) throws LensException {
     if (explainCtx.getUserQuery().contains("runtime")) {
       throw new RuntimeException("Runtime exception from query explain");
+    }
+    if (explainCtx.getUserQuery().contains("webappexception")) {
+      throw new NotFoundException("Not found from mock driver");
     }
     return super.explain(explainCtx);
   }

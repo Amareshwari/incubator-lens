@@ -18,6 +18,7 @@
  */
 package org.apache.lens.server.error;
 
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.ExceptionMapper;
 import javax.ws.rs.ext.Provider;
@@ -34,11 +35,20 @@ public class GenericErrorMapper implements ExceptionMapper<Throwable> {
   private final LogSegregationContext logContext = LensServices.get().getLogSegregationContext();
   @Override
   public Response toResponse(Throwable exception) {
-    LensErrorTO errorTO = LensErrorTO.composedOf(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(),
-      "Internal server error" + (exception.getMessage() != null ? ":" + exception.getMessage() : ""),
-      ExceptionUtils.getStackTrace(exception));
+    LensErrorTO errorTO;
+    Response.Status status;
+    if (exception instanceof WebApplicationException) {
+      status = Response.Status.fromStatusCode(((WebApplicationException) exception).getResponse().getStatus());
+      errorTO = LensErrorTO.composedOf(status.getStatusCode(), exception.getMessage(),
+        ExceptionUtils.getStackTrace(exception));
+    } else {
+      status = Response.Status.INTERNAL_SERVER_ERROR;
+      errorTO = LensErrorTO.composedOf(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(),
+        "Internal server error" + (exception.getMessage() != null ? ":" + exception.getMessage() : ""),
+        ExceptionUtils.getStackTrace(exception));
+    }
     LensAPIResult lensAPIResult = LensAPIResult.composedOf(null, logContext.getLogSegragationId(), errorTO,
-      Response.Status.INTERNAL_SERVER_ERROR);
+      status);
     return Response.status(lensAPIResult.getHttpStatusCode()).entity(lensAPIResult).build();
 
   }

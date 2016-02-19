@@ -19,6 +19,7 @@
 package org.apache.lens.server.query;
 
 import static javax.ws.rs.core.Response.Status.BAD_REQUEST;
+import static javax.ws.rs.core.Response.Status.NOT_FOUND;
 
 import static org.apache.lens.api.error.LensCommonErrorCode.INTERNAL_SERVER_ERROR;
 import static org.apache.lens.cube.error.LensCubeErrorCode.COLUMN_UNAVAILABLE_IN_TIME_RANGE;
@@ -309,6 +310,28 @@ public class QueryAPIErrorResponseTest extends LensJerseyTest {
       LensErrorTO expectedLensErrorTO = LensErrorTO.composedOf(
         INTERNAL_SERVER_ERROR.getValue(), expectedErrMsg, MOCK_STACK_TRACE);
       ErrorResponseExpectedData expectedData = new ErrorResponseExpectedData(Response.Status.INTERNAL_SERVER_ERROR,
+        expectedLensErrorTO);
+      expectedData.verify(response);
+    } finally {
+      closeSessionFailFast(target(), sessionId, mt);
+    }
+
+  }
+  /**
+   * Test execute failure in with selected driver throwing webapp exception.
+   *
+   * @throws InterruptedException the interrupted exception
+   */
+  @Test(dataProvider = "mediaTypeData")
+  public void testExplainWebappException(MediaType mt) throws InterruptedException {
+    LensSessionHandle sessionId = openSession(target(), "foo", "bar", new LensConf(), mt);
+    try {
+      Response response = explain(target(), Optional.of(sessionId), Optional.of("select fail, webappexception "
+        + " from non_exist"), mt);
+      final String expectedErrMsg = "Not found from mock driver";
+      LensErrorTO expectedLensErrorTO = LensErrorTO.composedOf(
+        NOT_FOUND.getStatusCode(), expectedErrMsg, MOCK_STACK_TRACE);
+      ErrorResponseExpectedData expectedData = new ErrorResponseExpectedData(Response.Status.NOT_FOUND,
         expectedLensErrorTO);
       expectedData.verify(response);
     } finally {
