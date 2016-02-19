@@ -47,6 +47,7 @@ import org.apache.lens.cube.error.ColUnAvailableInTimeRange;
 import org.apache.lens.server.LensJerseyTest;
 import org.apache.lens.server.LensRequestContextInitFilter;
 import org.apache.lens.server.common.ErrorResponseExpectedData;
+import org.apache.lens.server.error.GenericErrorMapper;
 import org.apache.lens.server.error.LensExceptionMapper;
 import org.apache.lens.server.error.LensJAXBValidationExceptionMapper;
 import org.apache.lens.server.metastore.MetastoreResource;
@@ -90,7 +91,8 @@ public class QueryAPIErrorResponseTest extends LensJerseyTest {
     enable(TestProperties.DUMP_ENTITY);
 
     return new ResourceConfig(LensRequestContextInitFilter.class, SessionResource.class, MetastoreResource.class,
-      QueryServiceResource.class, MultiPartFeature.class, LensExceptionMapper.class, LensJAXBContextResolver.class,
+      QueryServiceResource.class, MultiPartFeature.class, GenericErrorMapper.class, LensExceptionMapper.class,
+      LensJAXBContextResolver.class,
       LensRequestContextInitFilter.class, LensJAXBValidationExceptionMapper.class,
       MoxyJsonConfigurationContextResolver.class, MoxyJsonFeature.class);
   }
@@ -129,7 +131,7 @@ public class QueryAPIErrorResponseTest extends LensJerseyTest {
     LensSessionHandle sessionId = openSession(target(), "foo", "bar", new LensConf(), mt);
 
     Response response = postQuery(target(), Optional.of(sessionId), Optional.of(MOCK_QUERY),
-        Optional.of(INVALID_OPERATION), mt);
+      Optional.of(INVALID_OPERATION), mt);
 
     final String expectedErrMsg = "Provided Operation is not supported. Supported Operations are: "
       + "[estimate, execute, explain, execute_with_timeout]";
@@ -163,7 +165,7 @@ public class QueryAPIErrorResponseTest extends LensJerseyTest {
     LensErrorTO responseLensErrorTO = response.readEntity(LensAPIResult.class).getLensErrorTO();
 
     assertTrue(expectedLensErrorTO1.getMessage().equals(responseLensErrorTO.getMessage())
-            || expectedLensErrorTO2.getMessage().equals(responseLensErrorTO.getMessage()),
+        || expectedLensErrorTO2.getMessage().equals(responseLensErrorTO.getMessage()),
       "Message is " + responseLensErrorTO.getMessage());
   }
 
@@ -290,5 +292,28 @@ public class QueryAPIErrorResponseTest extends LensJerseyTest {
       dropDatabaseFailFast(target, sessionId, testDb, mt);
       closeSessionFailFast(target, sessionId, mt);
     }
+  }
+
+  /**
+   * Test execute failure in with selected driver throwing Runtime exception.
+   *
+   * @throws InterruptedException the interrupted exception
+   */
+  @Test(dataProvider = "mediaTypeData")
+  public void testExplainRuntimeException(MediaType mt) throws InterruptedException {
+    LensSessionHandle sessionId = openSession(target(), "foo", "bar", new LensConf(), mt);
+    try {
+      Response response = explain(target(), Optional.of(sessionId), Optional.of("select fail, execute_runtime "
+        + " from non_exist"), mt);
+      final String expectedErrMsg = "Internal server error:Runtime exception from query explain";
+      LensErrorTO expectedLensErrorTO = LensErrorTO.composedOf(
+        INTERNAL_SERVER_ERROR.getValue(), expectedErrMsg, MOCK_STACK_TRACE);
+      ErrorResponseExpectedData expectedData = new ErrorResponseExpectedData(Response.Status.INTERNAL_SERVER_ERROR,
+        expectedLensErrorTO);
+      expectedData.verify(response);
+    } finally {
+      closeSessionFailFast(target(), sessionId, mt);
+    }
+
   }
 }

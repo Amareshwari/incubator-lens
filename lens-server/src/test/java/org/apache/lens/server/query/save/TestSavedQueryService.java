@@ -39,6 +39,7 @@ import org.apache.lens.server.LensServices;
 import org.apache.lens.server.api.metrics.MetricsService;
 import org.apache.lens.server.api.query.QueryExecutionService;
 import org.apache.lens.server.api.query.save.SavedQueryService;
+import org.apache.lens.server.error.GenericErrorMapper;
 import org.apache.lens.server.error.LensExceptionMapper;
 import org.apache.lens.server.query.QueryExecutionServiceImpl;
 
@@ -81,6 +82,7 @@ public class TestSavedQueryService extends LensJerseyTest {
     @Override
     public Set<Class<?>> getClasses() {
       final Set<Class<?>> classes = super.getClasses();
+      classes.add(GenericErrorMapper.class);
       classes.add(LensExceptionMapper.class);
       classes.add(LensJAXBContextResolver.class);
       return classes;

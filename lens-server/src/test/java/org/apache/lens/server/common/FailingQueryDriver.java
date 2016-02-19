@@ -19,6 +19,7 @@
 
 package org.apache.lens.server.common;
 
+import org.apache.lens.server.api.driver.DriverQueryPlan;
 import org.apache.lens.server.api.driver.MockDriver;
 import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.query.AbstractQueryContext;
@@ -30,7 +31,6 @@ public class FailingQueryDriver extends MockDriver {
 
   @Override
   public QueryCost estimate(final AbstractQueryContext ctx) throws LensException {
-
     if (ctx.getUserQuery().contains("fail")) {
       return new FactPartitionBasedQueryCost(0.0);
     } else {
@@ -39,7 +39,15 @@ public class FailingQueryDriver extends MockDriver {
   }
 
   @Override
-  public void executeAsync(final QueryContext context) throws LensException {
+  public DriverQueryPlan explain(AbstractQueryContext explainCtx) throws LensException {
+    if (explainCtx.getUserQuery().contains("runtime")) {
+      throw new RuntimeException("Runtime exception from query explain");
+    }
+    return super.explain(explainCtx);
+  }
+
+  @Override
+  public void executeAsync(final QueryContext ctx) throws LensException {
     throw new LensException("Simulated Launch Failure");
   }
 }
