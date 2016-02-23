@@ -31,7 +31,6 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 import org.apache.hadoop.hive.ql.parse.HiveParser;
-import org.apache.hadoop.hive.ql.parse.ParseException;
 
 import org.antlr.runtime.CommonToken;
 import org.antlr.runtime.tree.Tree;
@@ -73,18 +72,12 @@ class GroupbyResolver implements ContextRewriter {
 
         if (!groupByExprs.contains(expr)) {
           if (!cubeql.isAggregateExpr(expr)) {
-            ASTNode exprAST;
-            try {
-              exprAST = HQLParser.parseExpr(expr);
-            } catch (ParseException e) {
-              throw new LensException(e);
-            }
+            ASTNode exprAST = HQLParser.parseExpr(expr);
             ASTNode groupbyAST = cubeql.getGroupByAST();
             if (!isConstantsUsed(exprAST)) {
               if (groupbyAST != null) {
                 // groupby ast exists, add the expression to AST
                 groupbyAST.addChild(exprAST);
-                exprAST.setParent(groupbyAST);
               } else {
                 // no group by ast exist, create one
                 ASTNode newAST = new ASTNode(new CommonToken(TOK_GROUPBY));
@@ -140,12 +133,7 @@ class GroupbyResolver implements ContextRewriter {
     int index = 0;
     for (String expr : groupByExprs) {
       if (!contains(cubeql, selectExprs, expr)) {
-        ASTNode exprAST;
-        try {
-          exprAST = HQLParser.parseExpr(expr);
-        } catch (ParseException e) {
-          throw new LensException(e);
-        }
+        ASTNode exprAST = HQLParser.parseExpr(expr);
         addChildAtIndex(index, cubeql.getSelectAST(), exprAST);
         index++;
       }
@@ -164,7 +152,6 @@ class GroupbyResolver implements ContextRewriter {
       parent.setChild(i + 1, ch);
     }
     parent.setChild(index, child);
-    child.setParent(parent);
   }
 
   @Override

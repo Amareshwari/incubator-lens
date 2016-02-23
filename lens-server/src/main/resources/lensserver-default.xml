@@ -24,7 +24,7 @@
 <configuration>
   <property>
     <name>lens.server.drivers</name>
-    <value>org.apache.lens.driver.hive.HiveDriver</value>
+    <value>hive:org.apache.lens.driver.hive.HiveDriver</value>
     <description>Drivers enabled for this lens server instance</description>
   </property>
 
@@ -91,7 +91,7 @@
 
   <property>
     <name>lens.server.scheduler.service.impl</name>
-    <value>org.apache.lens.server.scheduler.QuerySchedulerServiceImpl</value>
+    <value>org.apache.lens.server.scheduler.SchedulerServiceImpl</value>
     <description>Implementation class for query scheduler service</description>
   </property>
 
@@ -308,6 +308,16 @@
     <value>10000</value>
     <description>The interval(milliseconds) with which purger to run periodically. Default 10 sec. </description>
   </property>
+
+  <property>
+    <name>lens.server.inmemory.resultset.ttl.secs</name>
+    <value>300</value>
+    <description>This property defines the TTL(time to live) in seconds for all result sets of type InMemoryResultSet
+     beyond which they are eligible for purging irrespective of whether the result set has been read or not.
+     The default value is 300 seconds (5 minutes).
+     </description>
+  </property>
+
   <property>
     <name>lens.server.domain</name>
     <value>company.com</value>
@@ -445,7 +455,7 @@
 
   <property>
     <name>lens.server.ws.featurenames</name>
-    <value>multipart</value>
+    <value>multipart,moxyjson,moxyjsonconfigresovler</value>
     <description>These JAX-RS Feature(s) would be started in the specified order when lens-server starts up
     </description>
   </property>
@@ -456,6 +466,16 @@
     <description>Implementation class for query scheduler resource</description>
   </property>
 
+  <property>
+    <name>lens.server.moxyjson.ws.feature.impl</name>
+    <value>org.glassfish.jersey.moxy.json.MoxyJsonFeature</value>
+    <description>Enable Moxy json feature </description>
+  </property>
+  <property>
+    <name>lens.server.moxyjsonconfigresovler.ws.feature.impl</name>
+    <value>org.apache.lens.api.util.MoxyJsonConfigurationContextResolver</value>
+    <description>Moxy json configuration resolver</description>
+  </property>
   <property>
     <name>lens.server.ws.filternames</name>
     <value>authentication,consistentState,serverMode</value>

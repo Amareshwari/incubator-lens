@@ -18,6 +18,8 @@
  */
 package org.apache.lens.cube.metadata;
 
+import static org.mockito.Matchers.anyBoolean;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -26,7 +28,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.lens.cube.parse.DateUtil;
 import org.apache.lens.server.api.error.LensException;
 
 import org.testng.annotations.DataProvider;
@@ -66,6 +67,8 @@ public class CubeFactTableTest {
     when(cubeFactTable.now()).thenReturn(now);
 
     when(cubeFactTable.getProperties()).thenReturn(properties);
+
+    when(cubeFactTable.getDateFromProperty(anyString(), anyBoolean(), anyBoolean())).thenCallRealMethod();
 
     when(cubeFactTable.getRelativeStartTime()).thenCallRealMethod();
     when(cubeFactTable.getAbsoluteStartTime()).thenCallRealMethod();

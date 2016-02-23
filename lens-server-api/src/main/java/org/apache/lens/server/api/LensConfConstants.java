@@ -52,9 +52,9 @@ public final class LensConfConstants {
   public static final String METASTORE_PFX = "lens.metastore.";
 
   /**
-   * The Constant DRIVER_CLASSES.
+   * The Constant DRIVER_TYPES_AND_CLASSES
    */
-  public static final String DRIVER_CLASSES = SERVER_PFX + "drivers";
+  public static final String DRIVER_TYPES_AND_CLASSES = SERVER_PFX + "drivers";
   /**
    * The Constant DRIVER_SELECTOR_CLASS.
    */
@@ -943,6 +943,21 @@ public final class LensConfConstants {
   public static final int DEFAULT_FETCH_COUNT_SAVED_QUERY_LIST = 20;
 
   /**
+   * This is the base directory where all drivers are available under lens-server's Conf directory.
+   */
+  public static final String DRIVERS_BASE_DIR = "drivers";
+
+  /**
+   * Name of the property that holds the path of "conf" directory of server
+   */
+  public static final String CONFIG_LOCATION = "config.location";
+
+  /**
+   * Default location of "conf" directory (wrt to lens-server/bin)
+   */
+  public static final String DEFAULT_CONFIG_LOCATION = "../conf";
+
+  /**
    * The Constant RESULTSET_PURGE_ENABLED.
    */
   public static final String RESULTSET_PURGE_ENABLED = SERVER_PFX + "resultset.purge.enabled";
@@ -982,4 +997,44 @@ public final class LensConfConstants {
    */
   public static final String DEFAULT_HDFS_OUTPUT_RETENTION = "1 day";
 
+  /**
+   * Pre Fetch results in case of in memory result sets.
+   */
+  public static final String PREFETCH_INMEMORY_RESULTSET = QUERY_PFX + "prefetch.inmemory.resultset";
+
+  /**
+   * Pre Fetch results in case of in memory result sets is enabled by default
+   */
+  public static final boolean DEFAULT_PREFETCH_INMEMORY_RESULTSET = true;
+
+  /**
+   * Pre-Fetch size for in memory results. Makes sense only if {@link #PREFETCH_INMEMORY_RESULTSET} set to true
+   */
+  public static final String PREFETCH_INMEMORY_RESULTSET_ROWS = QUERY_PFX + "prefetch.inmemory.resultset.rows";
+
+  /**
+   * Default Pre-Fetch size for in memory results.
+   */
+  public static final int DEFAULT_PREFETCH_INMEMORY_RESULTSET_ROWS = 100;
+
+  /**
+   * The Constant EXCLUDE_CUBE_TABLES.
+   */
+  public static final String EXCLUDE_CUBE_TABLES = SESSION_PFX + "metastore.exclude.cubetables.from.nativetables";
+
+  /**
+   * The Constant DEFAULT_EXCLUDE_CUBE_TABLES.
+   */
+  public static final boolean DEFAULT_EXCLUDE_CUBE_TABLES = true;
+
+  /**
+   * This property defines the TTL secs for all result sets of
+   * type {@link org.apache.lens.server.api.driver.InMemoryResultSet} beyond which they are eligible for purging
+   */
+  public static final String INMEMORY_RESULT_SET_TTL_SECS = SERVER_PFX + "inmemory.resultset.ttl.secs";
+
+  /**
+   * Default value of  INMEMORY_RESULT_SET_TTL_SECS is 300 secs (5 minutes)
+   */
+  public static final int DEFAULT_INMEMORY_RESULT_SET_TTL_SECS = 300;
 }

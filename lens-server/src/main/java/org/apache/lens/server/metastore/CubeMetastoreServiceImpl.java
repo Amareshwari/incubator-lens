@@ -31,12 +31,14 @@ import org.apache.lens.cube.metadata.*;
 import org.apache.lens.cube.metadata.timeline.PartitionTimeline;
 import org.apache.lens.server.BaseLensService;
 import org.apache.lens.server.LensServerConf;
+import org.apache.lens.server.api.LensConfConstants;
 import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.health.HealthStatus;
 import org.apache.lens.server.api.metastore.CubeMetastoreService;
 import org.apache.lens.server.session.LensSessionImpl;
 
 import org.apache.commons.lang.StringUtils;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.*;
 import org.apache.hadoop.hive.ql.metadata.Hive;
@@ -699,7 +701,7 @@ public class CubeMetastoreServiceImpl extends BaseLensService implements CubeMet
         storageName);
       List<Partition> parts = client.getPartitionsByFilter(storageTableName, filter);
       List<String> timePartCols = client.getTimePartColNamesOfTable(storageTableName);
-      return xpartitionListFromPartitionList(parts, timePartCols);
+      return xpartitionListFromPartitionList(fact, parts, timePartCols);
     } catch (HiveException exc) {
       throw new LensException(exc);
     } finally {
@@ -735,31 +737,31 @@ public class CubeMetastoreServiceImpl extends BaseLensService implements CubeMet
     }
   }
 
-  private CubeDimensionTable checkDimensionStorage(LensSessionHandle sessionid, String dimension, String storage)
+  private CubeDimensionTable checkDimTableStorage(LensSessionHandle sessionid, String dimTable, String storage)
     throws HiveException, LensException {
     CubeMetastoreClient client = getClient(sessionid);
-    if (!client.isDimensionTable(dimension)) {
-      throw new NotFoundException("Dimension table not found: " + dimension);
+    if (!client.isDimensionTable(dimTable)) {
+      throw new NotFoundException("Dimension table not found: " + dimTable);
     }
-    CubeDimensionTable cdt = client.getDimensionTable(dimension);
+    CubeDimensionTable cdt = client.getDimensionTable(dimTable);
     if (!cdt.getStorages().contains(storage)) {
-      throw new NotFoundException("Storage " + storage + " not found for dimension " + dimension);
+      throw new NotFoundException("Storage " + storage + " not found for dimension table " + dimTable);
     }
     return cdt;
   }
 
   @Override
   public XPartitionList getAllPartitionsOfDimTableStorage(
-    LensSessionHandle sessionid, String dimension, String storageName, String filter)
+    LensSessionHandle sessionid, String dimTable, String storageName, String filter)
     throws LensException {
     try {
       acquire(sessionid);
-      checkDimensionStorage(sessionid, dimension, storageName);
+      checkDimTableStorage(sessionid, dimTable, storageName);
       CubeMetastoreClient client = getClient(sessionid);
-      String storageTableName = MetastoreUtil.getFactOrDimtableStorageTableName(dimension, storageName);
+      String storageTableName = MetastoreUtil.getFactOrDimtableStorageTableName(dimTable, storageName);
       List<Partition> partitions = client.getPartitionsByFilter(storageTableName, filter);
       List<String> timePartCols = client.getTimePartColNamesOfTable(storageTableName);
-      return xpartitionListFromPartitionList(partitions, timePartCols);
+      return xpartitionListFromPartitionList(dimTable, partitions, timePartCols);
     } catch (HiveException exc) {
       throw new LensException(exc);
     } finally {
@@ -772,7 +774,7 @@ public class CubeMetastoreServiceImpl extends BaseLensService implements CubeMet
     String dimTblName, String storageName, XPartition partition) throws LensException {
     try {
       acquire(sessionid);
-      checkDimensionStorage(sessionid, dimTblName, storageName);
+      checkDimTableStorage(sessionid, dimTblName, storageName);
       return getClient(sessionid).addPartition(storagePartSpecFromXPartition(partition), storageName).size();
     } catch (HiveException exc) {
       throw new LensException(exc);
@@ -826,7 +828,7 @@ public class CubeMetastoreServiceImpl extends BaseLensService implements CubeMet
     String dimTblName, String storageName, XPartitionList partitions) throws LensException {
     try {
       acquire(sessionid);
-      checkDimensionStorage(sessionid, dimTblName, storageName);
+      checkDimTableStorage(sessionid, dimTblName, storageName);
       return getClient(sessionid).addPartitions(storagePartSpecListFromXPartitionList(partitions), storageName).size();
     } catch (HiveException exc) {
       throw new LensException(exc);
@@ -870,7 +872,7 @@ public class CubeMetastoreServiceImpl extends BaseLensService implements CubeMet
         String dateStr = partSpec.get(partCol);
         Date date = null;
         try {
-          date = period.format().parse(dateStr);
+          date = period.parse(dateStr);
         } catch (Exception e) {
           continue;
         }
@@ -919,11 +921,9 @@ public class CubeMetastoreServiceImpl extends BaseLensService implements CubeMet
     String storageName, String filter) throws LensException {
     try {
       acquire(sessionid);
-      String tableName = MetastoreUtil.getStorageTableName(cubeTableName,
-        Storage.getPrefix(storageName));
+      String tableName = MetastoreUtil.getStorageTableName(cubeTableName, Storage.getPrefix(storageName));
       CubeMetastoreClient msClient = getClient(sessionid);
-      List<Partition> partitions = msClient.getPartitionsByFilter(
-        tableName, filter);
+      List<Partition> partitions = msClient.getPartitionsByFilter(tableName, filter);
       for (Partition part : partitions) {
         try {
           Map<String, Date> timeSpec = new HashMap<String, Date>();
@@ -1195,6 +1195,10 @@ public class CubeMetastoreServiceImpl extends BaseLensService implements CubeMet
       msc = getSession(sessionid).getMetaStoreClient();
       List<String> tables = msc.getAllTables(
         dbName);
+      Configuration conf = getSession(sessionid).getSessionConf();
+      if (!conf.getBoolean(LensConfConstants.EXCLUDE_CUBE_TABLES, LensConfConstants.DEFAULT_EXCLUDE_CUBE_TABLES)) {
+        return tables;
+      }
       List<String> result = new ArrayList<String>();
       if (tables != null && !tables.isEmpty()) {
         List<org.apache.hadoop.hive.metastore.api.Table> tblObjects =
@@ -1214,10 +1218,6 @@ public class CubeMetastoreServiceImpl extends BaseLensService implements CubeMet
       return result;
     } catch (Exception e) {
       throw new LensException("Error getting native tables from DB", e);
-    } finally {
-      if (null != msc) {
-        msc.close();
-      }
     }
   }
 

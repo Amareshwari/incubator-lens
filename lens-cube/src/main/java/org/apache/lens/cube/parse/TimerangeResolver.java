@@ -27,11 +27,10 @@ import java.util.*;
 import org.apache.lens.cube.error.ColUnAvailableInTimeRange;
 import org.apache.lens.cube.error.ColUnAvailableInTimeRangeException;
 import org.apache.lens.cube.error.LensCubeErrorCode;
-import org.apache.lens.cube.metadata.AbstractCubeTable;
-import org.apache.lens.cube.metadata.CubeColumn;
-import org.apache.lens.cube.metadata.Dimension;
-import org.apache.lens.cube.metadata.SchemaGraph;
+import org.apache.lens.cube.metadata.*;
+import org.apache.lens.cube.metadata.join.JoinPath;
 import org.apache.lens.cube.parse.DenormalizationResolver.ReferencedQueriedColumn;
+import org.apache.lens.cube.parse.join.AutoJoinContext;
 import org.apache.lens.server.api.error.LensException;
 
 import org.apache.commons.lang.StringUtils;
@@ -200,14 +199,14 @@ class TimerangeResolver implements ContextRewriter {
         if (!column.isColumnAvailableInTimeRange(range)) {
           log.info("Timerange queried is not in column life for {}, Removing join paths containing the column", column);
           // Remove join paths containing this column
-          Map<Aliased<Dimension>, List<SchemaGraph.JoinPath>> allPaths = joinContext.getAllPaths();
+          Map<Aliased<Dimension>, List<JoinPath>> allPaths = joinContext.getAllPaths();
 
           for (Aliased<Dimension> dimension : allPaths.keySet()) {
-            List<SchemaGraph.JoinPath> joinPaths = allPaths.get(dimension);
-            Iterator<SchemaGraph.JoinPath> joinPathIterator = joinPaths.iterator();
+            List<JoinPath> joinPaths = allPaths.get(dimension);
+            Iterator<JoinPath> joinPathIterator = joinPaths.iterator();
 
             while (joinPathIterator.hasNext()) {
-              SchemaGraph.JoinPath path = joinPathIterator.next();
+              JoinPath path = joinPathIterator.next();
               if (path.containsColumnOfTable(col, (AbstractCubeTable) cubeql.getCube())) {
                 log.info("Removing join path: {} as columns :{} is not available in the range", path, col);
                 joinPathIterator.remove();

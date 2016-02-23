@@ -61,20 +61,42 @@ import com.google.common.base.Joiner;
     + "  <<<query execute cube select id,name from dim_table where name != \"\"first\"\">>>,\n"
     + "  will be parsed as <<<cube select id,name from dim_table where name != \"first\">>>")
 public class LensQueryCommands extends BaseLensCommand {
+  public static final String DEFAULT_QUERY_HANDLE_DESCRIPTION =
+    "If not provided, takes last query handle interacted with.";
+  private static final String ASYNC_DOC =
+    "If <async> is true, The query is launched in async manner and query handle is returned. It's by default false.";
+  private static final String QUERY_NAME_DOC = "<query name> can also be provided, though not required.";
 
-  /**
-   * Execute query.
-   *
-   * @param sql       the sql
-   * @param async    the asynch
-   * @param queryName the query name
-   * @return the string
-   */
+  @CliCommand(value = "select",
+    help = "Execute query <select query-string-without-select>. " + ASYNC_DOC + " " + QUERY_NAME_DOC)
+  public String executeSelectQuery(
+    @CliOption(key = {""}, mandatory = true, help = "<query-string-without-select>") String sql,
+    @CliOption(key = {"async"}, mandatory = false, unspecifiedDefaultValue = "false",
+      specifiedDefaultValue = "true", help = "<async>") boolean async,
+    @CliOption(key = {"name"}, mandatory = false, help = "<query-name>") String queryName) {
+    return executeQuery("select " + sql, async, queryName);
+  }
+
+  @CliCommand(value = "cube select",
+    help = "Execute cube query <cube select query-string-without-cube-select>. " + ASYNC_DOC + " " + QUERY_NAME_DOC)
+  public String executeCubeSelectQuery(
+    @CliOption(key = {""}, mandatory = true, help = "<query-string-without-cube-select>") String sql,
+    @CliOption(key = {"async"}, mandatory = false, unspecifiedDefaultValue = "false",
+      specifiedDefaultValue = "true", help = "<async>") boolean async,
+    @CliOption(key = {"name"}, mandatory = false, help = "<query-name>") String queryName) {
+    return executeQuery("cube select " + sql, async, queryName);
+  }
+
+    /**
+     * Execute query.
+     *
+     * @param sql       the sql
+     * @param async    the asynch
+     * @param queryName the query name
+     * @return the string
+     */
   @CliCommand(value = "query execute",
-    help = "Execute query <query-string>."
-      +
-      " If <async> is true, The query is launched in async manner and query handle is returned. It's by default false."
-      + " <query name> can also be provided, though not required")
+    help = "Execute query <query-string>. " + ASYNC_DOC + " " + QUERY_NAME_DOC)
   public String executeQuery(
     @CliOption(key = {"", "query"}, mandatory = true, help = "<query-string>") String sql,
     @CliOption(key = {"async"}, mandatory = false, unspecifiedDefaultValue = "false",
@@ -110,7 +132,6 @@ public class LensQueryCommands extends BaseLensCommand {
    */
   private String formatResultSet(LensClient.LensClientResultSetWithStats rs) {
     StringBuilder b = new StringBuilder();
-    int numRows = 0;
     if (rs.getResultSet() != null) {
       QueryResultSetMetadata resultSetMetadata = rs.getResultSet().getResultSetMetadata();
       for (ResultColumn column : resultSetMetadata.getColumns()) {
@@ -125,7 +146,7 @@ public class LensQueryCommands extends BaseLensCommand {
         PersistentQueryResult temp = (PersistentQueryResult) r;
         b.append("Results of query stored at : ").append(temp.getPersistedURI()).append("  ");
         if (null != temp.getNumRows()) {
-          b.append(temp.getNumRows() + " rows ");
+          b.append(temp.getNumRows()).append(" rows ");
         }
       }
     }
@@ -145,14 +166,17 @@ public class LensQueryCommands extends BaseLensCommand {
    * @param qh the qh
    * @return the status
    */
-  @CliCommand(value = "query status", help = "Fetch status of executed query having query handle <query_handle>")
+  @CliCommand(value = "query status",
+    help = "Fetch status of executed query having query handle <query_handle>. " + DEFAULT_QUERY_HANDLE_DESCRIPTION)
   public String getStatus(
-    @CliOption(key = {"", "query_handle"}, mandatory = true, help = "<query_handle>") String qh) {
-    QueryStatus status = getClient().getQueryStatus(new QueryHandle(UUID.fromString(qh)));
+    @CliOption(key = {"", "query_handle"}, mandatory = false, help = "<query_handle>") String qh) {
+    qh = getOrDefaultQueryHandleString(qh);
+    QueryHandle handle = QueryHandle.fromString(qh);
+    QueryStatus status = getClient().getQueryStatus(handle);
     if (status == null) {
-      return "Unable to find status for " + qh;
+      return "Unable to find status for " + handle;
     }
-    return status.toString();
+    return "Query Handle: " + qh + "\n" + status.toString();
   }
 
   /**
@@ -161,20 +185,16 @@ public class LensQueryCommands extends BaseLensCommand {
    * @param qh the qh
    * @return the query
    */
-  @CliCommand(value = "query details", help = "Get query details of query with handle <query_handle>")
+  @CliCommand(value = "query details",
+    help = "Get query details of query with handle <query_handle>." + DEFAULT_QUERY_HANDLE_DESCRIPTION)
   public String getDetails(
-    @CliOption(key = {"", "query_handle"}, mandatory = true, help
-      = "<query_handle>") String qh) {
+    @CliOption(key = {"", "query_handle"}, mandatory = false, help = "<query_handle>") String qh) {
+    qh = getOrDefaultQueryHandleString(qh);
     LensQuery query = getClient().getQueryDetails(qh);
     if (query == null) {
       return "Unable to find query for " + qh;
     }
-
-    try {
-      return formatJson(mapper.writer(pp).writeValueAsString(query));
-    } catch (IOException e) {
-      throw new IllegalArgumentException(e);
-    }
+    return formatJson(query);
   }
 
   /**
@@ -185,10 +205,11 @@ public class LensQueryCommands extends BaseLensCommand {
    * @throws LensAPIException
    * @throws UnsupportedEncodingException the unsupported encoding exception
    */
-  @CliCommand(value = "query explain", help = "Explain execution plan of query <query-string>. "
+  @CliCommand(value = "query explain",
+    help = "Explain execution plan of query <query-string>. "
       + "Can optionally save the plan to a file by providing <save_location>")
-  public String explainQuery(@CliOption(key = { "", "query" }, mandatory = true, help = "<query-string>") String sql,
-      @CliOption(key = { "save_location" }, mandatory = false, help = "<save_location>") final File path)
+  public String explainQuery(@CliOption(key = {"", "query"}, mandatory = true, help = "<query-string>") String sql,
+    @CliOption(key = {"save_location"}, mandatory = false, help = "<save_location>") final File path)
     throws IOException, LensAPIException {
     PrettyPrintable cliOutput;
 
@@ -197,7 +218,7 @@ public class LensQueryCommands extends BaseLensCommand {
       if (path != null && StringUtils.isNotBlank(path.getPath())) {
         String validPath = getValidPath(path, false, false);
         try (OutputStreamWriter osw = new OutputStreamWriter(new FileOutputStream(validPath),
-            Charset.defaultCharset())) {
+          Charset.defaultCharset())) {
           osw.write(plan.getPlanString());
         }
         return "Saved to " + validPath;
@@ -218,6 +239,7 @@ public class LensQueryCommands extends BaseLensCommand {
    * @param state     the state
    * @param queryName the query name
    * @param user      the user
+   * @param driver    the driver name
    * @param fromDate  the from date
    * @param toDate    the to date
    * @return the all queries
@@ -229,11 +251,12 @@ public class LensQueryCommands extends BaseLensCommand {
     @CliOption(key = {"state"}, mandatory = false, help = "<query-status>") String state,
     @CliOption(key = {"name"}, mandatory = false, help = "<query-name>") String queryName,
     @CliOption(key = {"user"}, mandatory = false, help = "<user-who-submitted-query>") String user,
+    @CliOption(key = {"driver"}, mandatory = false, help = "<driver-where-query-ran>") String driver,
     @CliOption(key = {"fromDate"}, mandatory = false, unspecifiedDefaultValue = "-1", help
       = "<submission-time-is-after>") long fromDate,
     @CliOption(key = {"toDate"}, mandatory = false, unspecifiedDefaultValue = "" + Long.MAX_VALUE, help
       = "<submission-time-is-before>") long toDate) {
-    List<QueryHandle> handles = getClient().getQueries(state, queryName, user, fromDate, toDate);
+    List<QueryHandle> handles = getClient().getQueries(state, queryName, user, driver, fromDate, toDate);
     if (handles != null && !handles.isEmpty()) {
       return Joiner.on("\n").skipNulls().join(handles).concat("\n").concat("Total number of queries: "
         + handles.size());
@@ -248,9 +271,10 @@ public class LensQueryCommands extends BaseLensCommand {
    * @param qh the qh
    * @return the string
    */
-  @CliCommand(value = "query kill", help = "Kill query with handle <query_handle>")
-  public String killQuery(
-    @CliOption(key = {"", "query_handle"}, mandatory = true, help = "<query_handle>") String qh) {
+  @CliCommand(value = "query kill", help = "Kill query with handle <query_handle>." + DEFAULT_QUERY_HANDLE_DESCRIPTION)
+  public String killQuery(@CliOption(key = {"", "query_handle"}, mandatory = false, help = "<query_handle>") String
+    qh) {
+    qh = getOrDefaultQueryHandleString(qh);
     boolean status = getClient().killQuery(new QueryHandle(UUID.fromString(qh)));
     if (status) {
       return "Successfully killed " + qh;
@@ -266,19 +290,19 @@ public class LensQueryCommands extends BaseLensCommand {
    * @return the query results
    */
   @CliCommand(value = "query results",
-    help = "get results of query with query handle <query_handle>. If async is false "
-      + "then wait till the query execution is completed, it's by default true. "
+    help = "get results of query with query handle <query_handle>. " + DEFAULT_QUERY_HANDLE_DESCRIPTION
+      + "If async is false then wait till the query execution is completed, it's by default true. "
       + "Can optionally save the results to a file by providing <save_location>.")
   public String getQueryResults(
-    @CliOption(key = {"", "query_handle"}, mandatory = true, help = "<query_handle>") String qh,
+    @CliOption(key = {"", "query_handle"}, mandatory = false, help = "<query_handle>") String qh,
     @CliOption(key = {"save_location"}, mandatory = false, help = "<save_location>") final File path,
     @CliOption(key = {"async"}, mandatory = false, unspecifiedDefaultValue = "true",
       help = "<async>") boolean async) {
+    qh = getOrDefaultQueryHandleString(qh);
     QueryHandle queryHandle = new QueryHandle(UUID.fromString(qh));
     LensClient.LensClientResultSetWithStats results;
     String location = path != null ? path.getPath() : null;
     try {
-      String prefix = "";
       if (StringUtils.isNotBlank(location)) {
         location = getValidPath(path, true, true);
         Response response = getClient().getHttpResults(queryHandle);
@@ -287,7 +311,7 @@ public class LensQueryCommands extends BaseLensCommand {
           String fileName = disposition.split("=")[1].trim();
           location = getValidPath(new File(location + File.separator + fileName), false, false);
           try (InputStream stream = response.readEntity(InputStream.class);
-            FileOutputStream outStream = new FileOutputStream(new File(location))) {
+               FileOutputStream outStream = new FileOutputStream(new File(location))) {
             IOUtils.copy(stream, outStream);
           }
           return "Saved to " + location;
@@ -362,9 +386,9 @@ public class LensQueryCommands extends BaseLensCommand {
       StringBuilder sb = new StringBuilder()
         .append("User query:").append(prepared.getUserQuery()).append("\n")
         .append("Prepare handle:").append(prepared.getPrepareHandle()).append("\n")
-        .append("User:" + prepared.getPreparedUser()).append("\n")
+        .append("User:").append(prepared.getPreparedUser()).append("\n")
         .append("Prepared at:").append(prepared.getPreparedTime()).append("\n")
-        .append("Selected driver :").append(prepared.getSelectedDriverClassName()).append("\n")
+        .append("Selected driver :").append(prepared.getSelectedDriverName()).append("\n")
         .append("Driver query:").append(prepared.getDriverQuery()).append("\n");
       if (prepared.getConf() != null) {
         sb.append("Conf:").append(prepared.getConf().getProperties()).append("\n");
@@ -452,19 +476,17 @@ public class LensQueryCommands extends BaseLensCommand {
    *           the unsupported encoding exception
    * @throws LensAPIException
    */
-  @CliCommand(value = "prepQuery explain", help = "Explain and prepare query <query-string>. "
-      + "Can optionally provide <query-name>")
+  @CliCommand(value = "prepQuery explain",
+    help = "Explain and prepare query <query-string>. Can optionally provide <query-name>")
   public String explainAndPrepare(
 
-  @CliOption(key = { "", "query" }, mandatory = true, help = "<query-string>") String sql,
-      @CliOption(key = { "name" }, mandatory = false, help = "<query-name>") String queryName)
+    @CliOption(key = {"", "query"}, mandatory = true, help = "<query-string>") String sql,
+    @CliOption(key = {"name"}, mandatory = false, help = "<query-name>") String queryName)
     throws UnsupportedEncodingException, LensAPIException {
     PrettyPrintable cliOutput;
     try {
       QueryPlan plan = getClient().explainAndPrepare(sql, queryName).getData();
-      StringBuilder planStr = new StringBuilder(plan.getPlanString());
-      planStr.append("\n").append("Prepare handle:").append(plan.getPrepareHandle());
-      return planStr.toString();
+      return plan.getPlanString() + "\n" + "Prepare handle:" + plan.getPrepareHandle();
     } catch (final LensAPIException e) {
       BriefError briefError = new BriefError(e.getLensAPIErrorCode(), e.getLensAPIErrorMessage());
       cliOutput = new IdBriefErrorTemplate(IdBriefErrorTemplateKey.REQUEST_ID, e.getLensAPIRequestId(), briefError);

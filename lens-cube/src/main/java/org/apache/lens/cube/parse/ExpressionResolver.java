@@ -19,18 +19,11 @@
 
 package org.apache.lens.cube.parse;
 
-import static org.apache.hadoop.hive.ql.parse.HiveParser.DOT;
-import static org.apache.hadoop.hive.ql.parse.HiveParser.Identifier;
-import static org.apache.hadoop.hive.ql.parse.HiveParser.TOK_TABLE_OR_COL;
+import static org.apache.hadoop.hive.ql.parse.HiveParser.*;
 
 import java.util.*;
 
-import org.apache.lens.cube.metadata.AbstractBaseTable;
-import org.apache.lens.cube.metadata.AbstractCubeTable;
-import org.apache.lens.cube.metadata.CubeColumn;
-import org.apache.lens.cube.metadata.CubeInterface;
-import org.apache.lens.cube.metadata.Dimension;
-import org.apache.lens.cube.metadata.ExprColumn;
+import org.apache.lens.cube.metadata.*;
 import org.apache.lens.cube.metadata.ExprColumn.ExprSpec;
 import org.apache.lens.cube.parse.CandidateTablePruneCause.CandidateTablePruneCode;
 import org.apache.lens.cube.parse.HQLParser.ASTNodeVisitor;
@@ -158,6 +151,7 @@ class ExpressionResolver implements ContextRewriter {
     }
 
     void addDirectlyAvailable(CandidateTable cTable) {
+      log.debug("Directly available in {}", cTable);
       directlyAvailableIn.add(cTable);
     }
 
@@ -439,7 +433,7 @@ class ExpressionResolver implements ContextRewriter {
     }
 
     public Set<Dimension> rewriteExprCtx(CandidateFact cfact, Map<Dimension, CandidateDim> dimsToQuery,
-      boolean replaceFact) throws LensException {
+      QueryAST queryAST) throws LensException {
       Set<Dimension> exprDims = new HashSet<Dimension>();
       if (!allExprsQueried.isEmpty()) {
         // pick expressions for fact
@@ -453,7 +447,8 @@ class ExpressionResolver implements ContextRewriter {
           }
         }
         // Replace picked expressions in all the base trees
-        replacePickedExpressions(cfact, replaceFact);
+        replacePickedExpressions(cfact, queryAST);
+        log.debug("Picked expressions: {}", pickedExpressions);
         for (Set<PickedExpression> peSet : pickedExpressions.values()) {
           for (PickedExpression pe : peSet) {
             exprDims.addAll(pe.pickedCtx.exprDims);
@@ -464,21 +459,21 @@ class ExpressionResolver implements ContextRewriter {
       return exprDims;
     }
 
-    private void replacePickedExpressions(CandidateFact cfact, boolean replaceFact)
+    private void replacePickedExpressions(CandidateFact cfact, QueryAST queryAST)
       throws LensException {
-      if (replaceFact) {
-        replaceAST(cubeql, cfact.getSelectAST());
-        replaceAST(cubeql, cfact.getWhereAST());
-        replaceAST(cubeql, cfact.getJoinTree());
-        replaceAST(cubeql, cfact.getGroupByAST());
-        replaceAST(cubeql, cfact.getHavingAST());
+      replaceAST(cubeql, queryAST.getSelectAST());
+      if (cfact != null) {
+        for (ASTNode storageWhereClauseAST : cfact.getStorgeWhereClauseMap().values()) {
+          replaceAST(cubeql, storageWhereClauseAST);
+        }
       } else {
-        replaceAST(cubeql, cubeql.getSelectAST());
-        replaceAST(cubeql, cubeql.getWhereAST());
-        replaceAST(cubeql, cubeql.getJoinTree());
-        replaceAST(cubeql, cubeql.getGroupByAST());
-        replaceAST(cubeql, cubeql.getHavingAST());
+        replaceAST(cubeql, queryAST.getWhereAST());
       }
+      replaceAST(cubeql, queryAST.getJoinAST());
+      replaceAST(cubeql, queryAST.getGroupByAST());
+      // Having AST is resolved by each fact, so that all facts can expand their expressions.
+      // Having ast is not copied now, it's maintained in cubeql, each fact processes that serially.
+      replaceAST(cubeql, cubeql.getHavingAST());
       replaceAST(cubeql, cubeql.getOrderByAST());
     }
 
@@ -533,6 +528,7 @@ class ExpressionResolver implements ContextRewriter {
         for (ExpressionContext ec : ecSet) {
           if (ec.getSrcTable().getName().equals(cTable.getBaseTable().getName())) {
             if (!ec.directlyAvailableIn.contains(cTable)) {
+              log.debug("{} is not directly evaluable in {}", ec, cTable);
               if (ec.evaluableExpressions.get(cTable) != null && !ec.evaluableExpressions.get(cTable).isEmpty()) {
                 // pick first evaluable expression
                 Set<PickedExpression> peSet = pickedExpressions.get(ecEntry.getKey());

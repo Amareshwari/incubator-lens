@@ -225,7 +225,7 @@
     </xs:annotation>
     <xs:complexContent>
       <xs:extension base="x_field">
-        <xs:attribute type="x_measure_type" name="type" use="required"/>
+        <xs:attribute type="x_measure_type" name="_type" use="required"/>
         <xs:attribute type="xs:string" name="default_aggr">
           <xs:annotation>
             <xs:documentation>
@@ -323,7 +323,7 @@
           </xs:annotation>
           <xs:element type="x_expr_spec" name="expr_spec" maxOccurs="unbounded" minOccurs="1"/>
         </xs:sequence>
-        <xs:attribute type="xs:string" name="type" use="required">
+        <xs:attribute type="xs:string" name="_type" use="required">
           <xs:annotation>
             <xs:documentation>
               The type indicating what the evaluation of expression will produce. Allowed types are BOOLEAN, TINYINT,
@@ -393,25 +393,13 @@
     <xs:complexContent>
       <xs:extension base="x_field">
         <xs:sequence>
-          <xs:element name="ref_spec" maxOccurs="1" minOccurs="0">
+          <xs:element type="x_chain_column" name="chain_ref_column" maxOccurs="unbounded" minOccurs="0">
             <xs:annotation>
               <xs:documentation>
-                Reference specifiction needs to be specified if the attribute is a reference attribute. It
-                can either be table reference or a chained column
-
-                ref_spec can be specified as a list of table references to
-                which the attribute is refering to.
-                For ex : userid refers user.id, xuser.id, yuser.id, zuser.id.
-
-                Alternately, ref_spec could be list of chained columns each specifed with chain name and column name.
+                Chain column specification needs to be specified if the attribute is a reference attribute.
+                It can be list of chained columns each specified with chain name and column name.
               </xs:documentation>
             </xs:annotation>
-            <xs:complexType>
-              <xs:choice maxOccurs="1" minOccurs="1">
-                <xs:element type="x_table_references" name="table_references" maxOccurs="1" minOccurs="1"/>
-                <xs:element type="x_chain_column" name="chain_ref_column" maxOccurs="unbounded" minOccurs="1"/>
-              </xs:choice>
-            </xs:complexType>
           </xs:element>
           <xs:element name="hierarchy" type="x_dim_attributes" maxOccurs="1" minOccurs="0">
             <xs:annotation>
@@ -436,7 +424,7 @@
             </xs:annotation>
           </xs:element>
         </xs:sequence>
-        <xs:attribute type="xs:string" name="type">
+        <xs:attribute type="xs:string" name="_type">
           <xs:annotation>
             <xs:documentation>
               The type indicating what the evaluation of expression will produce. Allowed types are BOOLEAN,TINYINT,
@@ -468,13 +456,6 @@
               This would give an idea of how big the grouping will be when an attribute is chosen for groupby
               expressions.
               This is just an approximate value.
-            </xs:documentation>
-          </xs:annotation>
-        </xs:attribute>
-        <xs:attribute type="xs:boolean" name="join_key" default="true">
-          <xs:annotation>
-            <xs:documentation>
-              This flag will tell whether the attribute can be used as a join key or not
             </xs:documentation>
           </xs:annotation>
         </xs:attribute>
@@ -529,17 +510,6 @@
         </xs:documentation>
       </xs:annotation>
     </xs:attribute>
-  </xs:complexType>
-
-  <xs:complexType name="x_table_references">
-    <xs:annotation>
-      <xs:documentation>
-        Set of table references.
-      </xs:documentation>
-    </xs:annotation>
-    <xs:sequence>
-      <xs:element type="x_table_reference" name="table_reference" maxOccurs="unbounded" minOccurs="1"/>
-    </xs:sequence>
   </xs:complexType>
 
   <xs:element name="x_join_chains" type="x_join_chains"/>
@@ -719,7 +689,7 @@
       </xs:documentation>
     </xs:annotation>
     <xs:attribute name="name" type="xs:string" use="required"/>
-    <xs:attribute type="xs:string" name="type" use="required">
+    <xs:attribute type="xs:string" name="_type" use="required">
       <xs:annotation>
         <xs:documentation>
           The type indicating what the evaluation of expression will produce. Allowed types are BOOLEAN, TINYINT,
@@ -1036,7 +1006,7 @@
       </xs:documentation>
     </xs:annotation>
     <xs:sequence>
-      <xs:element name="storage_table" minOccurs="1" maxOccurs="unbounded" type="x_storage_table_element"/>
+      <xs:element name="storage_table" minOccurs="0" maxOccurs="unbounded" type="x_storage_table_element"/>
     </xs:sequence>
   </xs:complexType>
 
@@ -1294,7 +1264,7 @@
         </xs:documentation>
       </xs:annotation>
     </xs:attribute>
-    <xs:attribute name="owner" type="xs:string" use="required">
+    <xs:attribute name="owner" type="xs:string" use="optional">
       <xs:annotation>
         <xs:documentation>
           Owner of the table.

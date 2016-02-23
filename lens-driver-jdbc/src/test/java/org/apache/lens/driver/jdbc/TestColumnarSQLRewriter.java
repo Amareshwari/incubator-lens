@@ -135,7 +135,7 @@ public class TestColumnarSQLRewriter {
   @BeforeTest
   public void setup() throws Exception {
     conf.addResource("jdbcdriver-default.xml");
-    conf.addResource("jdbcdriver-site.xml");
+    conf.addResource("drivers/jdbc/jdbc1/jdbcdriver-site.xml");
     qtest.init(conf);
 
     List<FieldSchema> factColumns = new ArrayList<>();
@@ -247,9 +247,9 @@ public class TestColumnarSQLRewriter {
     SessionState.start(hconf);
     qtest.rewrite(query, conf, hconf);
     String expected = "sales_fact___fact.time_key in  (  select time_dim .time_key from time_dim "
-      + "where ( time_dim. time_key ) between  '2013-01-01'  and  '2013-01-31'  ) and "
+      + "where ( time_dim. time_key ) between '2013-01-01' and '2013-01-31' ) and "
       + "sales_fact___fact.location_key in  (  select location_dim .location_key from "
-      + "location_dim where (( location_dim. location_key ) =  'some-loc' ) ) and ";
+      + "location_dim where (( location_dim. location_key ) = 'some-loc' ) ) and ";
     Assert.assertEquals(qtest.allSubQueries.toString().trim(), expected.trim());
   }
 
@@ -435,8 +435,8 @@ public class TestColumnarSQLRewriter {
     String actual = qtest.rewrite(query, conf, hconf);
 
     String expected = "select ( sales_fact___fact . time_key ), ( time_dim___time_dim . day_of_week ), "
-            + "week((time_dim___time_dim . day )), "
-            + "date(( time_dim___time_dim . day )), ( item_dim___item_dim . item_key ),  "
+            + "week(( time_dim___time_dim . day )), "
+            + "date((time_dim___time_dim . day )), ( item_dim___item_dim . item_key ),  "
             + "case  when (sum(alias2) =  0 ) then  0.0  else sum(alias2) end  as `dollars_sold` , "
             + "format(sum(alias3),  4 ), format(avg(alias4),  '##################.###' ), "
             + "min(alias5), max(alias6) from  (select sales_fact___fact.time_key, "
@@ -629,7 +629,6 @@ public class TestColumnarSQLRewriter {
             + "( time_dim___time_dim . day ), ( item_dim___item_dim . item_key ) "
             + "order by dollars_sold  desc";
     compareQueries(actual, expected);
-
   }
 
   @Test
@@ -683,7 +682,6 @@ public class TestColumnarSQLRewriter {
             + " ( time_dim___time_dim . day ), ( item_dim___item_dim . item_key ) "
             + "order by dollars_sold  desc";
     compareQueries(actual, expected);
-
   }
 
   @Test
@@ -1279,13 +1277,13 @@ public class TestColumnarSQLRewriter {
       assertEquals(HQLParser.getString(rewriter.getSelectAST()).trim(), "( t1 . id1 ), ( t2 . id2 ), ( t3 . id3 ),"
         + " ( t1 . name1 ), ( t2 . name2 ), ( t3 . name3 ), count( 1 )",
         "Found :" + HQLParser.getString(rewriter.getSelectAST()));
-      assertEquals(HQLParser.getString(rewriter.getWhereAST()).trim(), "(( t1 . id1 ) =  100 )",
+      assertEquals(HQLParser.getString(rewriter.getWhereAST()).trim(), "(( t1 . id1 ) = 100 )",
         "Found: " + HQLParser.getString(rewriter.getWhereAST()));
       assertEquals(HQLParser.getString(rewriter.getGroupByAST()).trim(), "( t2 . id2 )",
         "Found: " + HQLParser.getString(rewriter.getGroupByAST()));
-      assertEquals(HQLParser.getString(rewriter.getOrderByAST()).trim(), "t3 . id3   asc",
+      assertEquals(HQLParser.getString(rewriter.getOrderByAST()).trim(), "t3 . id3 asc",
         "Found: " + HQLParser.getString(rewriter.getOrderByAST()));
-      assertEquals(HQLParser.getString(rewriter.getHavingAST()).trim(), "(count(( t1 . id1 )) >  2 )",
+      assertEquals(HQLParser.getString(rewriter.getHavingAST()).trim(), "(count(( t1 . id1 )) > 2 )",
         "Found: " + HQLParser.getString(rewriter.getHavingAST()));
       assertTrue(fromStringAfterRewrite.contains("( t1 . t2id ) = ( t2 . id2 )")
         && fromStringAfterRewrite.contains("( t2 . t3id ) = ( t3 . id3 )"), fromStringAfterRewrite);

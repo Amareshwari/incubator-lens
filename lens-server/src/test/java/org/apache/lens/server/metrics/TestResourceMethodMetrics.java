@@ -41,8 +41,8 @@ import org.apache.lens.api.query.QueryHandle;
 import org.apache.lens.api.result.LensAPIResult;
 import org.apache.lens.server.LensAllApplicationJerseyTest;
 import org.apache.lens.server.LensApplication;
+import org.apache.lens.server.LensServerTestUtil;
 import org.apache.lens.server.LensServices;
-import org.apache.lens.server.LensTestUtil;
 import org.apache.lens.server.api.metastore.CubeMetastoreService;
 import org.apache.lens.server.api.metrics.MethodMetrics;
 import org.apache.lens.server.api.metrics.MetricsService;
@@ -50,11 +50,10 @@ import org.apache.lens.server.common.TestResourceFile;
 import org.apache.lens.server.metastore.CubeMetastoreServiceImpl;
 import org.apache.lens.server.query.TestQueryService;
 
-import org.glassfish.jersey.client.ClientConfig;
 import org.glassfish.jersey.media.multipart.FormDataBodyPart;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
 import org.glassfish.jersey.media.multipart.FormDataMultiPart;
-import org.glassfish.jersey.media.multipart.MultiPartFeature;
+import org.glassfish.jersey.test.TestProperties;
 import org.testng.Assert;
 import org.testng.annotations.AfterTest;
 import org.testng.annotations.BeforeTest;
@@ -87,16 +86,16 @@ public class TestResourceMethodMetrics extends LensAllApplicationJerseyTest {
   }
 
   private void createTable(String tblName) throws InterruptedException {
-    LensTestUtil.createTable(tblName, target(), lensSessionId);
+    LensServerTestUtil.createTable(tblName, target(), lensSessionId, defaultMT);
   }
 
   private void loadData(String tblName, final String testDataFile) throws InterruptedException {
-    LensTestUtil.loadDataFromClasspath(tblName, testDataFile, target(), lensSessionId);
+    LensServerTestUtil.loadDataFromClasspath(tblName, testDataFile, target(), lensSessionId, defaultMT);
   }
 
   @AfterTest
   public void tearDown() throws Exception {
-    LensTestUtil.dropTable(TestQueryService.TEST_TABLE, target(), lensSessionId);
+    LensServerTestUtil.dropTable(TestQueryService.TEST_TABLE, target(), lensSessionId, defaultMT);
     metastoreService.closeSession(lensSessionId);
     super.tearDown();
   }
@@ -110,12 +109,9 @@ public class TestResourceMethodMetrics extends LensAllApplicationJerseyTest {
 
   @Override
   protected Application configure() {
+    enable(TestProperties.LOG_TRAFFIC);
+    enable(TestProperties.DUMP_ENTITY);
     return new LensApplication();
-  }
-
-  @Override
-  protected void configureClient(ClientConfig config) {
-    config.register(MultiPartFeature.class);
   }
 
   @Test
@@ -241,7 +237,7 @@ public class TestResourceMethodMetrics extends LensAllApplicationJerseyTest {
     mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("operation").build(), "execute"));
     mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("conf").fileName("conf").build(), new LensConf(),
       MediaType.APPLICATION_XML_TYPE));
-    final QueryHandle handle = target.request().post(Entity.entity(mp, MediaType.MULTIPART_FORM_DATA_TYPE),
+    final QueryHandle handle = target.request(mediaType).post(Entity.entity(mp, MediaType.MULTIPART_FORM_DATA_TYPE),
         new GenericType<LensAPIResult<QueryHandle>>() {}).getData();
 
     Assert.assertNotNull(handle);

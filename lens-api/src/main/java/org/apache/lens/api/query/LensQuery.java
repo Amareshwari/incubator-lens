@@ -26,6 +26,7 @@ import javax.xml.bind.annotation.XmlRootElement;
 
 import org.apache.lens.api.LensConf;
 import org.apache.lens.api.Priority;
+import org.apache.lens.api.ToYAMLString;
 
 import lombok.*;
 
@@ -46,7 +47,7 @@ import lombok.*;
  *          the priority
  * @param isPersistent
  *          the is persistent
- * @param selectedDriverClassName
+ * @param selectedDriverName
  *          the selected driver class name
  * @param driverQuery
  *          the driver query
@@ -79,7 +80,7 @@ import lombok.*;
  */
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EqualsAndHashCode
-public class LensQuery {
+public class LensQuery extends ToYAMLString {
 
   /**
    * The query handle.
@@ -121,7 +122,7 @@ public class LensQuery {
    */
   @XmlElement
   @Getter
-  private String selectedDriverClassName;
+  private String selectedDriverName;
 
   /**
    * The driver query.

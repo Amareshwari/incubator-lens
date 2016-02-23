@@ -18,34 +18,48 @@
  */
 package org.apache.lens.cube.parse;
 
+import static org.apache.lens.cube.parse.HQLParser.*;
+
 import java.util.*;
 
 import org.apache.lens.cube.error.LensCubeErrorCode;
 import org.apache.lens.cube.metadata.Dimension;
 import org.apache.lens.server.api.error.LensException;
 
+import org.apache.hadoop.hive.ql.lib.Node;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
+import org.apache.hadoop.hive.ql.parse.HiveParser;
+
+import org.antlr.runtime.CommonToken;
 
 import com.google.common.collect.Lists;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Writes a join query with all the facts involved, with where, groupby and having expressions pushed down to the fact
  * queries.
  */
+@Slf4j
 class MultiFactHQLContext extends SimpleHQLContext {
 
-  private Map<Dimension, CandidateDim> dimsToQuery;
   private Set<CandidateFact> facts;
   private CubeQueryContext query;
-  private Map<CandidateFact, Set<Dimension>> factDimMap;
+  private Map<CandidateFact, SimpleHQLContext> factHQLContextMap = new HashMap<>();
 
   MultiFactHQLContext(Set<CandidateFact> facts, Map<Dimension, CandidateDim> dimsToQuery,
     Map<CandidateFact, Set<Dimension>> factDimMap, CubeQueryContext query) throws LensException {
     super();
     this.query = query;
     this.facts = facts;
-    this.dimsToQuery = dimsToQuery;
-    this.factDimMap = factDimMap;
+    for (CandidateFact fact : facts) {
+      if (fact.getStorageTables().size() > 1) {
+        factHQLContextMap.put(fact, new SingleFactMultiStorageHQLContext(fact, dimsToQuery, query, fact));
+      } else {
+        factHQLContextMap.put(fact,
+          new SingleFactSingleStorageHQLContext(fact, dimsToQuery, factDimMap.get(fact), query,
+            DefaultQueryAST.fromCandidateFact(fact, fact.getStorageTables().iterator().next(), fact)));
+      }
+    }
   }
 
   protected void setMissingExpressions() throws LensException {
@@ -70,7 +84,7 @@ class MultiFactHQLContext extends SimpleHQLContext {
   }
 
   private String getWhereString() {
-    return null;
+    return query.getWhereTree();
   }
 
   public String toHQL() throws LensException {
@@ -78,8 +92,7 @@ class MultiFactHQLContext extends SimpleHQLContext {
   }
 
   private String getSelectString() throws LensException {
-    Map<Integer, List<Integer>> selectToFactIndex =
-      new HashMap<Integer, List<Integer>>(query.getSelectAST().getChildCount());
+    Map<Integer, List<Integer>> selectToFactIndex = new HashMap<>(query.getSelectAST().getChildCount());
     int fi = 1;
     for (CandidateFact fact : facts) {
       for (int ind : fact.getSelectIndices()) {
@@ -94,7 +107,7 @@ class MultiFactHQLContext extends SimpleHQLContext {
     for (int i = 0; i < query.getSelectAST().getChildCount(); i++) {
       if (selectToFactIndex.get(i) == null) {
         throw new LensException(LensCubeErrorCode.EXPRESSION_NOT_IN_ANY_FACT.getLensErrorInfo(),
-            HQLParser.getString((ASTNode) query.getSelectAST().getChild(i)));
+          HQLParser.getString((ASTNode) query.getSelectAST().getChild(i)));
       }
       if (selectToFactIndex.get(i).size() == 1) {
         select.append("mq").append(selectToFactIndex.get(i).get(0)).append(".")
@@ -116,29 +129,14 @@ class MultiFactHQLContext extends SimpleHQLContext {
     return select.toString();
   }
 
-  public Map<Dimension, CandidateDim> getDimsToQuery() {
-    return dimsToQuery;
-  }
-
-  public Set<CandidateFact> getFactsToQuery() {
-    return facts;
-  }
-
   private String getFromString() throws LensException {
     StringBuilder fromBuilder = new StringBuilder();
     int aliasCount = 1;
-    Iterator<CandidateFact> iter = facts.iterator();
-    while (iter.hasNext()) {
-      CandidateFact fact = iter.next();
-      FactHQLContext facthql = new FactHQLContext(fact, dimsToQuery, factDimMap.get(fact), query);
-      fromBuilder.append("(");
-      fromBuilder.append(facthql.toHQL());
-      fromBuilder.append(")");
-      fromBuilder.append(" mq" + aliasCount);
-      aliasCount++;
-      if (iter.hasNext()) {
-        fromBuilder.append(" full outer join ");
-      }
+    String sep = "";
+    for (CandidateFact fact : facts) {
+      SimpleHQLContext facthql = factHQLContextMap.get(fact);
+      fromBuilder.append(sep).append("(").append(facthql.toHQL()).append(")").append(" mq").append(aliasCount++);
+      sep = " full outer join ";
     }
     CandidateFact firstFact = facts.iterator().next();
     if (!firstFact.getDimFieldIndices().isEmpty()) {
@@ -159,5 +157,80 @@ class MultiFactHQLContext extends SimpleHQLContext {
       }
     }
     return fromBuilder.toString();
+  }
+
+
+  public static ASTNode convertHavingToWhere(ASTNode havingAST, CubeQueryContext context, Set<CandidateFact> cfacts,
+    AliasDecider aliasDecider) throws LensException {
+    if (havingAST == null) {
+      return null;
+    }
+    if (isAggregateAST(havingAST) || isTableColumnAST(havingAST) || isNonAggregateFunctionAST(havingAST)) {
+      // if already present in select, pick alias
+      String alias = null;
+      for (CandidateFact fact : cfacts) {
+        if (fact.isExpressionAnswerable(havingAST, context)) {
+          alias = fact.addAndGetAliasFromSelect(havingAST, aliasDecider);
+          return new ASTNode(new CommonToken(HiveParser.Identifier, alias));
+        }
+      }
+    }
+    if (havingAST.getChildren() != null) {
+      for (int i = 0; i < havingAST.getChildCount(); i++) {
+        ASTNode replaced = convertHavingToWhere((ASTNode) havingAST.getChild(i), context, cfacts, aliasDecider);
+        havingAST.setChild(i, replaced);
+      }
+    }
+    return havingAST;
+  }
+
+  public static ASTNode pushDownHaving(ASTNode ast, CubeQueryContext cubeQueryContext, Set<CandidateFact> cfacts)
+    throws LensException {
+    if (ast == null) {
+      return null;
+    }
+    if (ast.getType() == HiveParser.KW_AND || ast.getType() == HiveParser.TOK_HAVING) {
+      List<ASTNode> children = Lists.newArrayList();
+      for (Node child : ast.getChildren()) {
+        ASTNode newChild = pushDownHaving((ASTNode) child, cubeQueryContext, cfacts);
+        if (newChild != null) {
+          children.add(newChild);
+        }
+      }
+      if (children.size() == 0) {
+        return null;
+      } else if (children.size() == 1) {
+        return children.get(0);
+      } else {
+        ASTNode newASTNode = new ASTNode(ast.getToken());
+        for (ASTNode child : children) {
+          newASTNode.addChild(child);
+        }
+        return newASTNode;
+      }
+    }
+    if (isPrimitiveBooleanExpression(ast)) {
+      CandidateFact fact = pickFactToPushDown(ast, cubeQueryContext, cfacts);
+      if (fact == null) {
+        return ast;
+      }
+      fact.addToHaving(ast);
+      return null;
+    }
+    return ast;
+  }
+
+  private static CandidateFact pickFactToPushDown(ASTNode ast, CubeQueryContext cubeQueryContext, Set<CandidateFact>
+    cfacts) throws LensException {
+    for (CandidateFact fact : cfacts) {
+      if (fact.isExpressionAnswerable(ast, cubeQueryContext)) {
+        return fact;
+      }
+    }
+    return null;
+  }
+
+  private static boolean isPrimitiveBooleanExpression(ASTNode ast) {
+    return HQLParser.FILTER_OPERATORS.contains(ast.getType());
   }
 }

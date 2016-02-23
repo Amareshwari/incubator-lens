@@ -39,8 +39,8 @@ public class TestFactPartition {
 
   @Test
   public void testGetFormattedFilter() throws Exception {
-    String dailyFormat = DAILY.format().format(DATE);
-    String hourlyFormat = HOURLY.format().format(DATE);
+    String dailyFormat = DAILY.format(DATE);
+    String hourlyFormat = HOURLY.format(DATE);
     assertEquals(fp1.getFormattedFilter("table"), "table.p = '" + dailyFormat + "'");
     assertEquals(fp2.getFormattedFilter("table2"),
       "table2.p = '" + dailyFormat + "' AND table2.q = '" + hourlyFormat + "'");
@@ -53,5 +53,9 @@ public class TestFactPartition {
     weights.put("st1", 0.2);
     weights.put("st2", 0.3);
     assertEquals(fp1.getAllTableWeights(ImmutableMap.copyOf(weights)), 0.5);
+    weights.clear();
+    weights.put("db1.st1", 0.4);
+    weights.put("db2.st2", 0.5);
+    assertEquals(fp1.getAllTableWeights(ImmutableMap.copyOf(weights)), 0.9);
   }
 }

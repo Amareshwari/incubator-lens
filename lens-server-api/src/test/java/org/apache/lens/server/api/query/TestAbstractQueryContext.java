@@ -20,7 +20,7 @@ package org.apache.lens.server.api.query;
 
 import static org.apache.lens.api.Priority.HIGH;
 import static org.apache.lens.server.api.LensConfConstants.*;
-import static org.apache.lens.server.api.util.TestLensUtil.getConfiguration;
+import static org.apache.lens.server.api.LensServerAPITestUtil.getConfiguration;
 
 import static org.testng.Assert.*;
 
@@ -33,7 +33,6 @@ import org.apache.lens.server.api.driver.LensDriver;
 import org.apache.lens.server.api.driver.MockDriver;
 import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.metrics.LensMetricsRegistry;
-import org.apache.lens.server.api.query.cost.MockQueryCostCalculator;
 import org.apache.lens.server.api.query.priority.MockQueryPriorityDecider;
 
 import org.apache.hadoop.conf.Configuration;
@@ -53,7 +52,7 @@ public class TestAbstractQueryContext {
     String uniqueMetridId = ctx.getConf().get(QUERY_METRIC_UNIQUE_ID_CONF_KEY);
     assertNotNull(uniqueMetridId);
     assertEquals(ctx.getSelectedDriverConf().get(QUERY_METRIC_DRIVER_STACK_NAME),
-      uniqueMetridId + "-" + MockDriver.class.getSimpleName());
+      uniqueMetridId + "-" + new MockDriver().getFullyQualifiedName());
   }
 
   @Test
@@ -70,7 +69,7 @@ public class TestAbstractQueryContext {
     ctx.estimateCostForDrivers();
     MetricRegistry reg = LensMetricsRegistry.getStaticRegistry();
     assertTrue(reg.getGauges().keySet().containsAll(Arrays.asList(
-      "lens.MethodMetricGauge.TestAbstractQueryContext-MockDriver-driverEstimate")));
+      "lens.MethodMetricGauge.TestAbstractQueryContext-"+new MockDriver().getFullyQualifiedName()+"-driverEstimate")));
   }
 
   @Test
@@ -101,8 +100,7 @@ public class TestAbstractQueryContext {
   @Test
   public void testPrioritySetting() throws LensException {
     MockQueryContext ctx = new MockQueryContext();
-    Priority p = ctx.calculateCostAndDecidePriority(ctx.getSelectedDriver(), new
-      MockQueryCostCalculator(), new MockQueryPriorityDecider());
+    Priority p = ctx.decidePriority(ctx.getSelectedDriver(), new MockQueryPriorityDecider());
     assertEquals(p, HIGH);
     assertEquals(ctx.getPriority(), HIGH);
   }

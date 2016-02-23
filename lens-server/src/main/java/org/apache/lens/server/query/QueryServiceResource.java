@@ -199,14 +199,15 @@ public class QueryServiceResource {
    * {@link org.apache.lens.api.query.SubmitOp#EXECUTE} operation.
    * {@link QueryPlan} in case of {@link org.apache.lens.api.query.SubmitOp#EXPLAIN} operation.
    * {@link QueryHandleWithResultSet} in case {@link org.apache.lens.api.query.SubmitOp#EXECUTE_WITH_TIMEOUT}
-   * operation. {@link QueryCostTO} in case of {@link org.apache.lens.api.query.SubmitOp#ESTIMATE} operation.
+   * operation. {@link org.apache.lens.api.result.QueryCostTO} in case of
+   * {@link org.apache.lens.api.query.SubmitOp#ESTIMATE} operation.
    */
   @POST
   @Path("queries")
   @Consumes({MediaType.MULTIPART_FORM_DATA})
   @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
   @MultiPurposeResource(formParamName = "operation")
-  public LensAPIResult<? extends QuerySubmitResult> query(@FormDataParam("sessionid") LensSessionHandle sessionid,
+  public LensAPIResult<QuerySubmitResult> query(@FormDataParam("sessionid") LensSessionHandle sessionid,
       @FormDataParam("query") String query, @FormDataParam("operation") String operation,
       @FormDataParam("conf") LensConf conf, @DefaultValue("30000") @FormDataParam("timeoutmillis") Long timeoutmillis,
       @DefaultValue("") @FormDataParam("queryName") String queryName) throws LensException {
@@ -350,7 +351,7 @@ public class QueryServiceResource {
   @Consumes({MediaType.MULTIPART_FORM_DATA})
   @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
   @MultiPurposeResource(formParamName = "operation")
-  public LensAPIResult<? extends QuerySubmitResult> prepareQuery(
+  public LensAPIResult<QuerySubmitResult> prepareQuery(
       @FormDataParam("sessionid") LensSessionHandle sessionid, @FormDataParam("query") String query,
       @DefaultValue("") @FormDataParam("operation") String operation, @FormDataParam("conf") LensConf conf,
       @DefaultValue("") @FormDataParam("queryName") String queryName) throws LensException {
