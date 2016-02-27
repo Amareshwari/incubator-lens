@@ -25,7 +25,15 @@ public class DefaultAliasDecider implements AliasDecider {
   int counter = 0;
   private static final String ALIAS_PREFIX = "alias";
 
+  final String aliasPrefix;
+  public DefaultAliasDecider(String alias) {
+    aliasPrefix = alias;
+  }
+
+  DefaultAliasDecider() {
+    this(ALIAS_PREFIX);
+  }
   public String decideAlias(ASTNode node) {
-    return ALIAS_PREFIX + (counter++);
+    return aliasPrefix + (counter++);
   }
 }

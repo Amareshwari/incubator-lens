@@ -510,6 +510,54 @@ public class TestBridgeTableQueries extends TestQueryRewrite {
   }
 
   @Test
+  public void testBridgeTablesWithExpressionAndAliasesBeforeFlattening() throws Exception {
+    String query = "select userid as uid, usersports.name as uname, substr(usersports.name, 3) as `sub user`," +
+      " sum(msr2) from basecube where " + TWO_DAYS_RANGE
+      + " and usersports.name = 'CRICKET' and substr(usersports.name, 3) = 'CRI' and (userid = 4 or userid = 5)";
+    String hqlQuery = rewrite(query, hConf);
+    String expected = getExpectedQuery("basecube", "select usersports.name, sum(basecube.msr2) FROM ",
+      " join " + getDbName() + "c1_usertable userdim ON basecube.userid = userdim.id "
+        + " join (select user_interests.user_id as user_id,collect_set(substr(usersports.name, 3)) as name"
+        + " from " + getDbName() + "c1_user_interests_tbl user_interests"
+        + " join " + getDbName() + "c1_sports_tbl usersports on user_interests.sport_id = usersports.id "
+        + " where usersports.name = 'CRICKET'"
+        + " group by user_interests.user_id) usersports"
+        + " on userdim.id = usersports.user_id ",
+      null, "group by usersports.name", null,
+      getWhereForDailyAndHourly2days("basecube", "c1_testfact1_base"));
+    TestCubeRewriter.compareQueries(hqlQuery, expected);
+    // run with chain ref column
+    query = "select sports as uname, sports_abbr as `sub user`, sum(msr2) from basecube where " + TWO_DAYS_RANGE
+      + "and sports = 'CRICKET' and sports_appr = 'CRI'";
+    hqlQuery = rewrite(query, hConf);
+    TestCubeRewriter.compareQueries(hqlQuery, expected);
+  }
+
+  @Test
+  public void testBridgeTablesWithExpressionAndAliasesAfterFlattening() throws Exception {
+    Configuration conf = new Configuration(hConf);
+    conf.setBoolean(CubeQueryConfUtil.DO_FLATTENING_OF_BRIDGE_TABLE_EARLY, true);
+    String query = "select usersports.name as uname, substr(usersports.name, 3) as `sub user`," +
+      " sum(msr2) from basecube where " + TWO_DAYS_RANGE
+      + " and usersports.name = 'CRICKET,FOOTBALL'";
+    String hqlQuery = rewrite(query, conf);
+    String expected = getExpectedQuery("basecube", "select substr(usersports.name, 3), sum(basecube.msr2) FROM ",
+      " join " + getDbName() + "c1_usertable userdim ON basecube.userid = userdim.id "
+        + " join (select user_interests.user_id as user_id,collect_set(usersports.name) as name"
+        + " from " + getDbName() + "c1_user_interests_tbl user_interests"
+        + " join " + getDbName() + "c1_sports_tbl usersports on user_interests.sport_id = usersports.id"
+        + " group by user_interests.user_id) usersports"
+        + " on userdim.id = usersports.user_id ", null,
+      " and usersports.name = 'CRICKET,FOOTBALL' group by substr(usersports.name, 3)", null,
+      getWhereForDailyAndHourly2days("basecube", "c1_testfact1_base"));
+    TestCubeRewriter.compareQueries(hqlQuery, expected);
+    // run with chain ref column
+    query = "select sports as uname, sports_abbr as `sub user`, sum(msr2) from basecube where " + TWO_DAYS_RANGE
+      + " and sports = 'CRICKET,FOOTBALL'";
+    hqlQuery = rewrite(query, conf);
+    TestCubeRewriter.compareQueries(hqlQuery, expected);
+  }
+  @Test
   public void testBridgeTablesWithMultipleFactsWithExprBeforeFlattening() throws Exception {
     String query = "select substr(usersports.name, 3), sum(msr2), sum(msr12) from basecube where " + TWO_DAYS_RANGE
       + " and usersports.name = 'CRICKET'";
