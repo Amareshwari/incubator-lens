@@ -28,6 +28,7 @@ import java.lang.reflect.Field;
 import java.util.*;
 import java.util.regex.Pattern;
 
+import org.antlr.runtime.CommonToken;
 import org.apache.lens.server.api.error.LensException;
 
 import org.apache.commons.lang.StringUtils;
@@ -62,6 +63,14 @@ public final class HQLParser {
 
   public static boolean isPrimitiveBooleanExpression(ASTNode ast) {
     return HQLParser.FILTER_OPERATORS.contains(ast.getType());
+  }
+
+  public static ASTNode getDotAST(String tableAlias, String fieldAlias) {
+    ASTNode child = new ASTNode(new CommonToken(DOT, "."));
+    child.addChild(new ASTNode(new CommonToken(TOK_TABLE_OR_COL, "TOK_TABLE_OR_COL")));
+    child.getChild(0).addChild(new ASTNode(new CommonToken(Identifier, tableAlias)));
+    child.addChild(new ASTNode(new CommonToken(Identifier, fieldAlias)));
+    return child;
   }
 
   public interface ASTNodeVisitor {

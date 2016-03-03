@@ -174,7 +174,7 @@ public class AutoJoinContext {
       return fromString;
     }
     // Compute the merged join clause string for the min cost joinClause
-    String clause = getMergedJoinClause(cubeql, ast,
+    String clause = getMergedJoinClause(cubeql, fact, ast,
       cubeql.getAutoJoinCtx().getJoinClause(fact), dimsToQuery);
 
     fromString += clause;
@@ -182,7 +182,7 @@ public class AutoJoinContext {
   }
 
   // Some refactoring needed to account for multiple join paths
-  public String getMergedJoinClause(CubeQueryContext cubeql, QueryAST ast, JoinClause joinClause,
+  public String getMergedJoinClause(CubeQueryContext cubeql, CandidateFact fact, QueryAST ast, JoinClause joinClause,
                                     Map<Dimension, CandidateDim> dimsToQuery) throws LensException {
     Set<String> clauses = new LinkedHashSet<>();
     String joinTypeStr = "";
@@ -195,7 +195,7 @@ public class AutoJoinContext {
 
     Iterator<JoinTree> iter = joinClause.getJoinTree().dft();
     boolean hasBridgeTable = false;
-    BridgeTableJoinContext bridgeTableJoinContext = new BridgeTableJoinContext(cubeql, ast, bridgeTableFieldAggr,
+    BridgeTableJoinContext bridgeTableJoinContext = new BridgeTableJoinContext(cubeql, fact, ast, bridgeTableFieldAggr,
       doFlatteningEarly);
 
     while (iter.hasNext()) {
