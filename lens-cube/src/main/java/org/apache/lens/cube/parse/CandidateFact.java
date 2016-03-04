@@ -23,8 +23,6 @@ import static org.apache.hadoop.hive.ql.parse.HiveParser.*;
 import java.util.*;
 
 import org.apache.lens.cube.metadata.*;
-import org.apache.lens.cube.parse.HQLParser.ASTNodeVisitor;
-import org.apache.lens.cube.parse.HQLParser.TreeNode;
 import org.apache.lens.server.api.error.LensException;
 
 import org.apache.commons.lang.StringUtils;

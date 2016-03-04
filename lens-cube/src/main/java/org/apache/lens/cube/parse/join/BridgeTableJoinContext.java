@@ -22,8 +22,6 @@ import static org.apache.lens.cube.parse.HQLParser.*;
 
 import java.util.*;
 
-import com.google.common.collect.Lists;
-import lombok.Data;
 import org.apache.hadoop.hive.ql.lib.Node;
 import org.apache.lens.cube.metadata.join.TableRelationship;
 import org.apache.lens.cube.parse.*;
@@ -33,8 +31,8 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 import org.apache.hadoop.hive.ql.parse.HiveParser;
 
-import org.antlr.runtime.CommonToken;
-
+import com.google.common.collect.Lists;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -43,6 +41,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class BridgeTableJoinContext {
   private final String bridgeTableFieldAggr;
+  private final String arrayFilter;
   private final CubeQueryContext cubeql;
   private final CandidateFact fact;
   private final QueryAST queryAST;
@@ -64,11 +63,12 @@ public class BridgeTableJoinContext {
   private final HashMap<HashableASTNode, BridgeTableExprCtx> exprToDotAST = new HashMap<>();
 
   public BridgeTableJoinContext(CubeQueryContext cubeql, CandidateFact fact, QueryAST queryAST,
-    String bridgeTableFieldAggr, boolean doFlatteningEarly) {
+    String bridgeTableFieldAggr, String arrayFilter, boolean doFlatteningEarly) {
     this.cubeql = cubeql;
     this.queryAST = queryAST;
     this.fact = fact;
     this.bridgeTableFieldAggr = bridgeTableFieldAggr;
+    this.arrayFilter = arrayFilter;
     this.doFlatteningEarly = doFlatteningEarly;
   }
 
@@ -150,11 +150,12 @@ public class BridgeTableJoinContext {
     Set<String> toCols = cubeql.getTblAliasToColumns().get(toAlias);
     // iterate over all select expressions and add them for select clause if do_flattening_early is disabled
     if (!doFlatteningEarly) {
-      processSelectAST(queryAST.getSelectAST(), toAlias, toCols, bridgeTableFieldAggr);
+      processSelectAST(queryAST.getSelectAST(), toAlias, toCols);
       processWhereClauses(fact, toAlias, toCols);
       processGroupbyAST(queryAST.getGroupByAST(), toAlias, toCols);
       processOrderbyAST(queryAST.getOrderByAST(), toAlias, toCols);
       clause.append(",").append(StringUtils.join(selectedBridgeExprs, ","));
+      selectedBridgeExprs.clear();
     } else {
       for (String col : cubeql.getTblAliasToColumns().get(toAlias)) {
         clause.append(",").append(bridgeTableFieldAggr).append("(").append(toAlias)
@@ -166,13 +167,11 @@ public class BridgeTableJoinContext {
     String bridgeFrom = bridgeFromClause.toString();
     clause.append(bridgeFrom);
     String bridgeFilter = bridgeFilterClause.toString();
-    boolean addedWhere = false;
     if (StringUtils.isNotBlank(bridgeFilter)) {
       if (bridgeFrom.contains(" join ")) {
         clause.append(" and ");
       } else {
         clause.append(" where ");
-        addedWhere = true;
       }
       clause.append(bridgeFilter);
     }
@@ -182,8 +181,7 @@ public class BridgeTableJoinContext {
     return clause.toString();
   }
 
-  private List<String> processSelectAST(ASTNode selectAST, String tableAlias, Set<String> cols, String
-    bridgeTableFieldAggr)
+  private List<String> processSelectAST(ASTNode selectAST, String tableAlias, Set<String> cols)
     throws LensException {
     // iterate over children
     for (int i = 0; i < selectAST.getChildCount(); i++) {
@@ -230,7 +228,6 @@ public class BridgeTableJoinContext {
     if (ast == null) {
       return;
     }
-    log.info("Orderby ASTdump:{}", ast.dump());
     // iterate over children
     for (int i = 0; i < ast.getChildCount(); i++) {
       ASTNode exprNode = (ASTNode) ast.getChild(i);
@@ -239,16 +236,13 @@ public class BridgeTableJoinContext {
         exprNode.setChild(0, getDotASTForExprAST(child, tableAlias).dotAST);
       }
     }
-    log.info("Orderby ASTdump:{}", ast.dump());
   }
 
   void processWhereClauses(CandidateFact fact, String tableAlias, Set<String> cols) throws LensException {
 
     for (Map.Entry<String, ASTNode> whereEntry : fact.getStorgeWhereClauseMap().entrySet()) {
       ASTNode whereAST = whereEntry.getValue();
-      log.info("Where ASTdump:{}", whereAST.dump());
       processWhereAST(whereAST, tableAlias, cols, whereAST, 0);
-      log.info("Where ASTdump:{}", whereAST.dump());
     }
   }
 
@@ -258,21 +252,17 @@ public class BridgeTableJoinContext {
       return;
     }
     ASTNode child;
+    int replaceIndex = -1;
     if (isPrimitiveBooleanExpression(ast)) {
-      log.info("Primitive boolean ASTdump {}", ast.dump());
-      child = (ASTNode)ast.getChild(0);
-      log.info("Child ASTdump {}", child.dump());
-      if (hasBridgeCol(child, tableAlias, cols)) {
-        ast.setChild(0, getDotASTForExprAST(child, tableAlias).dotAST);
-        parent.setChild(childPos, replaceDirectFiltersWithArrayFilter(ast));
-      }
+      replaceIndex = 0;
     } else if (isPrimitiveBooleanFunction(ast)) {
-      log.info("Primitive boolean ASTdump {}", ast.dump());
-      child = (ASTNode)ast.getChild(1);
-      log.info("Child ASTdump {}", child.dump());
+      replaceIndex = 1;
+    }
+    if (replaceIndex != -1) {
+      child = (ASTNode)ast.getChild(replaceIndex);
       if (hasBridgeCol(child, tableAlias, cols)) {
-        ast.setChild(1, getDotASTForExprAST(child, tableAlias).dotAST);
-        parent.setChild(childPos, replaceDirectFiltersWithArrayFilter(ast));
+        ast.setChild(replaceIndex, getDotASTForExprAST(child, tableAlias).dotAST);
+        parent.setChild(childPos, replaceDirectFiltersWithArrayFilter(ast, arrayFilter));
       }
     }
     // recurse down
@@ -282,70 +272,38 @@ public class BridgeTableJoinContext {
 
   }
 
-  static ASTNode replaceDirectFiltersWithArrayFilter(ASTNode ast)
+  static ASTNode replaceDirectFiltersWithArrayFilter(ASTNode ast, String arrayFilter)
     throws LensException {
-    StringBuilder arrayFilter = new StringBuilder();
-    if ((ast.getType() == HiveParser.EQUAL || ast.getType() == HiveParser.EQUAL_NS)) {
+    StringBuilder filterBuilder = new StringBuilder();
+    if ((ast.getType() == HiveParser.EQUAL || ast.getType() == HiveParser.NOTEQUAL)) {
       String colStr = getString((ASTNode) ast.getChild(0));
-      if (ast.getType() == HiveParser.EQUAL_NS) {
-        arrayFilter.append(" NOT ");
+      if (ast.getType() == HiveParser.NOTEQUAL) {
+        filterBuilder.append(" NOT ");
       }
-      arrayFilter.append("array_contains(");
-      arrayFilter.append(colStr).append(",");
-      arrayFilter.append(ast.getChild(1).getText());
-      arrayFilter.append(")");
+      filterBuilder.append(arrayFilter);
+      filterBuilder.append("(");
+      filterBuilder.append(colStr).append(",");
+      filterBuilder.append(ast.getChild(1).getText());
+      filterBuilder.append(")");
     } else if (ast.getType() == HiveParser.TOK_FUNCTION) {
+      // This is IN clause as function
       String colStr = getString((ASTNode) ast.getChild(1));
-      arrayFilter.append("(");
+      filterBuilder.append("(");
       for (int i = 2; i < ast.getChildCount(); i++) {
-        arrayFilter.append("array_contains(");
-        arrayFilter.append(colStr).append(",");
-        arrayFilter.append(ast.getChild(i).getText());
-        arrayFilter.append(")");
+        filterBuilder.append(arrayFilter);
+        filterBuilder.append("(");
+        filterBuilder.append(colStr).append(",");
+        filterBuilder.append(ast.getChild(i).getText());
+        filterBuilder.append(")");
         if (i + 1 != ast.getChildCount()) {
-          arrayFilter.append(" OR ");
+          filterBuilder.append(" OR ");
         }
       }
-      arrayFilter.append(")");
+      filterBuilder.append(")");
     }
-    String finalFilter = arrayFilter.toString();
-    log.info("Final filter {}", finalFilter);
+    String finalFilter = filterBuilder.toString();
     if (StringUtils.isNotBlank(finalFilter)) {
       return HQLParser.parseExpr(finalFilter);
-    }
-    return ast;
-  }
-
-  public static ASTNode pushBridgeFilter(ASTNode ast, String tableAlias, Set<String> cols, List<ASTNode> pushedFilters)
-    throws LensException {
-    if (ast == null) {
-      return null;
-    }
-    if (ast.getType() == HiveParser.KW_AND) {
-      List<ASTNode> children = Lists.newArrayList();
-      for (Node child : ast.getChildren()) {
-        ASTNode newChild = pushBridgeFilter((ASTNode) child, tableAlias, cols, pushedFilters);
-        if (newChild != null) {
-          children.add(newChild);
-        }
-      }
-      if (children.size() == 0) {
-        return null;
-      } else if (children.size() == 1) {
-        return children.get(0);
-      } else {
-        ASTNode newASTNode = new ASTNode(ast.getToken());
-        for (ASTNode child : children) {
-          newASTNode.addChild(child);
-        }
-        return newASTNode;
-      }
-    }
-    if (isPrimitiveBooleanExpression(ast)) {
-      if (hasBridgeCol(ast, tableAlias, cols)) {
-        pushedFilters.add(ast);
-        return null;
-      }
     }
     return ast;
   }

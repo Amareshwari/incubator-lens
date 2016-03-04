@@ -28,7 +28,6 @@ import java.lang.reflect.Field;
 import java.util.*;
 import java.util.regex.Pattern;
 
-import org.antlr.runtime.CommonToken;
 import org.apache.lens.server.api.error.LensException;
 
 import org.apache.commons.lang.StringUtils;
@@ -38,10 +37,10 @@ import org.apache.hadoop.hive.ql.exec.FunctionRegistry;
 import org.apache.hadoop.hive.ql.lib.Node;
 import org.apache.hadoop.hive.ql.parse.*;
 
+import org.antlr.runtime.CommonToken;
 import org.antlr.runtime.tree.Tree;
 
 import com.google.common.base.Optional;
-
 import com.google.common.collect.Sets;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -169,7 +168,7 @@ public final class HQLParser {
     PRIMITIVE_TYPES = Collections.unmodifiableSet(primitiveTypes);
 
     FILTER_OPERATORS = Sets.newHashSet(GREATERTHAN, GREATERTHANOREQUALTO, LESSTHAN, LESSTHANOREQUALTO, EQUAL,
-      EQUAL_NS);
+      EQUAL_NS, NOTEQUAL);
   }
 
   public static ASTNode parseHQL(String query, HiveConf conf) throws LensException {

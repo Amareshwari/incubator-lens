@@ -70,13 +70,15 @@ public class AutoJoinContext {
   JoinClause minCostClause;
   private final boolean flattenBridgeTables;
   private final String bridgeTableFieldAggr;
+  private final String bridgeTableFieldArrayFilter;
   private final boolean doFlatteningEarly;
 
   public AutoJoinContext(Map<Aliased<Dimension>, List<JoinPath>> allPaths,
                          Set<Dimension> requiredDimensions,
                          Map<AbstractCubeTable, JoinType> tableJoinTypeMap,
                          AbstractCubeTable autoJoinTarget, String joinTypeCfg, boolean joinsResolved,
-                         boolean flattenBridgeTables, String bridgeTableFieldAggr, boolean doFlatteningEarly) {
+                         boolean flattenBridgeTables, String bridgeTableFieldAggr, String bridgeTableFieldArrayFilter,
+                         boolean doFlatteningEarly) {
     this.allPaths = allPaths;
     this.requiredDimensions = requiredDimensions;
     initJoinPathColumns();
@@ -86,6 +88,7 @@ public class AutoJoinContext {
     this.joinsResolved = joinsResolved;
     this.flattenBridgeTables = flattenBridgeTables;
     this.bridgeTableFieldAggr = bridgeTableFieldAggr;
+    this.bridgeTableFieldArrayFilter = bridgeTableFieldArrayFilter;
     this.doFlatteningEarly = doFlatteningEarly;
     log.debug("All join paths:{}", allPaths);
     log.debug("Join path from columns:{}", joinPathFromColumns);
@@ -196,7 +199,7 @@ public class AutoJoinContext {
     Iterator<JoinTree> iter = joinClause.getJoinTree().dft();
     boolean hasBridgeTable = false;
     BridgeTableJoinContext bridgeTableJoinContext = new BridgeTableJoinContext(cubeql, fact, ast, bridgeTableFieldAggr,
-      doFlatteningEarly);
+      bridgeTableFieldArrayFilter, doFlatteningEarly);
 
     while (iter.hasNext()) {
       JoinTree cur = iter.next();
