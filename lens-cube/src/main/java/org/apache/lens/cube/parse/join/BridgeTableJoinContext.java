@@ -22,7 +22,6 @@ import static org.apache.lens.cube.parse.HQLParser.*;
 
 import java.util.*;
 
-import org.apache.hadoop.hive.ql.lib.Node;
 import org.apache.lens.cube.metadata.join.TableRelationship;
 import org.apache.lens.cube.parse.*;
 import org.apache.lens.server.api.error.LensException;
@@ -31,7 +30,6 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 import org.apache.hadoop.hive.ql.parse.HiveParser;
 
-import com.google.common.collect.Lists;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
