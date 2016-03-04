@@ -329,7 +329,9 @@ public class TestBridgeTableQueries extends TestQueryRewrite {
     String query = "select usersports.name, sum(msr2) from basecube where " + TWO_DAYS_RANGE
       + " and usersports.name = 'CRICKET' and usersports.name in ('CRICKET', 'FOOTBALL')"
       + " and usersports.name != 'RANDOM' and usersports.name not in ('xyz', 'ABC')"
-      + " and array_contains(usersports.name, 'CRICKET') OR array_contains(usersports.name, 'FOOTBALL')"
+      + " and (array_contains(usersports.name, 'CRICKET') OR array_contains(usersports.name, 'FOOTBALL'))"
+      + " and not (array_contains(usersports.name, 'ASD') OR array_contains(usersports.name, 'ZXC'))"
+      + " and myfunc(usersports.name) = 'CRT' and substr(usersports.name, 3) in ('CRI')"
       + " order by usersports.name";
     String hqlQuery = rewrite(query, hConf);
     String expected = getExpectedQuery("basecube", "select usersports.balias0, sum(basecube.msr2) FROM ",

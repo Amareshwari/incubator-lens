@@ -54,6 +54,7 @@ public class BridgeTableJoinContext {
   private final StringBuilder bridgeJoinClause = new StringBuilder();
   private final StringBuilder bridgeGroupbyClause = new StringBuilder();
   private final AliasDecider aliasDecider = new DefaultAliasDecider("balias");
+  private final List<String> selectedBridgeExprs = new ArrayList<>();
 
   @Data
   private static class BridgeTableExprCtx {
@@ -149,12 +150,11 @@ public class BridgeTableJoinContext {
     Set<String> toCols = cubeql.getTblAliasToColumns().get(toAlias);
     // iterate over all select expressions and add them for select clause if do_flattening_early is disabled
     if (!doFlatteningEarly) {
-      List<String> selectedBridgeExprs = processSelectAST(queryAST.getSelectAST(), toAlias, toCols,
-        bridgeTableFieldAggr);
-      clause.append(",").append(StringUtils.join(selectedBridgeExprs, ","));
+      processSelectAST(queryAST.getSelectAST(), toAlias, toCols, bridgeTableFieldAggr);
       processWhereClauses(fact, toAlias, toCols);
       processGroupbyAST(queryAST.getGroupByAST(), toAlias, toCols);
       processOrderbyAST(queryAST.getOrderByAST(), toAlias, toCols);
+      clause.append(",").append(StringUtils.join(selectedBridgeExprs, ","));
     } else {
       for (String col : cubeql.getTblAliasToColumns().get(toAlias)) {
         clause.append(",").append(bridgeTableFieldAggr).append("(").append(toAlias)
@@ -185,26 +185,30 @@ public class BridgeTableJoinContext {
   private List<String> processSelectAST(ASTNode selectAST, String tableAlias, Set<String> cols, String
     bridgeTableFieldAggr)
     throws LensException {
-    List<String> selectedBridgeExprs = new ArrayList<>();
     // iterate over children
     for (int i = 0; i < selectAST.getChildCount(); i++) {
       ASTNode selectExprNode = (ASTNode) selectAST.getChild(i);
       ASTNode child = (ASTNode)selectExprNode.getChild(0);
       if (hasBridgeCol(child, tableAlias, cols)) {
-        HashableASTNode hashAST = new HashableASTNode(child);
-        // add selected expression to get selected from bridge table, with a generated alias
-        String colAlias = aliasDecider.decideAlias(child);
-        selectedBridgeExprs.add(bridgeTableFieldAggr + "(" + HQLParser.getString(child) + ") as " + colAlias);
-
-        // replace bridge expression with tableAlias.colAlias.
-        ASTNode dot = HQLParser.getDotAST(tableAlias, colAlias);
-        exprToDotAST.put(hashAST, new BridgeTableExprCtx(dot, colAlias));
-        selectExprNode.setChild(0, dot);
+        selectExprNode.setChild(0, getDotASTForExprAST(child, tableAlias).dotAST);
       }
     }
     return selectedBridgeExprs;
   }
 
+  private BridgeTableExprCtx getDotASTForExprAST(ASTNode child, String tableAlias) {
+    HashableASTNode hashAST = new HashableASTNode(child);
+    if (!exprToDotAST.containsKey(hashAST)) {
+      // add selected expression to get selected from bridge table, with a generated alias
+      String colAlias = aliasDecider.decideAlias(child);
+      selectedBridgeExprs.add(bridgeTableFieldAggr + "(" + HQLParser.getString(child) + ") as " + colAlias);
+
+      // replace bridge expression with tableAlias.colAlias.
+      ASTNode dot = HQLParser.getDotAST(tableAlias, colAlias);
+      exprToDotAST.put(hashAST, new BridgeTableExprCtx(dot, colAlias));
+    }
+    return exprToDotAST.get(hashAST);
+  }
   // process groupby
   private void processGroupbyAST(ASTNode ast, String tableAlias, Set<String> cols)
     throws LensException {
@@ -215,9 +219,7 @@ public class BridgeTableJoinContext {
     for (int i = 0; i < ast.getChildCount(); i++) {
       ASTNode exprNode = (ASTNode) ast.getChild(i);
       if (hasBridgeCol(exprNode, tableAlias, cols)) {
-        HashableASTNode hashAST = new HashableASTNode(exprNode);
-        ASTNode dotAST = exprToDotAST.get(hashAST).dotAST;
-        ast.setChild(i, dotAST);
+        ast.setChild(i, getDotASTForExprAST(exprNode, tableAlias).dotAST);
       }
     }
   }
@@ -234,9 +236,7 @@ public class BridgeTableJoinContext {
       ASTNode exprNode = (ASTNode) ast.getChild(i);
       ASTNode child = (ASTNode)exprNode.getChild(0);
       if (hasBridgeCol(child, tableAlias, cols)) {
-        HashableASTNode hashAST = new HashableASTNode(child);
-        ASTNode dotAST = exprToDotAST.get(hashAST).dotAST;
-        exprNode.setChild(0, dotAST);
+        exprNode.setChild(0, getDotASTForExprAST(child, tableAlias).dotAST);
       }
     }
     log.info("Orderby ASTdump:{}", ast.dump());
@@ -247,40 +247,75 @@ public class BridgeTableJoinContext {
     for (Map.Entry<String, ASTNode> whereEntry : fact.getStorgeWhereClauseMap().entrySet()) {
       ASTNode whereAST = whereEntry.getValue();
       log.info("Where ASTdump:{}", whereAST.dump());
-      processWhereAST(whereAST, tableAlias, cols);
+      processWhereAST(whereAST, tableAlias, cols, whereAST, 0);
       log.info("Where ASTdump:{}", whereAST.dump());
     }
   }
 
-  private void processWhereAST(ASTNode ast, String tableAlias, Set<String> cols)
+  private void processWhereAST(ASTNode ast, String tableAlias, Set<String> cols, ASTNode parent, int childPos)
     throws LensException {
     if (ast == null) {
       return;
     }
     ASTNode child;
-    if ((ast.getType() == HiveParser.EQUAL || ast.getType() == HiveParser.EQUAL_NS)) {
+    if (isPrimitiveBooleanExpression(ast)) {
+      log.info("Primitive boolean ASTdump {}", ast.dump());
       child = (ASTNode)ast.getChild(0);
+      log.info("Child ASTdump {}", child.dump());
       if (hasBridgeCol(child, tableAlias, cols)) {
-        HashableASTNode hashAST = new HashableASTNode(child);
-        ASTNode dotAST = exprToDotAST.get(hashAST).dotAST;
-        ast.setChild(0, dotAST);
+        ast.setChild(0, getDotASTForExprAST(child, tableAlias).dotAST);
+        parent.setChild(childPos, replaceDirectFiltersWithArrayFilter(ast));
       }
-    } else if (ast.getType() == HiveParser.KW_IN) {
-/*  TOK_FUNCTION
-          in
-            .
-               TOK_TABLE_OR_COL
-                  usersports
-               name
-            'CRICKET'
-            'FOOTBALL'*/
+    } else if (isPrimitiveBooleanFunction(ast)) {
+      log.info("Primitive boolean ASTdump {}", ast.dump());
+      child = (ASTNode)ast.getChild(1);
+      log.info("Child ASTdump {}", child.dump());
+      if (hasBridgeCol(child, tableAlias, cols)) {
+        ast.setChild(1, getDotASTForExprAST(child, tableAlias).dotAST);
+        parent.setChild(childPos, replaceDirectFiltersWithArrayFilter(ast));
+      }
     }
     // recurse down
     for (int i = 0; i < ast.getChildCount(); i++) {
-      processWhereAST((ASTNode)ast.getChild(i), tableAlias, cols);
+      processWhereAST((ASTNode) ast.getChild(i), tableAlias, cols, ast, i);
     }
 
   }
+
+  static ASTNode replaceDirectFiltersWithArrayFilter(ASTNode ast)
+    throws LensException {
+    StringBuilder arrayFilter = new StringBuilder();
+    if ((ast.getType() == HiveParser.EQUAL || ast.getType() == HiveParser.EQUAL_NS)) {
+      String colStr = getString((ASTNode) ast.getChild(0));
+      if (ast.getType() == HiveParser.EQUAL_NS) {
+        arrayFilter.append(" NOT ");
+      }
+      arrayFilter.append("array_contains(");
+      arrayFilter.append(colStr).append(",");
+      arrayFilter.append(ast.getChild(1).getText());
+      arrayFilter.append(")");
+    } else if (ast.getType() == HiveParser.TOK_FUNCTION) {
+      String colStr = getString((ASTNode) ast.getChild(1));
+      arrayFilter.append("(");
+      for (int i = 2; i < ast.getChildCount(); i++) {
+        arrayFilter.append("array_contains(");
+        arrayFilter.append(colStr).append(",");
+        arrayFilter.append(ast.getChild(i).getText());
+        arrayFilter.append(")");
+        if (i + 1 != ast.getChildCount()) {
+          arrayFilter.append(" OR ");
+        }
+      }
+      arrayFilter.append(")");
+    }
+    String finalFilter = arrayFilter.toString();
+    log.info("Final filter {}", finalFilter);
+    if (StringUtils.isNotBlank(finalFilter)) {
+      return HQLParser.parseExpr(finalFilter);
+    }
+    return ast;
+  }
+
   public static ASTNode pushBridgeFilter(ASTNode ast, String tableAlias, Set<String> cols, List<ASTNode> pushedFilters)
     throws LensException {
     if (ast == null) {

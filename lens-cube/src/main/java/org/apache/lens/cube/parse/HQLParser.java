@@ -65,6 +65,14 @@ public final class HQLParser {
     return HQLParser.FILTER_OPERATORS.contains(ast.getType());
   }
 
+  public static boolean isPrimitiveBooleanFunction(ASTNode ast) {
+    if (ast.getType() == TOK_FUNCTION) {
+      if (ast.getChild(0).getText().equals("in")) {
+        return true;
+      }
+    }
+    return false;
+  }
   public static ASTNode getDotAST(String tableAlias, String fieldAlias) {
     ASTNode child = new ASTNode(new CommonToken(DOT, "."));
     child.addChild(new ASTNode(new CommonToken(TOK_TABLE_OR_COL, "TOK_TABLE_OR_COL")));
@@ -160,7 +168,7 @@ public final class HQLParser {
     primitiveTypes.add(TOK_CHAR);
     PRIMITIVE_TYPES = Collections.unmodifiableSet(primitiveTypes);
 
-    FILTER_OPERATORS = Sets.newHashSet(KW_IN, GREATERTHAN, GREATERTHANOREQUALTO, LESSTHAN, LESSTHANOREQUALTO, EQUAL,
+    FILTER_OPERATORS = Sets.newHashSet(GREATERTHAN, GREATERTHANOREQUALTO, LESSTHAN, LESSTHANOREQUALTO, EQUAL,
       EQUAL_NS);
   }
 
