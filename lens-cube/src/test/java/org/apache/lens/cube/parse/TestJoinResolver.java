@@ -647,4 +647,19 @@ public class TestJoinResolver extends TestQueryRewrite {
     Assert.assertFalse(cdimTables.contains("citytable3"));
     Assert.assertFalse(cdimTables.contains("citytable4"));
   }
+
+  @Test
+  public void testUnreachableDim() throws ParseException, LensException, HiveException {
+    assertLensExceptionInRewrite("select urdimid from testdim2", hconf, LensCubeErrorCode.NO_DIM_HAS_COLUMN);
+    assertLensExceptionInRewrite("select urdimid from testcube where " + TWO_DAYS_RANGE, hconf,
+      LensCubeErrorCode.NO_FACT_HAS_COLUMN);
+    assertLensExceptionInRewrite("select unreachableName from testdim2", hconf,
+      LensCubeErrorCode.NO_DIM_HAS_COLUMN);
+    assertLensExceptionInRewrite("select unreachableName from testcube where " + TWO_DAYS_RANGE, hconf,
+      LensCubeErrorCode.NO_CANDIDATE_FACT_AVAILABLE);
+    assertLensExceptionInRewrite("select unreachableDim_chain.name from testdim2", hconf,
+      LensCubeErrorCode.NO_JOIN_PATH);
+    assertLensExceptionInRewrite("select unreachableDim_chain.name from testcube where " + TWO_DAYS_RANGE, hconf,
+      LensCubeErrorCode.NO_FACT_HAS_COLUMN);
+  }
 }
