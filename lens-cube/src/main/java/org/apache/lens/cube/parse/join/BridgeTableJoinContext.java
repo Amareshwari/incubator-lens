@@ -50,15 +50,6 @@ public class BridgeTableJoinContext {
   private final StringBuilder bridgeFilterClause = new StringBuilder();
   private final StringBuilder bridgeJoinClause = new StringBuilder();
   private final StringBuilder bridgeGroupbyClause = new StringBuilder();
-  private final AliasDecider aliasDecider = new DefaultAliasDecider("balias");
-  private final List<String> selectedBridgeExprs = new ArrayList<>();
-
-  @Data
-  private static class BridgeTableExprCtx {
-    private final ASTNode dotAST;
-    private final String alias;
-  }
-  private final HashMap<HashableASTNode, BridgeTableExprCtx> exprToDotAST = new HashMap<>();
 
   public BridgeTableJoinContext(CubeQueryContext cubeql, CandidateFact fact, QueryAST queryAST,
     String bridgeTableFieldAggr, String arrayFilter, boolean doFlatteningEarly) {
@@ -145,15 +136,14 @@ public class BridgeTableJoinContext {
     StringBuilder clause = new StringBuilder(joinTypeStr);
     clause.append(" join ");
     clause.append(bridgeSelectClause.toString());
-    Set<String> toCols = cubeql.getTblAliasToColumns().get(toAlias);
     // iterate over all select expressions and add them for select clause if do_flattening_early is disabled
     if (!doFlatteningEarly) {
-      processSelectAST(queryAST.getSelectAST(), toAlias, toCols);
-      processWhereClauses(fact, toAlias, toCols);
-      processGroupbyAST(queryAST.getGroupByAST(), toAlias, toCols);
-      processOrderbyAST(queryAST.getOrderByAST(), toAlias, toCols);
-      clause.append(",").append(StringUtils.join(selectedBridgeExprs, ","));
-      selectedBridgeExprs.clear();
+      BridgeTableSelectCtx selectCtx = new BridgeTableSelectCtx(bridgeTableFieldAggr, arrayFilter);
+      selectCtx.processSelectAST(queryAST.getSelectAST(), toAlias);
+      selectCtx.processWhereClauses(fact, toAlias);
+      selectCtx.processGroupbyAST(queryAST.getGroupByAST(), toAlias);
+      selectCtx.processOrderbyAST(queryAST.getOrderByAST(), toAlias);
+      clause.append(",").append(StringUtils.join(selectCtx.getSelectedBridgeExprs(), ","));
     } else {
       for (String col : cubeql.getTblAliasToColumns().get(toAlias)) {
         clause.append(",").append(bridgeTableFieldAggr).append("(").append(toAlias)
@@ -179,97 +169,114 @@ public class BridgeTableJoinContext {
     return clause.toString();
   }
 
-  private List<String> processSelectAST(ASTNode selectAST, String tableAlias, Set<String> cols)
-    throws LensException {
-    // iterate over children
-    for (int i = 0; i < selectAST.getChildCount(); i++) {
-      ASTNode selectExprNode = (ASTNode) selectAST.getChild(i);
-      ASTNode child = (ASTNode)selectExprNode.getChild(0);
-      if (hasBridgeCol(child, tableAlias, cols)) {
-        selectExprNode.setChild(0, getDotASTForExprAST(child, tableAlias).dotAST);
+  @Data
+  private static class BridgeTableSelectCtx {
+    private final HashMap<HashableASTNode, ASTNode> exprToDotAST = new HashMap<>();
+    private final List<String> selectedBridgeExprs = new ArrayList<>();
+    private final AliasDecider aliasDecider = new DefaultAliasDecider("balias");
+    private final String bridgeTableFieldAggr;
+    private final String arrayFilter;
+
+    private List<String> processSelectAST(ASTNode selectAST, String tableAlias)
+      throws LensException {
+      // iterate over children
+      for (int i = 0; i < selectAST.getChildCount(); i++) {
+        ASTNode selectExprNode = (ASTNode) selectAST.getChild(i);
+        ASTNode child = (ASTNode) selectExprNode.getChild(0);
+        if (hasBridgeCol(child, tableAlias)) {
+          selectExprNode.setChild(0, getDotASTForExprAST(child, tableAlias));
+        }
+      }
+      return selectedBridgeExprs;
+    }
+
+    private ASTNode getDotASTForExprAST(ASTNode child, String tableAlias) {
+      HashableASTNode hashAST = new HashableASTNode(child);
+      if (!exprToDotAST.containsKey(hashAST)) {
+        // add selected expression to get selected from bridge table, with a generated alias
+        String colAlias = aliasDecider.decideAlias(child);
+        selectedBridgeExprs.add(bridgeTableFieldAggr + "(" + HQLParser.getString(child) + ") as " + colAlias);
+
+        // replace bridge expression with tableAlias.colAlias.
+        ASTNode dot = HQLParser.getDotAST(tableAlias, colAlias);
+        exprToDotAST.put(hashAST, dot);
+      }
+      return exprToDotAST.get(hashAST);
+    }
+
+    // process groupby
+    private void processGroupbyAST(ASTNode ast, String tableAlias)
+      throws LensException {
+      if (ast == null) {
+        return;
+      }
+      // iterate over children
+      for (int i = 0; i < ast.getChildCount(); i++) {
+        ASTNode exprNode = (ASTNode) ast.getChild(i);
+        if (hasBridgeCol(exprNode, tableAlias)) {
+          ast.setChild(i, getDotASTForExprAST(exprNode, tableAlias));
+        }
       }
     }
-    return selectedBridgeExprs;
-  }
 
-  private BridgeTableExprCtx getDotASTForExprAST(ASTNode child, String tableAlias) {
-    HashableASTNode hashAST = new HashableASTNode(child);
-    if (!exprToDotAST.containsKey(hashAST)) {
-      // add selected expression to get selected from bridge table, with a generated alias
-      String colAlias = aliasDecider.decideAlias(child);
-      selectedBridgeExprs.add(bridgeTableFieldAggr + "(" + HQLParser.getString(child) + ") as " + colAlias);
+    // process orderby
+    private void processOrderbyAST(ASTNode ast, String tableAlias)
+      throws LensException {
+      if (ast == null) {
+        return;
+      }
+      // iterate over children
+      for (int i = 0; i < ast.getChildCount(); i++) {
+        ASTNode exprNode = (ASTNode) ast.getChild(i);
+        ASTNode child = (ASTNode) exprNode.getChild(0);
+        if (hasBridgeCol(child, tableAlias)) {
+          exprNode.setChild(0, getDotASTForExprAST(child, tableAlias));
+        }
+      }
+    }
 
-      // replace bridge expression with tableAlias.colAlias.
-      ASTNode dot = HQLParser.getDotAST(tableAlias, colAlias);
-      exprToDotAST.put(hashAST, new BridgeTableExprCtx(dot, colAlias));
+    void processWhereClauses(CandidateFact fact, String tableAlias) throws LensException {
+
+      for (Map.Entry<String, ASTNode> whereEntry : fact.getStorgeWhereClauseMap().entrySet()) {
+        ASTNode whereAST = whereEntry.getValue();
+        processWhereAST(whereAST, tableAlias, whereAST, 0);
+      }
     }
-    return exprToDotAST.get(hashAST);
-  }
-  // process groupby
-  private void processGroupbyAST(ASTNode ast, String tableAlias, Set<String> cols)
-    throws LensException {
-    if (ast == null) {
-      return;
-    }
-    // iterate over children
-    for (int i = 0; i < ast.getChildCount(); i++) {
-      ASTNode exprNode = (ASTNode) ast.getChild(i);
-      if (hasBridgeCol(exprNode, tableAlias, cols)) {
-        ast.setChild(i, getDotASTForExprAST(exprNode, tableAlias).dotAST);
+
+    private void processWhereAST(ASTNode ast, String tableAlias, ASTNode parent, int childPos)
+      throws LensException {
+      if (ast == null) {
+        return;
+      }
+      ASTNode child;
+      int replaceIndex = -1;
+      if (isPrimitiveBooleanExpression(ast)) {
+        replaceIndex = 0;
+      } else if (isPrimitiveBooleanFunction(ast)) {
+        replaceIndex = 1;
+      }
+      if (replaceIndex != -1) {
+        child = (ASTNode) ast.getChild(replaceIndex);
+        if (hasBridgeCol(child, tableAlias)) {
+          ast.setChild(replaceIndex, getDotASTForExprAST(child, tableAlias));
+          parent.setChild(childPos, replaceDirectFiltersWithArrayFilter(ast, arrayFilter));
+        }
+      }
+      // recurse down
+      for (int i = 0; i < ast.getChildCount(); i++) {
+        processWhereAST((ASTNode) ast.getChild(i), tableAlias, ast, i);
       }
     }
   }
-
-  // process orderby
-  private void processOrderbyAST(ASTNode ast, String tableAlias, Set<String> cols)
-    throws LensException {
-    if (ast == null) {
-      return;
-    }
-    // iterate over children
-    for (int i = 0; i < ast.getChildCount(); i++) {
-      ASTNode exprNode = (ASTNode) ast.getChild(i);
-      ASTNode child = (ASTNode)exprNode.getChild(0);
-      if (hasBridgeCol(child, tableAlias, cols)) {
-        exprNode.setChild(0, getDotASTForExprAST(child, tableAlias).dotAST);
-      }
-    }
-  }
-
-  void processWhereClauses(CandidateFact fact, String tableAlias, Set<String> cols) throws LensException {
-
-    for (Map.Entry<String, ASTNode> whereEntry : fact.getStorgeWhereClauseMap().entrySet()) {
-      ASTNode whereAST = whereEntry.getValue();
-      processWhereAST(whereAST, tableAlias, cols, whereAST, 0);
-    }
-  }
-
-  private void processWhereAST(ASTNode ast, String tableAlias, Set<String> cols, ASTNode parent, int childPos)
-    throws LensException {
-    if (ast == null) {
-      return;
-    }
-    ASTNode child;
-    int replaceIndex = -1;
-    if (isPrimitiveBooleanExpression(ast)) {
-      replaceIndex = 0;
-    } else if (isPrimitiveBooleanFunction(ast)) {
-      replaceIndex = 1;
-    }
-    if (replaceIndex != -1) {
-      child = (ASTNode)ast.getChild(replaceIndex);
-      if (hasBridgeCol(child, tableAlias, cols)) {
-        ast.setChild(replaceIndex, getDotASTForExprAST(child, tableAlias).dotAST);
-        parent.setChild(childPos, replaceDirectFiltersWithArrayFilter(ast, arrayFilter));
-      }
-    }
-    // recurse down
-    for (int i = 0; i < ast.getChildCount(); i++) {
-      processWhereAST((ASTNode) ast.getChild(i), tableAlias, cols, ast, i);
-    }
-
-  }
-
+  /**
+   * Update =, != and IN clause filters to arrayFilter. arrayFilter will have signature arrayFilter(col, value)
+   *
+   * @param ast AST for simple filter
+   * @param arrayFilter arrayFilter function
+   * @return ASTNode with converted filter
+   *
+   * @throws LensException
+   */
   static ASTNode replaceDirectFiltersWithArrayFilter(ASTNode ast, String arrayFilter)
     throws LensException {
     StringBuilder filterBuilder = new StringBuilder();
@@ -306,8 +313,8 @@ public class BridgeTableJoinContext {
     return ast;
   }
 
-  static boolean hasBridgeCol(ASTNode astNode, String tableAlias, Set<String> cols) throws LensException {
-    Set<String> bridgeCols = HQLParser.getColsInExpr(tableAlias, cols, astNode);
+  static boolean hasBridgeCol(ASTNode astNode, String tableAlias) throws LensException {
+    Set<String> bridgeCols = HQLParser.getColsInExpr(tableAlias, astNode);
     return !bridgeCols.isEmpty();
   }
 }

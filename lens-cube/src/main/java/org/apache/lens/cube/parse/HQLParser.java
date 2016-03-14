@@ -740,8 +740,7 @@ public final class HQLParser {
     return colname;
   }
 
-  public static Set<String> getColsInExpr(final String tableAlias, final Set<String> tableCols,
-                                    ASTNode expr) throws LensException {
+  public static Set<String> getColsInExpr(final String tableAlias, ASTNode expr) throws LensException {
     final Set<String> colsInExpr = new HashSet<>();
     HQLParser.bft(expr, new ASTNodeVisitor() {
       @Override
@@ -751,19 +750,11 @@ public final class HQLParser {
         if (visited.getParent() != null) {
           parent = visited.getParent().getNode();
         }
-
-        if (node.getToken().getType() == TOK_TABLE_OR_COL && (parent != null && parent.getToken().getType() != DOT)) {
-          // Take child ident.totext
-          ASTNode ident = (ASTNode) node.getChild(0);
-          String column = ident.getText().toLowerCase();
-          if (tableCols.contains(column)) {
-            colsInExpr.add(column);
-          }
-        } else if (node.getToken().getType() == DOT) {
+        if (node.getToken().getType() == DOT) {
           String alias = HQLParser.findNodeByPath(node, TOK_TABLE_OR_COL, Identifier).getText().toLowerCase();
           ASTNode colIdent = (ASTNode) node.getChild(1);
           String column = colIdent.getText().toLowerCase();
-          if (tableAlias.equalsIgnoreCase(alias) && tableCols.contains(column)) {
+          if (tableAlias.equalsIgnoreCase(alias)) {
             colsInExpr.add(column);
           }
         }

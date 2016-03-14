@@ -129,17 +129,17 @@ public class TestBridgeTableQueries extends TestQueryRewrite {
   public void testBridgeTablesWithMegringChains() throws Exception {
     String query = "select userInterestIds.sport_id, usersports.name, sum(msr2) from basecube where " + TWO_DAYS_RANGE;
     String hqlQuery = rewrite(query, hConf);
-    String expected = getExpectedQuery("basecube", "select userInterestIds.balias0, usersports.balias1,"
+    String expected = getExpectedQuery("basecube", "select userInterestIds.balias0, usersports.balias0,"
       + " sum(basecube.msr2) FROM ",
       " join " + getDbName() + "c1_usertable userdim on basecube.userid = userdim.id join (select userinterestids"
         + ".user_id as user_id,collect_set(userinterestids.sport_id) as balias0 from " + getDbName()
         + "c1_user_interests_tbl userinterestids group by userinterestids.user_id) userinterestids on userdim.id = "
         + "userinterestids.user_id "
-        + "join (select userinterestids.user_id as user_id,collect_set(usersports.name) as balias1 from "
+        + "join (select userinterestids.user_id as user_id,collect_set(usersports.name) as balias0 from "
         + getDbName() + "c1_user_interests_tbl userinterestids join "
         + getDbName() + "c1_sports_tbl usersports on userinterestids.sport_id = usersports.id"
         + " group by userinterestids.user_id) usersports on userdim.id = usersports.user_id",
-       null, "group by userinterestids.balias0, usersports.balias1", null,
+       null, "group by userinterestids.balias0, usersports.balias0", null,
       getWhereForDailyAndHourly2days("basecube", "c1_testfact1_base"));
     TestCubeRewriter.compareQueries(hqlQuery, expected);
     // run with chain ref column
@@ -216,22 +216,22 @@ public class TestBridgeTableQueries extends TestQueryRewrite {
     String query = "select usersports.name, xusersports.name, yusersports.name, sum(msr2) from basecube where "
       + TWO_DAYS_RANGE;
     String hqlQuery = rewrite(query, hConf);
-    String expected = getExpectedQuery("basecube", "select usersports.balias0, xusersports.balias2, "
-      + "yusersports.balias1, sum(basecube.msr2) FROM ",
+    String expected = getExpectedQuery("basecube", "select usersports.balias0, xusersports.balias0, "
+      + "yusersports.balias0, sum(basecube.msr2) FROM ",
       " join " + getDbName() + "c1_usertable userdim_1 on basecube.userid = userdim_1.id "
       + " join  (select user_interests_1.user_id as user_id, collect_set(usersports.name) as balias0 from "
       + getDbName() + "c1_user_interests_tbl user_interests_1 join " + getDbName() + "c1_sports_tbl usersports on "
       + "user_interests_1.sport_id = usersports.id group by user_interests_1.user_id) "
       + "usersports on userdim_1.id = usersports.user_id"
       + " join " + getDbName() + "c1_usertable userdim_0 on basecube.yuserid = userdim_0.id "
-      + " join  (select user_interests_0.user_id as user_id,collect_set(yusersports.name) as balias1 from "
+      + " join  (select user_interests_0.user_id as user_id,collect_set(yusersports.name) as balias0 from "
       + getDbName() + "c1_user_interests_tbl user_interests_0 join " + getDbName() + "c1_sports_tbl yusersports on "
       + " user_interests_0.sport_id = yusersports.id group by user_interests_0.user_id) yusersports on userdim_0.id ="
       + " yusersports.user_id join " + getDbName() + "c1_usertable userdim on basecube.xuserid = userdim.id"
-      + " join  (select user_interests.user_id as user_id,collect_set(xusersports.name) as balias2 from "
+      + " join  (select user_interests.user_id as user_id,collect_set(xusersports.name) as balias0 from "
       + getDbName() + "c1_user_interests_tbl user_interests join " + getDbName() + "c1_sports_tbl xusersports"
       + " on user_interests.sport_id = xusersports.id group by user_interests.user_id) xusersports on userdim.id = "
-      + " xusersports.user_id", null, "group by usersports.balias0, xusersports.balias2, yusersports.balias1", null,
+      + " xusersports.user_id", null, "group by usersports.balias0, xusersports.balias0, yusersports.balias0", null,
       getWhereForDailyAndHourly2days("basecube", "c1_testfact1_base"));
     TestCubeRewriter.compareQueries(hqlQuery, expected);
     // run with chain ref column
@@ -247,23 +247,23 @@ public class TestBridgeTableQueries extends TestQueryRewrite {
     String query = "select usersports.name, xusersports.name, yusersports.name, sum(msr2) from basecube where "
       + TWO_DAYS_RANGE;
     String hqlQuery = rewrite(query, conf);
-    String expected = getExpectedQuery("basecube", "select usersports.balias0, xusersports.balias2, "
-      + "yusersports.balias1, sum(basecube.msr2) FROM ",
+    String expected = getExpectedQuery("basecube", "select usersports.balias0, xusersports.balias0, "
+      + "yusersports.balias0, sum(basecube.msr2) FROM ",
       " left outer join " + getDbName() + "c1_usertable userdim_1 on basecube.userid = userdim_1.id "
       + " left outer join  (select user_interests_1.user_id as user_id, collect_set(usersports.name) as balias0 from "
       + getDbName() + "c1_user_interests_tbl user_interests_1 join " + getDbName() + "c1_sports_tbl usersports on "
       + "user_interests_1.sport_id = usersports.id group by user_interests_1.user_id) "
       + "usersports on userdim_1.id = usersports.user_id"
       + " left outer join " + getDbName() + "c1_usertable userdim_0 on basecube.yuserid = userdim_0.id "
-      + " left outer join  (select user_interests_0.user_id as user_id,collect_set(yusersports.name) as balias1 from "
+      + " left outer join  (select user_interests_0.user_id as user_id,collect_set(yusersports.name) as balias0 from "
       + getDbName() + "c1_user_interests_tbl user_interests_0 join " + getDbName() + "c1_sports_tbl yusersports on "
       + " user_interests_0.sport_id = yusersports.id group by user_interests_0.user_id) yusersports on userdim_0.id ="
       + " yusersports.user_id left outer join " + getDbName()
       + "c1_usertable userdim on basecube.xuserid = userdim.id"
-      + " left outer join  (select user_interests.user_id as user_id,collect_set(xusersports.name) as balias2 from "
+      + " left outer join  (select user_interests.user_id as user_id,collect_set(xusersports.name) as balias0 from "
       + getDbName() + "c1_user_interests_tbl user_interests join " + getDbName() + "c1_sports_tbl xusersports"
       + " on user_interests.sport_id = xusersports.id group by user_interests.user_id) xusersports on userdim.id = "
-      + " xusersports.user_id", null, "group by usersports.balias0, xusersports.balias2, yusersports.balias1", null,
+      + " xusersports.user_id", null, "group by usersports.balias0, xusersports.balias0, yusersports.balias0", null,
       getWhereForDailyAndHourly2days("basecube", "c1_testfact1_base"));
     TestCubeRewriter.compareQueries(hqlQuery, expected);
     // run with chain ref column
@@ -383,6 +383,7 @@ public class TestBridgeTableQueries extends TestQueryRewrite {
     hqlQuery = rewrite(query, hConf);
     TestCubeRewriter.compareQueries(hqlQuery, expected);
   }
+
   @Test
   public void testFlattenBridgeTablesWithCustomFilter() throws Exception {
     Configuration conf = new Configuration(hConf);
@@ -797,5 +798,54 @@ public class TestBridgeTableQueries extends TestQueryRewrite {
     assertTrue(hqlQuery.contains("mq1 full outer join ")
         && hqlQuery.endsWith("mq2 on mq1.sports_abbr <=> mq2.sports_abbr"),
       hqlQuery);
+  }
+
+  @Test
+  public void testBridgeTablesDimensionOnlyQuery() throws Exception {
+    String query = "select userid as uid, usersports.name as uname, substr(usersports.name, 3) as `sub user`"
+      + " from basecube where " + TWO_DAYS_RANGE
+      + " and usersports.name = 'CRICKET' and substr(usersports.name, 3) = 'CRI' and (userid = 4 or userid = 5)";
+    String hqlQuery = rewrite(query, hConf);
+    String expected = getExpectedQuery("basecube", "select distinct basecube.userid as `uid`, usersports.balias0 as " +
+        "`uname`, "
+        + " (usersports.balias1) as `sub user` FROM ",
+      " join " + getDbName() + "c1_usertable userdim ON basecube.userid = userdim.id "
+        + " join (select user_interests.user_id as user_id, collect_set(usersports.name) as balias0, "
+        + "collect_set(substr(usersports.name, 3)) as balias1"
+        + " from " + getDbName() + "c1_user_interests_tbl user_interests"
+        + " join " + getDbName() + "c1_sports_tbl usersports on user_interests.sport_id = usersports.id "
+        + " group by user_interests.user_id) usersports"
+        + " on userdim.id = usersports.user_id ",
+      null, " and array_contains(usersports.balias0,'CRICKET') and (array_contains(usersports.balias1),'CRI')"
+        + " and ((basecube.userid) = 4) or (( basecube . userid ) = 5 )) ", null,
+      getWhereForDailyAndHourly2days("basecube", "c1_testfact2_base"));
+    TestCubeRewriter.compareQueries(hqlQuery, expected);
+    // run with chain ref column
+    query = "select userid as uid, sports as uname, sports_abbr as `sub user` from basecube where "
+      + TWO_DAYS_RANGE + " and sports = 'CRICKET' and sports_abbr = 'CRI' and (userid = 4 or userid = 5)";
+    hqlQuery = rewrite(query, hConf);
+    TestCubeRewriter.compareQueries(hqlQuery, expected);
+  }
+
+  @Test
+  public void testBridgeTableQueryJoinColumns() throws Exception {
+    String query = "select userid as uid, userchain.id as udid, userInterestIds.sport_id as uisid, "
+      + "userInterestIds.user_id as uiuid, usersports.id as usid"
+      + " from basecube where " + TWO_DAYS_RANGE;
+    String hqlQuery = rewrite(query, hConf);
+    String expected = getExpectedQuery("basecube", "select distinct basecube.userid as `uid`,"
+        + "userchain.id as `udid`, userinterestids.balias0 as `uisid`, userinterestids.balias1 as "
+        + "`uiuid`, usersports . balias0 as `usid` FROM ",
+      " join " + getDbName() + "c1_usertable userdim ON basecube.userid = userdim.id "
+        + " join ( select userinterestids.user_id as user_id, collect_set(userinterestids.sport_id) as balias0,"
+        + "collect_set(userinterestids.user_id) as balias1 from  " + getDbName() + "c1_user_interests_tbl "
+        + "userinterestids group by userinterestids.user_id) userinterestids on userchain.id = userinterestids.user_id"
+        + "join  (select userinterestids.user_id as user_id, collect_set(usersports . id) as balias0 from"
+        + getDbName() + " c1_user_interests_tbl userinterestids join " + getDbName() + "c1_sports_tbl"
+        + "usersports on userinterestids.sport_id = usersports.id group by userinterestids.user_id) usersports"
+        + " on userchain.id = usersports.user_id ",
+      null, null, null,
+      getWhereForDailyAndHourly2days("basecube", "c1_testfact2_base"));
+    TestCubeRewriter.compareQueries(hqlQuery, expected);
   }
 }

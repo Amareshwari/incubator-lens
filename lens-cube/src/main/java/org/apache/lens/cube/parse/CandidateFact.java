@@ -218,7 +218,7 @@ public class CandidateFact implements CandidateTable, QueryAST {
 
   private Set<String> getColsInExpr(final CubeQueryContext cubeql, final Set<String> cubeCols,
     ASTNode expr) throws LensException {
-    return HQLParser.getColsInExpr(cubeql.getAliasForTableName(cubeql.getCube()), cubeCols, expr);
+    return HQLParser.getColsInExpr(cubeql.getAliasForTableName(cubeql.getCube()), expr);
   }
 
   @Override

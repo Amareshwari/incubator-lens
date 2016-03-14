@@ -1069,6 +1069,16 @@ public class CubeTestSetup {
         });
       }
     });
+    joinChains.add(new JoinChain("userchain", "user-chain", "user chain") {
+      {
+        addPath(new ArrayList<TableReference>() {
+          {
+            add(new TableReference("basecube", "userid"));
+            add(new TableReference("userdim", "id"));
+          }
+        });
+      }
+    });
     joinChains.add(new JoinChain("userSports", "user-sports", "user sports") {
       {
         addPath(new ArrayList<TableReference>() {
