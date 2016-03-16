@@ -65,7 +65,8 @@ class JoinResolver implements ContextRewriter {
 
     if (!joinResolverDisabled && (!cubeql.getNonChainedDimensions().isEmpty() && cubeql.hasCubeInQuery())
       || ((cubeql.getNonChainedDimensions().size() > 1) && !cubeql.hasCubeInQuery())) {
-      log.warn("Disabling auto join resolver as there are direct dimensions queried");
+      log.warn("Disabling auto join resolver as there are direct dimensions queried {}",
+        cubeql.getNonChainedDimensions());
       joinResolverDisabled = true;
     }
     if (joinResolverDisabled) {
