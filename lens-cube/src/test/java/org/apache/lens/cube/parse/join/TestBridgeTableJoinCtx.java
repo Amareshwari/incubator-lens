@@ -44,8 +44,9 @@ public class TestBridgeTableJoinCtx {
   @DataProvider(name = "filterReplace")
   public Object[][] mediaTypeData() {
     return new Object[][] {
-      {"t1.c1 in ('XyZ', 'abc', 'PQR', 'lKg')", "myfilter(( t1 . c1 ), 'XyZ' ) or myfilter(( t1 . c1 ), 'abc' )"
-        + " or myfilter(( t1 . c1 ), 'PQR' ) or myfilter(( t1 . c1 ), 'lKg' )"},
+      {"t1.c1 in ('XyZ', 'abc', 'PQR', 'lKg')",
+       "myfilter(( t1 . c1 ), 'XyZ' ) or myfilter(( t1 . c1 ), 'abc' )"
+         + " or myfilter(( t1 . c1 ), 'PQR' ) or myfilter(( t1 . c1 ), 'lKg' )", },
       {"t1.c1 = ('XyZ')", "myfilter(( t1 . c1 ), 'XyZ' )"},
       {"t1.c1 != ('XyZ')", "not myfilter(( t1 . c1 ), 'XyZ' )"},
       {"t1.c1 != x", "not myfilter(( t1 . c1 ), x )"},
