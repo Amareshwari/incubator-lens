@@ -802,10 +802,12 @@ public class TestBridgeTableQueries extends TestQueryRewrite {
 
   @Test
   public void testBridgeTablesDimensionOnlyQuery() throws Exception {
+    Configuration conf = new Configuration(hConf);
+    conf.set(CubeQueryConfUtil.getValidFactTablesKey("basecube"), "testFact1_base");
     String query = "select userid as uid, usersports.name as uname, substr(usersports.name, 3) as `sub user`"
       + " from basecube where " + TWO_DAYS_RANGE
       + " and usersports.name = 'CRICKET' and substr(usersports.name, 3) = 'CRI' and (userid = 4 or userid = 5)";
-    String hqlQuery = rewrite(query, hConf);
+    String hqlQuery = rewrite(query, conf);
     String expected = getExpectedQuery("basecube", "select distinct basecube.userid as `uid`, usersports.balias0 as " +
         "`uname`, "
         + " (usersports.balias1) as `sub user` FROM ",
@@ -818,34 +820,36 @@ public class TestBridgeTableQueries extends TestQueryRewrite {
         + " on userdim.id = usersports.user_id ",
       null, " and array_contains(usersports.balias0,'CRICKET') and (array_contains(usersports.balias1),'CRI')"
         + " and ((basecube.userid) = 4) or (( basecube . userid ) = 5 )) ", null,
-      getWhereForDailyAndHourly2days("basecube", "c1_testfact2_base"));
+      getWhereForDailyAndHourly2days("basecube", "c1_testfact1_base"));
     TestCubeRewriter.compareQueries(hqlQuery, expected);
     // run with chain ref column
     query = "select userid as uid, sports as uname, sports_abbr as `sub user` from basecube where "
       + TWO_DAYS_RANGE + " and sports = 'CRICKET' and sports_abbr = 'CRI' and (userid = 4 or userid = 5)";
-    hqlQuery = rewrite(query, hConf);
+    hqlQuery = rewrite(query, conf);
     TestCubeRewriter.compareQueries(hqlQuery, expected);
   }
 
   @Test
   public void testBridgeTableQueryJoinColumns() throws Exception {
+    Configuration conf = new Configuration(hConf);
+    conf.set(CubeQueryConfUtil.getValidFactTablesKey("basecube"), "testFact1_base");
     String query = "select userid as uid, userchain.id as udid, userInterestIds.sport_id as uisid, "
       + "userInterestIds.user_id as uiuid, usersports.id as usid"
       + " from basecube where " + TWO_DAYS_RANGE;
-    String hqlQuery = rewrite(query, hConf);
+    String hqlQuery = rewrite(query, conf);
     String expected = getExpectedQuery("basecube", "select distinct basecube.userid as `uid`,"
         + "userchain.id as `udid`, userinterestids.balias0 as `uisid`, userinterestids.balias1 as "
         + "`uiuid`, usersports . balias0 as `usid` FROM ",
-      " join " + getDbName() + "c1_usertable userdim ON basecube.userid = userdim.id "
+      " join " + getDbName() + "c1_usertable userchain ON basecube.userid = userchain.id "
         + " join ( select userinterestids.user_id as user_id, collect_set(userinterestids.sport_id) as balias0,"
-        + "collect_set(userinterestids.user_id) as balias1 from  " + getDbName() + "c1_user_interests_tbl "
-        + "userinterestids group by userinterestids.user_id) userinterestids on userchain.id = userinterestids.user_id"
-        + "join  (select userinterestids.user_id as user_id, collect_set(usersports . id) as balias0 from"
+        + " collect_set(userinterestids.user_id) as balias1 from  " + getDbName() + "c1_user_interests_tbl "
+        + " userinterestids group by userinterestids.user_id) userinterestids on userchain.id = userinterestids.user_id"
+        + " join  (select userinterestids.user_id as user_id, collect_set(usersports . id) as balias0 from"
         + getDbName() + " c1_user_interests_tbl userinterestids join " + getDbName() + "c1_sports_tbl"
-        + "usersports on userinterestids.sport_id = usersports.id group by userinterestids.user_id) usersports"
+        + " usersports on userinterestids.sport_id = usersports.id group by userinterestids.user_id) usersports"
         + " on userchain.id = usersports.user_id ",
       null, null, null,
-      getWhereForDailyAndHourly2days("basecube", "c1_testfact2_base"));
+      getWhereForDailyAndHourly2days("basecube", "c1_testfact1_base"));
     TestCubeRewriter.compareQueries(hqlQuery, expected);
   }
 }

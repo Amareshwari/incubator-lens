@@ -138,11 +138,11 @@ public class BridgeTableJoinContext {
     clause.append(bridgeSelectClause.toString());
     // iterate over all select expressions and add them for select clause if do_flattening_early is disabled
     if (!doFlatteningEarly) {
-      BridgeTableSelectCtx selectCtx = new BridgeTableSelectCtx(bridgeTableFieldAggr, arrayFilter);
-      selectCtx.processSelectAST(queryAST.getSelectAST(), toAlias);
-      selectCtx.processWhereClauses(fact, toAlias);
-      selectCtx.processGroupbyAST(queryAST.getGroupByAST(), toAlias);
-      selectCtx.processOrderbyAST(queryAST.getOrderByAST(), toAlias);
+      BridgeTableSelectCtx selectCtx = new BridgeTableSelectCtx(bridgeTableFieldAggr, arrayFilter, toAlias);
+      selectCtx.processSelectAST(queryAST.getSelectAST());
+      selectCtx.processWhereClauses(fact);
+      selectCtx.processGroupbyAST(queryAST.getGroupByAST());
+      selectCtx.processOrderbyAST(queryAST.getOrderByAST());
       clause.append(",").append(StringUtils.join(selectCtx.getSelectedBridgeExprs(), ","));
     } else {
       for (String col : cubeql.getTblAliasToColumns().get(toAlias)) {
@@ -170,27 +170,28 @@ public class BridgeTableJoinContext {
   }
 
   @Data
-  private static class BridgeTableSelectCtx {
+  static class BridgeTableSelectCtx {
     private final HashMap<HashableASTNode, ASTNode> exprToDotAST = new HashMap<>();
     private final List<String> selectedBridgeExprs = new ArrayList<>();
     private final AliasDecider aliasDecider = new DefaultAliasDecider("balias");
     private final String bridgeTableFieldAggr;
     private final String arrayFilter;
+    private final String tableAlias;
 
-    private List<String> processSelectAST(ASTNode selectAST, String tableAlias)
+    List<String> processSelectAST(ASTNode selectAST)
       throws LensException {
       // iterate over children
       for (int i = 0; i < selectAST.getChildCount(); i++) {
         ASTNode selectExprNode = (ASTNode) selectAST.getChild(i);
         ASTNode child = (ASTNode) selectExprNode.getChild(0);
         if (hasBridgeCol(child, tableAlias)) {
-          selectExprNode.setChild(0, getDotASTForExprAST(child, tableAlias));
+          selectExprNode.setChild(0, getDotASTForExprAST(child));
         }
       }
       return selectedBridgeExprs;
     }
 
-    private ASTNode getDotASTForExprAST(ASTNode child, String tableAlias) {
+    private ASTNode getDotASTForExprAST(ASTNode child) {
       HashableASTNode hashAST = new HashableASTNode(child);
       if (!exprToDotAST.containsKey(hashAST)) {
         // add selected expression to get selected from bridge table, with a generated alias
@@ -205,7 +206,7 @@ public class BridgeTableJoinContext {
     }
 
     // process groupby
-    private void processGroupbyAST(ASTNode ast, String tableAlias)
+    void processGroupbyAST(ASTNode ast)
       throws LensException {
       if (ast == null) {
         return;
@@ -214,13 +215,13 @@ public class BridgeTableJoinContext {
       for (int i = 0; i < ast.getChildCount(); i++) {
         ASTNode exprNode = (ASTNode) ast.getChild(i);
         if (hasBridgeCol(exprNode, tableAlias)) {
-          ast.setChild(i, getDotASTForExprAST(exprNode, tableAlias));
+          ast.setChild(i, getDotASTForExprAST(exprNode));
         }
       }
     }
 
     // process orderby
-    private void processOrderbyAST(ASTNode ast, String tableAlias)
+    void processOrderbyAST(ASTNode ast)
       throws LensException {
       if (ast == null) {
         return;
@@ -230,20 +231,20 @@ public class BridgeTableJoinContext {
         ASTNode exprNode = (ASTNode) ast.getChild(i);
         ASTNode child = (ASTNode) exprNode.getChild(0);
         if (hasBridgeCol(child, tableAlias)) {
-          exprNode.setChild(0, getDotASTForExprAST(child, tableAlias));
+          exprNode.setChild(0, getDotASTForExprAST(child));
         }
       }
     }
 
-    void processWhereClauses(CandidateFact fact, String tableAlias) throws LensException {
+    void processWhereClauses(CandidateFact fact) throws LensException {
 
       for (Map.Entry<String, ASTNode> whereEntry : fact.getStorgeWhereClauseMap().entrySet()) {
         ASTNode whereAST = whereEntry.getValue();
-        processWhereAST(whereAST, tableAlias, whereAST, 0);
+        processWhereAST(whereAST, whereAST, 0);
       }
     }
 
-    private void processWhereAST(ASTNode ast, String tableAlias, ASTNode parent, int childPos)
+    void processWhereAST(ASTNode ast, ASTNode parent, int childPos)
       throws LensException {
       if (ast == null) {
         return;
@@ -258,13 +259,13 @@ public class BridgeTableJoinContext {
       if (replaceIndex != -1) {
         child = (ASTNode) ast.getChild(replaceIndex);
         if (hasBridgeCol(child, tableAlias)) {
-          ast.setChild(replaceIndex, getDotASTForExprAST(child, tableAlias));
+          ast.setChild(replaceIndex, getDotASTForExprAST(child));
           parent.setChild(childPos, replaceDirectFiltersWithArrayFilter(ast, arrayFilter));
         }
       }
       // recurse down
       for (int i = 0; i < ast.getChildCount(); i++) {
-        processWhereAST((ASTNode) ast.getChild(i), tableAlias, ast, i);
+        processWhereAST((ASTNode) ast.getChild(i), ast, i);
       }
     }
   }
@@ -288,7 +289,7 @@ public class BridgeTableJoinContext {
       filterBuilder.append(arrayFilter);
       filterBuilder.append("(");
       filterBuilder.append(colStr).append(",");
-      filterBuilder.append(ast.getChild(1).getText());
+      filterBuilder.append(getString((ASTNode)ast.getChild(1)));
       filterBuilder.append(")");
     } else if (ast.getType() == HiveParser.TOK_FUNCTION) {
       // This is IN clause as function
