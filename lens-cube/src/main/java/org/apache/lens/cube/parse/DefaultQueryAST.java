@@ -50,7 +50,6 @@ public class DefaultQueryAST implements QueryAST {
     return null;
   }
 
-
   public String getHavingTree() {
     if (havingAST != null) {
       return HQLParser.getString(havingAST);

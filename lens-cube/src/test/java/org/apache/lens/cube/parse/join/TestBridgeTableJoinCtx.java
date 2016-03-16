@@ -22,18 +22,19 @@ package org.apache.lens.cube.parse.join;
 import static org.apache.hadoop.hive.ql.parse.HiveParser.TOK_INSERT;
 import static org.apache.hadoop.hive.ql.parse.HiveParser.TOK_SELECT;
 import static org.apache.hadoop.hive.ql.parse.HiveParser.TOK_WHERE;
+
 import static org.testng.Assert.*;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hadoop.hive.ql.parse.HiveParser;
 import org.apache.lens.cube.parse.HQLParser;
 import org.apache.lens.cube.parse.join.BridgeTableJoinContext.BridgeTableSelectCtx;
 import org.apache.lens.server.api.error.LensException;
 
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
+import org.apache.hadoop.hive.ql.parse.HiveParser;
 
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
@@ -48,7 +49,6 @@ public class TestBridgeTableJoinCtx {
       {"t1.c1 = ('XyZ')", "myfilter(( t1 . c1 ), 'XyZ' )"},
       {"t1.c1 != ('XyZ')", "not myfilter(( t1 . c1 ), 'XyZ' )"},
       {"t1.c1 != x", "not myfilter(( t1 . c1 ), x )"},
-
     };
   }
 

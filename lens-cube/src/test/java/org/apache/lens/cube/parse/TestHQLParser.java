@@ -395,8 +395,8 @@ public class TestHQLParser {
       {" fun1(cie.c4)", new String[]{"c4"}}, // simple selection
       {" t1.c1 + cie.c5+ t2.c3", new String[]{"c5"}}, // simple selection
       {" t1.c1=x and cie.c2=y", new String[]{"c2"}}, //filter expression
-      {"case when t1.c1 then 1 when cie.c3 then 2 when cie.c4 then 3 when t2.c2 then 4 else cie.c6 end", new String[]
-        {"c3", "c4", "c6"}},  // case when statement
+      {"case when t1.c1 then 1 when cie.c3 then 2 when cie.c4 then 3 when t2.c2 then 4 else cie.c6 end",
+        new String[]{"c3", "c4", "c6", }},  // case when statement
       {"complexfunc(round(t1.c1), myfunc(t2.c2), myfunc2(cie.c4, cie.c5, t2.c6))", new String[]{"c4", "c5"}},
     };
   }
@@ -429,7 +429,7 @@ public class TestHQLParser {
       {" fun1(cie.c4)", false},
       {" arraycontains(arr1, v1)", false},
       {" t1.c1=x and cie.c2=y", false},
-      {" t1.col1 in ('x', 'y', 'z')", false}
+      {" t1.col1 in ('x', 'y', 'z')", false},
     };
   }
 
@@ -454,7 +454,7 @@ public class TestHQLParser {
       {" fun1(cie.c4)", false},
       {" arraycontains(arr1, v1)", false},
       {" t1.c1=x and cie.c2=y", false},
-      {" t1.col1 in ('x', 'y', 'z')", true}
+      {" t1.col1 in ('x', 'y', 'z')", true},
     };
   }
 

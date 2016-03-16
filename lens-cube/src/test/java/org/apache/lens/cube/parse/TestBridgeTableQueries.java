@@ -808,9 +808,8 @@ public class TestBridgeTableQueries extends TestQueryRewrite {
       + " from basecube where " + TWO_DAYS_RANGE
       + " and usersports.name = 'CRICKET' and substr(usersports.name, 3) = 'CRI' and (userid = 4 or userid = 5)";
     String hqlQuery = rewrite(query, conf);
-    String expected = getExpectedQuery("basecube", "select distinct basecube.userid as `uid`, usersports.balias0 as " +
-        "`uname`, "
-        + " (usersports.balias1) as `sub user` FROM ",
+    String expected = getExpectedQuery("basecube", "select distinct basecube.userid as `uid`, usersports.balias0 as "
+        + "`uname`, (usersports.balias1) as `sub user` FROM ",
       " join " + getDbName() + "c1_usertable userdim ON basecube.userid = userdim.id "
         + " join (select user_interests.user_id as user_id, collect_set(usersports.name) as balias0, "
         + "collect_set(substr(usersports.name, 3)) as balias1"
