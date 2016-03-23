@@ -33,6 +33,7 @@ import org.apache.lens.api.query.QueryHandle;
 import org.apache.lens.api.query.QueryStatus;
 import org.apache.lens.api.query.QueryStatus.Status;
 import org.apache.lens.server.api.LensConfConstants;
+import org.apache.lens.server.api.common.ExponentialBackOffRetryHandler;
 import org.apache.lens.server.api.driver.DriverQueryStatus;
 import org.apache.lens.server.api.driver.InMemoryResultSet;
 import org.apache.lens.server.api.driver.LensDriver;
@@ -41,6 +42,7 @@ import org.apache.lens.server.api.driver.PartiallyFetchedInMemoryResultSet;
 import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.query.collect.WaitingQueriesSelectionPolicy;
 import org.apache.lens.server.api.query.constraint.QueryLaunchingConstraint;
+import org.apache.lens.server.api.util.LensUtil;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -185,6 +187,8 @@ public class QueryContext extends AbstractQueryContext {
    */
   @Getter
   private transient boolean isDriverResultRegistered;
+
+  final transient ExponentialBackOffRetryHandler statusUpdateRetries = new ExponentialBackOffRetryHandler();
 
   /**
    * Creates context from query
@@ -357,8 +361,36 @@ public class QueryContext extends AbstractQueryContext {
   }
 
   public synchronized void setStatus(final QueryStatus newStatus) throws LensException {
+    validateTransition(newStatus);
     log.info("Updating status of {} from {} to {}", getQueryHandle(), this.status, newStatus);
     this.status = newStatus;
+  }
+
+  /**
+   * Update status from selected driver
+   *
+   * @param statusUpdateRetryMaxDelay Max delay that next status update can wait from last update
+   * @param statusUpdateExponentialWaitFactor The wait time factor for exponential backoff, incase of transient failures
+   *
+   * @throws LensException Throws exception if update from driver has failed.
+   */
+  public void updateDriverStatus(long statusUpdateRetryMaxDelay, long statusUpdateExponentialWaitFactor)
+    throws LensException {
+    if (statusUpdateRetries.canTryNow(statusUpdateRetryMaxDelay, statusUpdateExponentialWaitFactor)) {
+      try {
+        getSelectedDriver().updateStatus(this);
+        statusUpdateRetries.clear();
+      } catch (LensException exc) {
+        if (LensUtil.isSocketException(exc)) {
+          statusUpdateRetries.updateFailure();
+          if (!statusUpdateRetries.hasExhaustedRetries()) {
+            // retries are not exhausted to update failure is ignored
+            return;
+          }
+        }
+        throw exc;
+      }
+    }
   }
 
   public String getResultHeader() {

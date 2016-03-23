@@ -18,6 +18,8 @@
  */
 package org.apache.lens.server.api.util;
 
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.util.HashMap;
 import java.util.Set;
 
@@ -56,6 +58,20 @@ public final class LensUtil {
     return expMsg;
   }
 
+  public static Throwable getCause(Throwable e) {
+    if (e.getCause() != null) {
+      return getCause(e.getCause());
+    }
+    return e;
+  }
+
+  public static boolean isSocketException(Throwable e) {
+    Throwable cause = getCause(e);
+    if (cause instanceof SocketException || cause instanceof SocketTimeoutException) {
+      return true;
+    }
+    return false;
+  }
   public static <T> ImmutableSet<T> getImplementations(final String factoriesKey, final Configuration conf) {
 
     Set<T> implSet = Sets.newLinkedHashSet();

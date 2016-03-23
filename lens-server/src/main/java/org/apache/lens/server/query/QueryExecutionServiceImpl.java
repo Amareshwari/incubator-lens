@@ -294,6 +294,15 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
   };
   private UserQueryToCubeQueryRewriter userQueryToCubeQueryRewriter;
 
+  /**
+   * Maximum delay a status update can wait for next update, in case of transient failures.
+   */
+  private long statusUpdateRetryMaxDelay;
+
+  /**
+   * The wait time for next status update which can grow exponentially, in case of transient failures.
+   */
+  private long statusUpdateExponentialWaiFactor;
 
   /**
    * Instantiates a new query execution service impl.
@@ -884,14 +893,14 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
         if (!ctx.queued() && !ctx.finished() && !ctx.getDriverStatus().isFinished()) {
           log.debug("Updating status for {}", ctx.getQueryHandle());
           try {
-            ctx.getSelectedDriver().updateStatus(ctx);
-            ctx.setStatus(ctx.getDriverStatus().toQueryStatus());
+            ctx.updateDriverStatus(statusUpdateRetryMaxDelay, statusUpdateExponentialWaiFactor);
           } catch (LensException exc) {
-            // Driver gave exception while updating status
+            // Status update from driver failed
             setFailedStatus(ctx, "Status update failed", exc.getMessage(), exc.buildLensErrorTO(this.errorCollection));
             log.error("Status update failed for {}", handle, exc);
             return;
           }
+          ctx.setStatus(ctx.getDriverStatus().toQueryStatus());
           // query is successfully executed by driver and
           // if query result need not be persisted or there is no result available in driver, move the query to
           // succeeded state immediately, otherwise result formatter will format the result and move it to succeeded
@@ -1152,6 +1161,10 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     inMemoryResultsetTTLMillis = conf.getInt(
         LensConfConstants.INMEMORY_RESULT_SET_TTL_SECS, LensConfConstants.DEFAULT_INMEMORY_RESULT_SET_TTL_SECS) * 1000;
 
+    statusUpdateRetryMaxDelay = conf.getLong(LensConfConstants.MAXIMUM_STATUS_UPDATE_DELAY,
+      LensConfConstants.DEFAULT_MAXIMUM_STATUS_UPDATE_DELAY) * 1000;
+    statusUpdateExponentialWaiFactor = conf.getLong(LensConfConstants.STATUS_UPDATE_EXPONENTIAL_WAIT_FACTOR,
+      LensConfConstants.DEFAULT_STATUS_UPDATE_EXPONENTIAL_WAIT_FACTOR);
     log.info("Query execution service initialized");
   }
 
