@@ -188,7 +188,7 @@ public class QueryContext extends AbstractQueryContext {
   @Getter
   private transient boolean isDriverResultRegistered;
 
-  final transient ExponentialBackOffRetryHandler statusUpdateRetries = new ExponentialBackOffRetryHandler();
+  transient ExponentialBackOffRetryHandler statusUpdateRetries = new ExponentialBackOffRetryHandler();
 
   /**
    * Creates context from query
@@ -283,13 +283,17 @@ public class QueryContext extends AbstractQueryContext {
     return ctx;
   }
 
-  /**
-   * Merge conf.
-   *
-   * @param prepared the prepared
-   * @param current  the current
-   * @return the configuration
-   */
+  public void initTransientState() {
+    super.initTransientState();
+    statusUpdateRetries = new ExponentialBackOffRetryHandler();
+  }
+    /**
+     * Merge conf.
+     *
+     * @param prepared the prepared
+     * @param current  the current
+     * @return the configuration
+     */
   private static Configuration mergeConf(Configuration prepared, Configuration current) {
     Configuration conf = new Configuration(false);
     for (Map.Entry<String, String> entry : prepared) {
