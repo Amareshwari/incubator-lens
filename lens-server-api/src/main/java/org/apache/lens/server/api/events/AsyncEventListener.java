@@ -91,6 +91,7 @@ public abstract class AsyncEventListener<T extends LensEvent> implements LensEve
       .build();
     // fixed pool with min and max equal to poolSize
     processor = new ThreadPoolExecutor(poolSize, poolSize, timeOutSeconds, TimeUnit.SECONDS, eventQueue, factory);
+    processor.allowCoreThreadTimeOut(true);
   }
 
   /**

@@ -749,6 +749,26 @@
   </property>
 
   <property>
+    <name>lens.server.estimate.pool.min.threads</name>
+    <value>3</value>
+    <description>Minimum number of threads in the estimate thread pool</description>
+  </property>
+
+  <property>
+    <name>lens.server.estimate.pool.max.threads</name>
+    <value>100</value>
+    <description>Maximum number of threads in the estimate thread pool</description>
+  </property>
+
+  <property>
+    <name>lens.server.estimate.pool.keepalive.millis</name>
+    <value>60000</value>
+    <description>Thread keep alive time in milliseconds for the estimate thread pool.
+      If there are no estimate requests for this period,then cached threads are released from the pool.
+    </description>
+  </property>
+
+  <property>
     <name>lens.server.session.expiry.service.interval.secs</name>
     <value>3600</value>
     <description>Interval at which lens session expiry service runs</description>
