@@ -1254,13 +1254,6 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
   }
 
   private void startEstimatePool() {
-    int minPoolSize = conf.getInt(ESTIMATE_POOL_MIN_THREADS,
-      DEFAULT_ESTIMATE_POOL_MIN_THREADS);
-    int maxPoolSize = conf.getInt(ESTIMATE_POOL_MAX_THREADS,
-      DEFAULT_ESTIMATE_POOL_MAX_THREADS);
-    int keepAlive = conf.getInt(ESTIMATE_POOL_KEEP_ALIVE_MILLIS,
-      DEFAULT_ESTIMATE_POOL_KEEP_ALIVE_MILLIS);
-
     final ThreadFactory defaultFactory = Executors.defaultThreadFactory();
     final AtomicInteger thId = new AtomicInteger();
     // We are creating our own thread factory, just so that we can override thread name for easy debugging
@@ -1274,11 +1267,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     };
 
     log.debug("starting estimate pool");
-    ThreadPoolExecutor estimatePool = new ThreadPoolExecutor(minPoolSize, maxPoolSize, keepAlive, TimeUnit.MILLISECONDS,
-      new LinkedBlockingQueue<Runnable>(), threadFactory);
-    estimatePool.allowCoreThreadTimeOut(true);
-    estimatePool.prestartCoreThread();
-    this.estimatePool = estimatePool;
+    this.estimatePool = Executors.newCachedThreadPool(threadFactory);
   }
 
   private static final String REWRITE_GAUGE = "CUBE_REWRITE";
