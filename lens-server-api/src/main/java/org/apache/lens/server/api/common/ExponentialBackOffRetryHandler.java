@@ -58,28 +58,34 @@ public class ExponentialBackOffRetryHandler {
     this.waitMillis = waitMills;
   }
 
-  public synchronized boolean canTryNow(FailureContext failContext) {
-    if (failContext.getFailCount() != 0) {
-      long now = System.currentTimeMillis();
-      if (now < getNextUpdateTime(failContext)) {
-        return false;
+  public boolean canTryNow(FailureContext failContext) {
+    synchronized (failContext) {
+      if (failContext.getFailCount() != 0) {
+        long now = System.currentTimeMillis();
+        if (now < getNextUpdateTime(failContext)) {
+          return false;
+        }
       }
-    }
-    return true;
-  }
-
-  synchronized long getNextUpdateTime(FailureContext failContext) {
-    if (failContext.getFailCount() >= fibonacci.length) {
-      return failContext.getLastFailedTime() + maxDelay;
-    }
-    long delay = Math.min(maxDelay, fibonacci[failContext.getFailCount()] * waitMillis);
-    return failContext.getLastFailedTime() + delay;
-  }
-
-  public synchronized boolean hasExhaustedRetries(FailureContext failContext) {
-    if (failContext.getFailCount() >= fibonacci.length) {
       return true;
     }
-    return false;
+  }
+
+  public long getNextUpdateTime(FailureContext failContext) {
+    synchronized (failContext) {
+      if (failContext.getFailCount() >= fibonacci.length) {
+        return failContext.getLastFailedTime() + maxDelay;
+      }
+      long delay = Math.min(maxDelay, fibonacci[failContext.getFailCount()] * waitMillis);
+      return failContext.getLastFailedTime() + delay;
+    }
+  }
+
+  public boolean hasExhaustedRetries(FailureContext failContext) {
+    synchronized (failContext) {
+      if (failContext.getFailCount() >= fibonacci.length) {
+        return true;
+      }
+      return false;
+    }
   }
 }

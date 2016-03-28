@@ -378,7 +378,7 @@ public class QueryContext extends AbstractQueryContext {
    *
    * @throws LensException Throws exception if update from driver has failed.
    */
-  public void updateDriverStatus(ExponentialBackOffRetryHandler statusUpdateRetryHandler)
+  public synchronized void updateDriverStatus(ExponentialBackOffRetryHandler statusUpdateRetryHandler)
     throws LensException {
     if (statusUpdateRetryHandler.canTryNow(statusUpdateFailures)) {
       try {
@@ -388,7 +388,9 @@ public class QueryContext extends AbstractQueryContext {
         if (LensUtil.isSocketException(exc)) {
           statusUpdateFailures.updateFailure();
           if (!statusUpdateRetryHandler.hasExhaustedRetries(statusUpdateFailures)) {
-            // retries are not exhausted to update failure is ignored
+            // retries are not exhausted, so failure is ignored and update will be tried later
+            log.warn("Exception during update status from driver and update will be tried again at {}",
+              statusUpdateRetryHandler.getNextUpdateTime(statusUpdateFailures), exc);
             return;
           }
         }

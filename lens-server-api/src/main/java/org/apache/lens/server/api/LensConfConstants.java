@@ -1060,7 +1060,7 @@ public final class LensConfConstants {
   /**
    * Maximum delay a status update can wait for next update, in case of transient failures
    */
-  public static final String MAXIMUM_STATUS_UPDATE_DELAY = SERVER_PFX + "status.update.delay.secs.maximum";
+  public static final String MAXIMUM_STATUS_UPDATE_DELAY = SERVER_PFX + "status.update.maximum.delay.secs";
 
   /**
    * Default value of MAXIMUM_STATUS_UPDATE_DELAY is 1800 secs (30 minutes)

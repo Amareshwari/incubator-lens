@@ -842,7 +842,7 @@
     </description>
   </property>
   <property>
-    <name>lens.server.status.update.delay.secs.maximum</name>
+    <name>lens.server.status.update.maximum.delay.secs</name>
     <value>1800</value>
     <description>The maximum delay in seconds for next status update to happen after any transient failure. This will
       be used a maximum delay sothat exponential wait times not to grow to bigger value.
