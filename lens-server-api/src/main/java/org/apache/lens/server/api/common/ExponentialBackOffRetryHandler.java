@@ -19,45 +19,66 @@
 
 package org.apache.lens.server.api.common;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
+/**
+ * A exponential backoff retry handler.
+ *
+ * It allows the the failures to be retried at a next update time, which can increase exponentially.
+ *
+ *  Callers of this would do the following :
+ *
+ *  if (handler.canTrynow(FailureContext)) {
+ *    try {
+ *      tryCallerOperation();
+ *      FailureContext.clear();
+ *    } catch (any Transient Exception) {
+ *      FailureContext.updateFailure();
+ *      if (!retry.hasExhaustedRetries(FailureContext)) {
+ *        // will be tried later again
+ *      }
+ *      throw exception;
+ *    }
+ *  }
+ */
 public class ExponentialBackOffRetryHandler {
+  final int[] fibonacci;
+  final long maxDelay;
+  final long waitMillis;
 
-  static final int[] FIBONACCI = new int[] { 1, 1, 2, 3, 5, 8, 13, 21, 34, 45 };
+  public ExponentialBackOffRetryHandler(int numRetries, long maxDelay, long waitMills) {
+    checkArgument(numRetries > 2);
+    fibonacci = new int[numRetries];
+    fibonacci[0] = fibonacci[1] = 1;
+    for(int i = 2; i < numRetries; ++i) {
+      fibonacci[i] = fibonacci[i-1] + fibonacci[i-2];
+    }
+    this.maxDelay = maxDelay;
+    this.waitMillis = waitMills;
+  }
 
-  private long lastFailedTime = 0;
-  private int retryAttempt = 0;
-
-  public boolean canTryNow(long maxDelay, long waitSecFactor) {
-    if (retryAttempt != 0) {
+  public synchronized boolean canTryNow(FailureContext failContext) {
+    if (failContext.getFailCount() != 0) {
       long now = System.currentTimeMillis();
-      if (now < getNextUpdateTime(maxDelay, waitSecFactor)) {
+      if (now < getNextUpdateTime(failContext)) {
         return false;
       }
     }
     return true;
   }
 
-  synchronized long getNextUpdateTime(long maxDelay, long waitSecFactor) {
-    if (retryAttempt >= FIBONACCI.length) {
-      return lastFailedTime + maxDelay;
+  synchronized long getNextUpdateTime(FailureContext failContext) {
+    if (failContext.getFailCount() >= fibonacci.length) {
+      return failContext.getLastFailedTime() + maxDelay;
     }
-    long delay = Math.min(maxDelay, FIBONACCI[retryAttempt] * waitSecFactor);
-    return lastFailedTime + delay;
+    long delay = Math.min(maxDelay, fibonacci[failContext.getFailCount()] * waitMillis);
+    return failContext.getLastFailedTime() + delay;
   }
 
-  public synchronized boolean hasExhaustedRetries() {
-    if (retryAttempt >= FIBONACCI.length) {
+  public synchronized boolean hasExhaustedRetries(FailureContext failContext) {
+    if (failContext.getFailCount() >= fibonacci.length) {
       return true;
     }
     return false;
-  }
-
-  public synchronized void updateFailure() {
-    lastFailedTime = System.currentTimeMillis();
-    retryAttempt++;
-  }
-
-  public synchronized void clear() {
-    lastFailedTime = 0;
-    retryAttempt = 0;
   }
 }

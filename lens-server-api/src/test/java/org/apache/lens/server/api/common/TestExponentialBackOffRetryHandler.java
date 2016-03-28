@@ -20,6 +20,7 @@ package org.apache.lens.server.api.common;
 
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import org.testng.annotations.Test;
 
@@ -27,25 +28,26 @@ public class TestExponentialBackOffRetryHandler {
 
   @Test
   public void testExponentialBackOff() {
-    ExponentialBackOffRetryHandler retryHandler = new ExponentialBackOffRetryHandler();
-    assertFalse(retryHandler.hasExhaustedRetries());
-    assertTrue(retryHandler.canTryNow(10000, 1000));
+    FailureContext failures = new FailureContext();
+    ExponentialBackOffRetryHandler retryHandler = new ExponentialBackOffRetryHandler(10, 10000, 1000);
+    assertFalse(retryHandler.hasExhaustedRetries(failures));
+    assertTrue(retryHandler.canTryNow(failures));
 
     long now = System.currentTimeMillis();
-    retryHandler.updateFailure();
-    assertFalse(retryHandler.hasExhaustedRetries());
-    assertFalse(retryHandler.canTryNow(10000, 1000));
-    assertTrue(now + 500 < retryHandler.getNextUpdateTime(10000, 1000));
-    assertTrue(now + 15000 > retryHandler.getNextUpdateTime(10000, 20000));
+    failures.updateFailure();
+    assertFalse(retryHandler.hasExhaustedRetries(failures));
+    assertFalse(retryHandler.canTryNow(failures));
+    assertTrue(now + 500 < retryHandler.getNextUpdateTime(failures));
+    assertTrue(now + 15000 > retryHandler.getNextUpdateTime(failures));
 
-    for (int i = 0; i < ExponentialBackOffRetryHandler.FIBONACCI.length; i++) {
-      retryHandler.updateFailure();
+    for (int i = 0; i < 10; i++) {
+      failures.updateFailure();
     }
-    assertTrue(retryHandler.hasExhaustedRetries());
-    assertFalse(retryHandler.canTryNow(10000, 1000));
+    assertTrue(retryHandler.hasExhaustedRetries(failures));
+    assertFalse(retryHandler.canTryNow(failures));
 
-    retryHandler.clear();
-    assertFalse(retryHandler.hasExhaustedRetries());
-    assertTrue(retryHandler.canTryNow(10000, 1000));
+    failures.clear();
+    assertFalse(retryHandler.hasExhaustedRetries(failures));
+    assertTrue(retryHandler.canTryNow(failures));
   }
 }

@@ -48,6 +48,7 @@ import org.apache.lens.server.BaseLensService;
 import org.apache.lens.server.LensServerConf;
 import org.apache.lens.server.LensServices;
 import org.apache.lens.server.api.LensConfConstants;
+import org.apache.lens.server.api.common.ExponentialBackOffRetryHandler;
 import org.apache.lens.server.api.driver.*;
 import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.error.LensMultiCauseException;
@@ -294,15 +295,8 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
   };
   private UserQueryToCubeQueryRewriter userQueryToCubeQueryRewriter;
 
-  /**
-   * Maximum delay a status update can wait for next update, in case of transient failures.
-   */
-  private long statusUpdateRetryMaxDelay;
-
-  /**
-   * The wait time for next status update which can grow exponentially, in case of transient failures.
-   */
-  private long statusUpdateExponentialWaiFactor;
+  // Exponential backoff retry handler for status updates
+  private ExponentialBackOffRetryHandler statusUpdateRetryHandler;
 
   /**
    * Instantiates a new query execution service impl.
@@ -893,7 +887,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
         if (!ctx.queued() && !ctx.finished() && !ctx.getDriverStatus().isFinished()) {
           log.debug("Updating status for {}", ctx.getQueryHandle());
           try {
-            ctx.updateDriverStatus(statusUpdateRetryMaxDelay, statusUpdateExponentialWaiFactor);
+            ctx.updateDriverStatus(statusUpdateRetryHandler);
           } catch (LensException exc) {
             // Status update from driver failed
             setFailedStatus(ctx, "Status update failed", exc.getMessage(), exc.buildLensErrorTO(this.errorCollection));
@@ -1161,10 +1155,16 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     inMemoryResultsetTTLMillis = conf.getInt(
         LensConfConstants.INMEMORY_RESULT_SET_TTL_SECS, LensConfConstants.DEFAULT_INMEMORY_RESULT_SET_TTL_SECS) * 1000;
 
-    statusUpdateRetryMaxDelay = conf.getLong(LensConfConstants.MAXIMUM_STATUS_UPDATE_DELAY,
+    int statusUpdateRetries = conf.getInt(LensConfConstants.STATUS_UPDATE_EXPONENTIAL_RETRIES,
+      LensConfConstants.DEFAULT_STATUS_UPDATE_EXPONENTIAL_RETRIES);
+    //  Maximum delay a status update can wait for next update, in case of transient failures.
+    long statusUpdateRetryMaxDelay = conf.getLong(LensConfConstants.MAXIMUM_STATUS_UPDATE_DELAY,
       LensConfConstants.DEFAULT_MAXIMUM_STATUS_UPDATE_DELAY) * 1000;
-    statusUpdateExponentialWaiFactor = conf.getLong(LensConfConstants.STATUS_UPDATE_EXPONENTIAL_WAIT_FACTOR,
+    // The wait time for next status update which can grow exponentially, in case of transient failures.
+    long statusUpdateExponentialWaiFactor = conf.getLong(LensConfConstants.STATUS_UPDATE_EXPONENTIAL_WAIT_FACTOR,
       LensConfConstants.DEFAULT_STATUS_UPDATE_EXPONENTIAL_WAIT_FACTOR);
+    statusUpdateRetryHandler = new ExponentialBackOffRetryHandler(statusUpdateRetries, statusUpdateRetryMaxDelay,
+      statusUpdateExponentialWaiFactor);
     log.info("Query execution service initialized");
   }
 

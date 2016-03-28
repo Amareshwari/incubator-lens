@@ -24,6 +24,7 @@ import static org.testng.Assert.*;
 import java.util.List;
 
 import org.apache.lens.api.LensConf;
+import org.apache.lens.server.api.common.ExponentialBackOffRetryHandler;
 import org.apache.lens.server.api.driver.LensDriver;
 import org.apache.lens.server.api.driver.MockDriver;
 import org.apache.lens.server.api.error.LensException;
@@ -43,29 +44,31 @@ public class TestQueryContext {
     List<LensDriver> drivers = MockQueryContext.getDrivers(conf);
     MockDriver selectedDriver = (MockDriver)drivers.iterator().next();
     MockQueryContext ctx = new MockQueryContext("simulate status retries", new LensConf(), conf, drivers);
+    ExponentialBackOffRetryHandler waitingHandler = new ExponentialBackOffRetryHandler(10, 10000, 1000);
+    ExponentialBackOffRetryHandler noWaitingHandler = new ExponentialBackOffRetryHandler(10, 0, 0);
     // do first update
-    ctx.updateDriverStatus(10000, 100);
+    ctx.updateDriverStatus(waitingHandler);
     assertEquals(selectedDriver.getUpdateCount(), 1);
 
     // try another update, update should be skipped
-    ctx.updateDriverStatus(10000, 1000);
+    ctx.updateDriverStatus(waitingHandler);
     assertEquals(selectedDriver.getUpdateCount(), 1);
 
     // update without delays
-    ctx.updateDriverStatus(0, 0);
-    ctx.updateDriverStatus(0, 0);
-    ctx.updateDriverStatus(0, 0);
-    ctx.updateDriverStatus(0, 0);
+    ctx.updateDriverStatus(noWaitingHandler);
+    ctx.updateDriverStatus(noWaitingHandler);
+    ctx.updateDriverStatus(noWaitingHandler);
+    ctx.updateDriverStatus(noWaitingHandler);
     assertEquals(selectedDriver.getUpdateCount(), 5);
 
     // update with delays, update should be skipped
-    ctx.updateDriverStatus(10000, 1000);
+    ctx.updateDriverStatus(waitingHandler);
     assertEquals(selectedDriver.getUpdateCount(), 5);
 
     // update succeeds now.
-    ctx.updateDriverStatus(0, 0);
+    ctx.updateDriverStatus(noWaitingHandler);
     // all next updates should succeed, as retries should be cleared
-    ctx.updateDriverStatus(10000, 1000);
+    ctx.updateDriverStatus(waitingHandler);
     assertEquals(selectedDriver.getUpdateCount(), 7);
   }
 
@@ -74,17 +77,19 @@ public class TestQueryContext {
     Configuration conf = new Configuration();
     List<LensDriver> drivers = MockQueryContext.getDrivers(conf);
     MockQueryContext ctx = new MockQueryContext("simulate status failure", new LensConf(), conf, drivers);
+    ExponentialBackOffRetryHandler waitingHandler = new ExponentialBackOffRetryHandler(10, 10000, 1000);
+    ExponentialBackOffRetryHandler noWaitingHandler = new ExponentialBackOffRetryHandler(10, 0, 0);
     for (int i = 0; i < 18; i++) {
       if (i % 2 == 0) {
-        ctx.updateDriverStatus(0, 0);
+        ctx.updateDriverStatus(noWaitingHandler);
       } else {
-        ctx.updateDriverStatus(100000, 10000);
+        ctx.updateDriverStatus(waitingHandler);
       }
     }
 
     // retries should be exhausted and update should fail.
     try {
-      ctx.updateDriverStatus(0, 0);
+      ctx.updateDriverStatus(noWaitingHandler);
       fail("Should throw exception");
     } catch (LensException e) {
       // pass

@@ -34,6 +34,7 @@ import org.apache.lens.api.query.QueryStatus;
 import org.apache.lens.api.query.QueryStatus.Status;
 import org.apache.lens.server.api.LensConfConstants;
 import org.apache.lens.server.api.common.ExponentialBackOffRetryHandler;
+import org.apache.lens.server.api.common.FailureContext;
 import org.apache.lens.server.api.driver.DriverQueryStatus;
 import org.apache.lens.server.api.driver.InMemoryResultSet;
 import org.apache.lens.server.api.driver.LensDriver;
@@ -188,7 +189,7 @@ public class QueryContext extends AbstractQueryContext {
   @Getter
   private transient boolean isDriverResultRegistered;
 
-  transient ExponentialBackOffRetryHandler statusUpdateRetries = new ExponentialBackOffRetryHandler();
+  transient FailureContext statusUpdateFailures = new FailureContext();
 
   /**
    * Creates context from query
@@ -285,7 +286,7 @@ public class QueryContext extends AbstractQueryContext {
 
   public void initTransientState() {
     super.initTransientState();
-    statusUpdateRetries = new ExponentialBackOffRetryHandler();
+    statusUpdateFailures = new FailureContext();
   }
     /**
      * Merge conf.
@@ -373,21 +374,20 @@ public class QueryContext extends AbstractQueryContext {
   /**
    * Update status from selected driver
    *
-   * @param statusUpdateRetryMaxDelay Max delay that next status update can wait from last update
-   * @param statusUpdateExponentialWaitFactor The wait time factor for exponential backoff, incase of transient failures
+   * @param statusUpdateRetryHandler The exponential retry handler
    *
    * @throws LensException Throws exception if update from driver has failed.
    */
-  public void updateDriverStatus(long statusUpdateRetryMaxDelay, long statusUpdateExponentialWaitFactor)
+  public void updateDriverStatus(ExponentialBackOffRetryHandler statusUpdateRetryHandler)
     throws LensException {
-    if (statusUpdateRetries.canTryNow(statusUpdateRetryMaxDelay, statusUpdateExponentialWaitFactor)) {
+    if (statusUpdateRetryHandler.canTryNow(statusUpdateFailures)) {
       try {
         getSelectedDriver().updateStatus(this);
-        statusUpdateRetries.clear();
+        statusUpdateFailures.clear();
       } catch (LensException exc) {
         if (LensUtil.isSocketException(exc)) {
-          statusUpdateRetries.updateFailure();
-          if (!statusUpdateRetries.hasExhaustedRetries()) {
+          statusUpdateFailures.updateFailure();
+          if (!statusUpdateRetryHandler.hasExhaustedRetries(statusUpdateFailures)) {
             // retries are not exhausted to update failure is ignored
             return;
           }

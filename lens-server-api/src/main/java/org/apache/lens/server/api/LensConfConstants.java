@@ -1045,12 +1045,22 @@ public final class LensConfConstants {
   /**
    * Maximum delay a status update can wait for next update, in case of transient failures
    */
+  public static final String STATUS_UPDATE_EXPONENTIAL_RETRIES = SERVER_PFX + "status.update.num.retries";
+
+  /**
+   * Default value of STATUS_UPDATE_EXPONENTIAL_RETRIES is 10
+   */
+  public static final int DEFAULT_STATUS_UPDATE_EXPONENTIAL_RETRIES = 10;
+
+  /**
+   * Maximum delay a status update can wait for next update, in case of transient failures
+   */
   public static final String MAXIMUM_STATUS_UPDATE_DELAY = SERVER_PFX + "status.update.delay.secs.maximum";
 
   /**
    * Default value of MAXIMUM_STATUS_UPDATE_DELAY is 1800 secs (30 minutes)
    */
-  public static final int DEFAULT_MAXIMUM_STATUS_UPDATE_DELAY = 1800;
+  public static final long DEFAULT_MAXIMUM_STATUS_UPDATE_DELAY = 1800;
 
   /**
    * Number of seconds that would grow exponentially for next update, incase of transient failures.
@@ -1061,5 +1071,5 @@ public final class LensConfConstants {
   /**
    * Default value of DEFAULT_STATUS_UPDATE_EXPONENTIAL_WAIT_FACTOR is 30000 millis (30 seconds)
    */
-  public static final int DEFAULT_STATUS_UPDATE_EXPONENTIAL_WAIT_FACTOR = 30000;
+  public static final long DEFAULT_STATUS_UPDATE_EXPONENTIAL_WAIT_FACTOR = 30000;
 }

@@ -835,6 +835,13 @@
     </description>
   </property>
   <property>
+    <name>lens.server.status.update.num.retries</name>
+    <value>10</value>
+    <description>The number of retries a status update will tried with exponentital back off, in case of transient
+      issues, upon which query will be marked FAILED.
+    </description>
+  </property>
+  <property>
     <name>lens.server.status.update.delay.secs.maximum</name>
     <value>1800</value>
     <description>The maximum delay in seconds for next status update to happen after any transient failure. This will
