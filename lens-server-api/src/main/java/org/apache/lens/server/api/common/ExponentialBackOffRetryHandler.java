@@ -49,7 +49,8 @@ public class ExponentialBackOffRetryHandler {
   public ExponentialBackOffRetryHandler(int numRetries, long maxDelay, long waitMills) {
     checkArgument(numRetries > 2);
     fibonacci = new int[numRetries];
-    fibonacci[0] = fibonacci[1] = 1;
+    fibonacci[0] = 1;
+    fibonacci[1] = 1;
     for(int i = 2; i < numRetries; ++i) {
       fibonacci[i] = fibonacci[i-1] + fibonacci[i-2];
     }
