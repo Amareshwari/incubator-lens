@@ -1043,7 +1043,7 @@ public final class LensConfConstants {
   public static final int DEFAULT_INMEMORY_RESULT_SET_TTL_SECS = 300;
 
   /**
-   * Maximum delay a status update can wait for next update, in case of transient failures
+   * Number of retries status update will be retried, in case of transient failures
    */
   public static final String STATUS_UPDATE_EXPONENTIAL_RETRIES = SERVER_PFX + "status.update.num.retries";
 

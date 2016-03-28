@@ -21,6 +21,9 @@ package org.apache.lens.server.api.common;
 
 import lombok.Getter;
 
+/**
+ * Failure context captures last failure time and number of failures.
+ */
 public class FailureContext {
 
   @Getter

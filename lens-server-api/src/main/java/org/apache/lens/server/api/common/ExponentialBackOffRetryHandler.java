@@ -34,7 +34,7 @@ import static com.google.common.base.Preconditions.checkArgument;
  *      FailureContext.clear();
  *    } catch (any Transient Exception) {
  *      FailureContext.updateFailure();
- *      if (!retry.hasExhaustedRetries(FailureContext)) {
+ *      if (!handler.hasExhaustedRetries(FailureContext)) {
  *        // will be tried later again
  *      }
  *      throw exception;
