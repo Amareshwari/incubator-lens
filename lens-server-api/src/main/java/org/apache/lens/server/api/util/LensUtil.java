@@ -31,6 +31,8 @@ import org.apache.hadoop.conf.Configuration;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 
+import lombok.NonNull;
+
 /**
  * Utility methods for Lens
  */
@@ -47,7 +49,7 @@ public final class LensUtil {
    * @param e
    * @return message
    */
-  public static String getCauseMessage(Throwable e) {
+  public static String getCauseMessage(@NonNull Throwable e) {
     String expMsg = null;
     if (e.getCause() != null) {
       expMsg = getCauseMessage(e.getCause());
@@ -58,14 +60,14 @@ public final class LensUtil {
     return expMsg;
   }
 
-  public static Throwable getCause(Throwable e) {
+  public static Throwable getCause(@NonNull Throwable e) {
     if (e.getCause() != null) {
       return getCause(e.getCause());
     }
     return e;
   }
 
-  public static boolean isSocketException(Throwable e) {
+  public static boolean isSocketException(@NonNull Throwable e) {
     Throwable cause = getCause(e);
     if (cause instanceof SocketException || cause instanceof SocketTimeoutException) {
       return true;

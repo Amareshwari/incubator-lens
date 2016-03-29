@@ -24,7 +24,7 @@ import static org.testng.Assert.*;
 import java.util.List;
 
 import org.apache.lens.api.LensConf;
-import org.apache.lens.server.api.common.ExponentialBackOffRetryHandler;
+import org.apache.lens.server.api.common.*;
 import org.apache.lens.server.api.driver.LensDriver;
 import org.apache.lens.server.api.driver.MockDriver;
 import org.apache.lens.server.api.error.LensException;
@@ -44,8 +44,8 @@ public class TestQueryContext {
     List<LensDriver> drivers = MockQueryContext.getDrivers(conf);
     MockDriver selectedDriver = (MockDriver)drivers.iterator().next();
     MockQueryContext ctx = new MockQueryContext("simulate status retries", new LensConf(), conf, drivers);
-    ExponentialBackOffRetryHandler waitingHandler = new ExponentialBackOffRetryHandler(10, 10000, 1000);
-    ExponentialBackOffRetryHandler noWaitingHandler = new ExponentialBackOffRetryHandler(10, 0, 0);
+    BackOffRetryHandler waitingHandler = new FibonacciExponentialBackOffRetryHandler(10, 10000, 1000);
+    BackOffRetryHandler noWaitingHandler = new FibonacciExponentialBackOffRetryHandler(10, 0, 0);
     // do first update
     ctx.updateDriverStatus(waitingHandler);
     assertEquals(selectedDriver.getUpdateCount(), 1);
@@ -77,8 +77,8 @@ public class TestQueryContext {
     Configuration conf = new Configuration();
     List<LensDriver> drivers = MockQueryContext.getDrivers(conf);
     MockQueryContext ctx = new MockQueryContext("simulate status failure", new LensConf(), conf, drivers);
-    ExponentialBackOffRetryHandler waitingHandler = new ExponentialBackOffRetryHandler(10, 10000, 1000);
-    ExponentialBackOffRetryHandler noWaitingHandler = new ExponentialBackOffRetryHandler(10, 0, 0);
+    BackOffRetryHandler waitingHandler = new FibonacciExponentialBackOffRetryHandler(10, 10000, 1000);
+    BackOffRetryHandler noWaitingHandler = new FibonacciExponentialBackOffRetryHandler(10, 0, 0);
     for (int i = 0; i < 18; i++) {
       if (i % 2 == 0) {
         ctx.updateDriverStatus(noWaitingHandler);

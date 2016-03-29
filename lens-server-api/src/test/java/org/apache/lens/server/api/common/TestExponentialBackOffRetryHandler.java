@@ -28,25 +28,25 @@ public class TestExponentialBackOffRetryHandler {
   @Test
   public void testExponentialBackOff() {
     FailureContext failures = new FailureContext();
-    ExponentialBackOffRetryHandler retryHandler = new ExponentialBackOffRetryHandler(10, 10000, 1000);
+    BackOffRetryHandler retryHandler = OperationRetryHandlerFactory.createExponentialBackOffHandler(10, 10000, 1000);
     assertFalse(retryHandler.hasExhaustedRetries(failures));
-    assertTrue(retryHandler.canTryNow(failures));
+    assertTrue(retryHandler.canTryOpNow(failures));
 
     long now = System.currentTimeMillis();
     failures.updateFailure();
     assertFalse(retryHandler.hasExhaustedRetries(failures));
-    assertFalse(retryHandler.canTryNow(failures));
-    assertTrue(now + 500 < retryHandler.getNextUpdateTime(failures));
-    assertTrue(now + 15000 > retryHandler.getNextUpdateTime(failures));
+    assertFalse(retryHandler.canTryOpNow(failures));
+    assertTrue(now + 500 < retryHandler.getOperationNextTime(failures));
+    assertTrue(now + 15000 > retryHandler.getOperationNextTime(failures));
 
     for (int i = 0; i < 10; i++) {
       failures.updateFailure();
     }
     assertTrue(retryHandler.hasExhaustedRetries(failures));
-    assertFalse(retryHandler.canTryNow(failures));
+    assertFalse(retryHandler.canTryOpNow(failures));
 
     failures.clear();
     assertFalse(retryHandler.hasExhaustedRetries(failures));
-    assertTrue(retryHandler.canTryNow(failures));
+    assertTrue(retryHandler.canTryOpNow(failures));
   }
 }

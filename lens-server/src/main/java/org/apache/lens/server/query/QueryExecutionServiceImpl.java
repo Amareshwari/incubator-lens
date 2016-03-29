@@ -48,7 +48,8 @@ import org.apache.lens.server.BaseLensService;
 import org.apache.lens.server.LensServerConf;
 import org.apache.lens.server.LensServices;
 import org.apache.lens.server.api.LensConfConstants;
-import org.apache.lens.server.api.common.ExponentialBackOffRetryHandler;
+import org.apache.lens.server.api.common.BackOffRetryHandler;
+import org.apache.lens.server.api.common.OperationRetryHandlerFactory;
 import org.apache.lens.server.api.driver.*;
 import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.error.LensMultiCauseException;
@@ -296,7 +297,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
   private UserQueryToCubeQueryRewriter userQueryToCubeQueryRewriter;
 
   // Exponential backoff retry handler for status updates
-  private ExponentialBackOffRetryHandler statusUpdateRetryHandler;
+  private BackOffRetryHandler statusUpdateRetryHandler;
 
   /**
    * Instantiates a new query execution service impl.
@@ -1163,8 +1164,8 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     // The wait time for next status update which can grow exponentially, in case of transient failures.
     long statusUpdateExponentialWaiFactor = conf.getLong(LensConfConstants.STATUS_UPDATE_EXPONENTIAL_WAIT_FACTOR,
       LensConfConstants.DEFAULT_STATUS_UPDATE_EXPONENTIAL_WAIT_FACTOR);
-    statusUpdateRetryHandler = new ExponentialBackOffRetryHandler(statusUpdateRetries, statusUpdateRetryMaxDelay,
-      statusUpdateExponentialWaiFactor);
+    statusUpdateRetryHandler = OperationRetryHandlerFactory.createExponentialBackOffHandler(statusUpdateRetries,
+      statusUpdateRetryMaxDelay, statusUpdateExponentialWaiFactor);
     log.info("Query execution service initialized");
   }
 

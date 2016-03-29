@@ -33,7 +33,7 @@ import org.apache.lens.api.query.QueryHandle;
 import org.apache.lens.api.query.QueryStatus;
 import org.apache.lens.api.query.QueryStatus.Status;
 import org.apache.lens.server.api.LensConfConstants;
-import org.apache.lens.server.api.common.ExponentialBackOffRetryHandler;
+import org.apache.lens.server.api.common.BackOffRetryHandler;
 import org.apache.lens.server.api.common.FailureContext;
 import org.apache.lens.server.api.driver.DriverQueryStatus;
 import org.apache.lens.server.api.driver.InMemoryResultSet;
@@ -378,9 +378,9 @@ public class QueryContext extends AbstractQueryContext {
    *
    * @throws LensException Throws exception if update from driver has failed.
    */
-  public synchronized void updateDriverStatus(ExponentialBackOffRetryHandler statusUpdateRetryHandler)
+  public synchronized void updateDriverStatus(BackOffRetryHandler statusUpdateRetryHandler)
     throws LensException {
-    if (statusUpdateRetryHandler.canTryNow(statusUpdateFailures)) {
+    if (statusUpdateRetryHandler.canTryOpNow(statusUpdateFailures)) {
       try {
         getSelectedDriver().updateStatus(this);
         statusUpdateFailures.clear();
@@ -390,7 +390,7 @@ public class QueryContext extends AbstractQueryContext {
           if (!statusUpdateRetryHandler.hasExhaustedRetries(statusUpdateFailures)) {
             // retries are not exhausted, so failure is ignored and update will be tried later
             log.warn("Exception during update status from driver and update will be tried again at {}",
-              statusUpdateRetryHandler.getNextUpdateTime(statusUpdateFailures), exc);
+              statusUpdateRetryHandler.getOperationNextTime(statusUpdateFailures), exc);
             return;
           }
         }

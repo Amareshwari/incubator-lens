@@ -26,27 +26,13 @@ import static com.google.common.base.Preconditions.checkArgument;
  *
  * It allows the the failures to be retried at a next update time, which can increase exponentially.
  *
- *  Callers of this would do the following :
- *
- *  if (handler.canTrynow(FailureContext)) {
- *    try {
- *      tryCallerOperation();
- *      FailureContext.clear();
- *    } catch (any Transient Exception) {
- *      FailureContext.updateFailure();
- *      if (!handler.hasExhaustedRetries(FailureContext)) {
- *        // will be tried later again
- *      }
- *      throw exception;
- *    }
- *  }
  */
-public class ExponentialBackOffRetryHandler {
+public class FibonacciExponentialBackOffRetryHandler implements BackOffRetryHandler {
   final int[] fibonacci;
   final long maxDelay;
   final long waitMillis;
 
-  public ExponentialBackOffRetryHandler(int numRetries, long maxDelay, long waitMills) {
+  public FibonacciExponentialBackOffRetryHandler(int numRetries, long maxDelay, long waitMillis) {
     checkArgument(numRetries > 2);
     fibonacci = new int[numRetries];
     fibonacci[0] = 1;
@@ -55,14 +41,14 @@ public class ExponentialBackOffRetryHandler {
       fibonacci[i] = fibonacci[i-1] + fibonacci[i-2];
     }
     this.maxDelay = maxDelay;
-    this.waitMillis = waitMills;
+    this.waitMillis = waitMillis;
   }
 
-  public boolean canTryNow(FailureContext failContext) {
+  public boolean canTryOpNow(FailureContext failContext) {
     synchronized (failContext) {
       if (failContext.getFailCount() != 0) {
         long now = System.currentTimeMillis();
-        if (now < getNextUpdateTime(failContext)) {
+        if (now < getOperationNextTime(failContext)) {
           return false;
         }
       }
@@ -70,7 +56,7 @@ public class ExponentialBackOffRetryHandler {
     }
   }
 
-  public long getNextUpdateTime(FailureContext failContext) {
+  public long getOperationNextTime(FailureContext failContext) {
     synchronized (failContext) {
       if (failContext.getFailCount() >= fibonacci.length) {
         return failContext.getLastFailedTime() + maxDelay;
