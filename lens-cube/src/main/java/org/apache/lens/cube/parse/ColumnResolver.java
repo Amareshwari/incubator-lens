@@ -23,6 +23,7 @@ import static org.apache.hadoop.hive.ql.parse.HiveParser.*;
 import java.util.HashSet;
 import java.util.Set;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.lens.cube.error.LensCubeErrorCode;
 import org.apache.lens.cube.parse.HQLParser.ASTNodeVisitor;
 import org.apache.lens.cube.parse.HQLParser.TreeNode;
@@ -33,6 +34,7 @@ import org.apache.hadoop.hive.ql.parse.ASTNode;
 
 import com.google.common.base.Optional;
 
+@Slf4j
 class ColumnResolver implements ContextRewriter {
 
   public ColumnResolver(Configuration conf) {
@@ -61,10 +63,10 @@ class ColumnResolver implements ContextRewriter {
     }
     getColsForSelectTree(cubeql);
     getColsForWhereTree(cubeql);
-    getColsForTree(cubeql, cubeql.getJoinAST(), cubeql);
-    getColsForTree(cubeql, cubeql.getGroupByAST(), cubeql);
-    getColsForTree(cubeql, cubeql.getHavingAST(), cubeql);
-    getColsForTree(cubeql, cubeql.getOrderByAST(), cubeql);
+    getColsForTree(cubeql, cubeql.getJoinAST(), cubeql, true);
+    getColsForTree(cubeql, cubeql.getGroupByAST(), cubeql, true);
+    getColsForTree(cubeql, cubeql.getHavingAST(), cubeql, true);
+    getColsForTree(cubeql, cubeql.getOrderByAST(), cubeql, true);
 
     // Update join dimension tables
     for (String table : cubeql.getTblAliasToColumns().keySet()) {
@@ -77,7 +79,8 @@ class ColumnResolver implements ContextRewriter {
   }
 
   // finds columns in AST passed.
-  static void getColsForTree(final CubeQueryContext cubeql, ASTNode tree, final TrackQueriedColumns tqc)
+  static void getColsForTree(final CubeQueryContext cubeql, ASTNode tree, final TrackQueriedColumns tqc,
+    final boolean skipAliases)
     throws LensException {
     if (tree == null) {
       return;
@@ -98,7 +101,7 @@ class ColumnResolver implements ContextRewriter {
           // Take child ident.totext
           ASTNode ident = (ASTNode) node.getChild(0);
           String column = ident.getText().toLowerCase();
-          if (cubeql.getExprToAliasMap().values().contains(column)) {
+          if (skipAliases && cubeql.getExprToAliasMap().values().contains(column)) {
             // column is an existing alias
             return;
           }
@@ -137,18 +140,12 @@ class ColumnResolver implements ContextRewriter {
   // Updates alias for each selected expression.
   // Alias is updated as follows:
   // Case 1: If select expression does not have an alias
-  // ** And the expression has only one column queried, the column name is put
-  // as
-  // select alias.
-  // ** If the expression has more than one column queried, the alias is
-  // constructed as
-  // 'expr' + index of the expression.
+  // ** And the expression is the column queried, the column name is put as select alias.
+  // ** If the expression is not just simple column queried, the alias is
+  // constructed as 'expr' + index of the expression.
   // Case 2: If select expression already has alias
   // ** Adds it to exprToAlias map
-  // ** and the alias does not have spaces, the select alias and final alias is
-  // same.
-  // ** If alias has spaces, select alias is constructed as 'expr' + index of
-  // the expression
+  // ** and the alias the alias is constructed as 'expr' + index of the expression.
   // and user given alias is the final alias of the expression.
   private static final String SELECT_ALIAS_PREFIX = "expr";
 
@@ -156,21 +153,19 @@ class ColumnResolver implements ContextRewriter {
     int exprInd = 1;
     for (int i = 0; i < cubeql.getSelectAST().getChildCount(); i++) {
       ASTNode selectExpr = (ASTNode) cubeql.getSelectAST().getChild(i);
-      Set<String> cols = new HashSet<String>();
+      ASTNode selectExprChild = (ASTNode)selectExpr.getChild(0);
+      Set<String> cols = new HashSet<>();
       addColumnsForSelectExpr(cubeql, selectExpr, cubeql.getSelectAST(), cols);
       ASTNode alias = HQLParser.findNodeByPath(selectExpr, Identifier);
       String selectAlias;
       String selectFinalAlias = null;
       if (alias != null) {
         cubeql.addExprToAlias(selectExpr, alias);
-        if (HQLParser.hasSpaces(alias.getText())) {
-          selectFinalAlias = alias.getText();
-          selectAlias = SELECT_ALIAS_PREFIX + exprInd;
-        } else {
-          selectAlias = alias.getText().trim();
-        }
-      } else if (cols.size() == 1) {
-        // add the column name as alias
+        selectFinalAlias = alias.getText();
+        selectAlias = SELECT_ALIAS_PREFIX + exprInd;
+      } else if (cols.size() == 1 && (selectExprChild.getToken().getType() == TOK_TABLE_OR_COL ||
+        selectExprChild.getToken().getType() == DOT)) {
+        // select expression is same as the column
         selectAlias = cols.iterator().next().toLowerCase();
       } else {
         selectAlias = SELECT_ALIAS_PREFIX + exprInd;

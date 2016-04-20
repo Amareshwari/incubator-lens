@@ -170,13 +170,15 @@ class AggregateResolver implements ContextRewriter {
       ASTNode tabident = HQLParser.findNodeByPath(node, TOK_TABLE_OR_COL, Identifier);
       ASTNode colIdent = (ASTNode) node.getChild(1);
 
-      colname = colIdent.getText();
-      tabname = tabident.getText();
+      colname = colIdent.getText().toLowerCase();
+      tabname = tabident.getText().toLowerCase();
     }
 
     String msrname = StringUtils.isBlank(tabname) ? colname : tabname + "." + colname;
 
     if (cubeql.isCubeMeasure(msrname)) {
+      log.info("isCubeMeasure {} {}", msrname, colname);
+      log.info("cubeql.getQueriedExprs() {}", cubeql.getQueriedExprs());
       if (cubeql.getQueriedExprs().contains(colname)) {
         String alias = cubeql.getAliasForTableName(cubeql.getCube().getName());
         for (ASTNode exprNode : cubeql.getExprCtx().getExpressionContext(colname, alias).getAllASTNodes()) {
