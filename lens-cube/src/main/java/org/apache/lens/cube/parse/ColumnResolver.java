@@ -23,7 +23,6 @@ import static org.apache.hadoop.hive.ql.parse.HiveParser.*;
 import java.util.HashSet;
 import java.util.Set;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.lens.cube.error.LensCubeErrorCode;
 import org.apache.lens.cube.parse.HQLParser.ASTNodeVisitor;
 import org.apache.lens.cube.parse.HQLParser.TreeNode;
@@ -34,7 +33,6 @@ import org.apache.hadoop.hive.ql.parse.ASTNode;
 
 import com.google.common.base.Optional;
 
-@Slf4j
 class ColumnResolver implements ContextRewriter {
 
   public ColumnResolver(Configuration conf) {
@@ -145,7 +143,7 @@ class ColumnResolver implements ContextRewriter {
   // constructed as 'expr' + index of the expression.
   // Case 2: If select expression already has alias
   // ** Adds it to exprToAlias map
-  // ** and the alias the alias is constructed as 'expr' + index of the expression.
+  // ** and the alias is constructed as 'expr' + index of the expression.
   // and user given alias is the final alias of the expression.
   private static final String SELECT_ALIAS_PREFIX = "expr";
 
@@ -163,8 +161,8 @@ class ColumnResolver implements ContextRewriter {
         cubeql.addExprToAlias(selectExpr, alias);
         selectFinalAlias = alias.getText();
         selectAlias = SELECT_ALIAS_PREFIX + exprInd;
-      } else if (cols.size() == 1 && (selectExprChild.getToken().getType() == TOK_TABLE_OR_COL ||
-        selectExprChild.getToken().getType() == DOT)) {
+      } else if (cols.size() == 1 && (selectExprChild.getToken().getType() == TOK_TABLE_OR_COL
+        || selectExprChild.getToken().getType() == DOT)) {
         // select expression is same as the column
         selectAlias = cols.iterator().next().toLowerCase();
       } else {

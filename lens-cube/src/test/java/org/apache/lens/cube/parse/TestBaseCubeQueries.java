@@ -213,7 +213,7 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
     String lower = hqlQuery.toLowerCase();
     assertTrue(
       lower.startsWith("select coalesce(mq1.dim1, mq2.dim1) dim1, mq2.roundedmsr2 roundedmsr2, mq1.msr12 msr12 from ")
-        || lower.startsWith("select coalesce(mq1.dim1, mq2.dim1) dim1, mq1.roundedmsr2 roundedmsr2, mq2.msr12 msr12"
+      || lower.startsWith("select coalesce(mq1.dim1, mq2.dim1) dim1, mq1.roundedmsr2 roundedmsr2, mq2.msr12 msr12"
         + " from "), hqlQuery);
 
     assertTrue(hqlQuery.contains("mq1 full outer join ") && hqlQuery.endsWith("mq2 on mq1.dim1 <=> mq2.dim1"),
@@ -408,8 +408,8 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
       getExpectedQuery(cubeName, "select basecube.dim1 as `expr1`, sum(basecube.msr12) as `expr2` FROM ", null,
         " group by basecube.dim1", getWhereForDailyAndHourly2days(cubeName, "C1_testFact2_BASE"));
     String expected2 =
-      getExpectedQuery(cubeName, "select basecube.dim1 as `expr1`, round(sum(basecube.msr2)/1000) as `expr3` FROM ", null,
-        " group by basecube.dim1", getWhereForDailyAndHourly2days(cubeName, "C1_testFact1_BASE"));
+      getExpectedQuery(cubeName, "select basecube.dim1 as `expr1`, round(sum(basecube.msr2)/1000) as `expr3` FROM ",
+        null, " group by basecube.dim1", getWhereForDailyAndHourly2days(cubeName, "C1_testFact1_BASE"));
     compareContains(expected1, hqlQuery);
     compareContains(expected2, hqlQuery);
     assertTrue(hqlQuery.toLowerCase().startsWith(
@@ -446,7 +446,8 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
   @Test
   public void testMultiFactQueryWithAliasAsExpressionName() throws Exception {
     String hqlQuery =
-      rewrite("select dim1 d1, msr12 `my msr12`, roundedmsr2 as `roundedmsr2` from basecube where " + TWO_DAYS_RANGE, conf);
+      rewrite("select dim1 d1, msr12 `my msr12`, roundedmsr2 as `roundedmsr2` from basecube where " + TWO_DAYS_RANGE,
+        conf);
 
     String expected1 =
       getExpectedQuery(cubeName, "select basecube.dim1 as `expr1`, sum(basecube.msr12) as `expr2` FROM ", null,
@@ -468,8 +469,7 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
   @Test
   public void testMultiFactQueryWithExprOnDimsWithoutAliases() throws Exception {
     String hqlQuery =
-      rewrite("select func1(dim1), func2(dim1), msr12, roundedmsr2 from basecube where " +
-        TWO_DAYS_RANGE, conf);
+      rewrite("select func1(dim1), func2(dim1), msr12, roundedmsr2 from basecube where " + TWO_DAYS_RANGE, conf);
     String expected1 =
       getExpectedQuery(cubeName, "select func1(basecube.dim1) as `expr1`, func2(basecube.dim1)  as `expr2`,"
         + " sum(basecube.msr12) as `msr12` FROM ", null,
@@ -482,11 +482,10 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
         getWhereForDailyAndHourly2days(cubeName, "C1_testFact1_BASE"));
     compareContains(expected1, hqlQuery);
     compareContains(expected2, hqlQuery);
-    assertTrue(hqlQuery.toLowerCase().startsWith(
-      "select coalesce(mq1.expr1, mq2.expr1) expr1, coalesce(mq1.expr2, mq2.expr2) expr2, mq2.msr12 msr12, mq1" +
-        ".roundedmsr2 roundedmsr2 from ")
+    assertTrue(hqlQuery.toLowerCase().startsWith("select coalesce(mq1.expr1, mq2.expr1) expr1,"
+      + " coalesce(mq1.expr2, mq2.expr2) expr2, mq2.msr12 msr12, mq1.roundedmsr2 roundedmsr2 from ")
       || hqlQuery.toLowerCase().startsWith("select coalesce(mq1.expr1, mq2.expr1) expr1, coalesce(mq1.expr2, mq2.expr2)"
-      + " expr2, mq1.msr12 msr12, mq2.roundedmsr2 roundedmsr2 from "), hqlQuery);
+        + " expr2, mq1.msr12 msr12, mq2.roundedmsr2 roundedmsr2 from "), hqlQuery);
     assertTrue(hqlQuery.contains("mq1 full outer join ")
       && hqlQuery.endsWith("mq2 on mq1.expr1 <=> mq2.expr1 AND mq1.expr2 <=> mq2.expr2"), hqlQuery);
   }
@@ -494,8 +493,8 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
   @Test
   public void testMultiFactQueryWithDirectMsr() throws Exception {
     String hqlQuery =
-      rewrite("select func1(dim1), directMsrExpr as directMsr, roundedmsr2 from basecube where " +
-        TWO_DAYS_RANGE, conf);
+      rewrite("select func1(dim1), directMsrExpr as directMsr, roundedmsr2 from basecube where " + TWO_DAYS_RANGE,
+        conf);
     String expected1 =
       getExpectedQuery(cubeName, "select func1(basecube.dim1) as `expr1`, max(basecube.msr13) + count(basecube . msr14)"
         + " as `expr2` FROM ", null,

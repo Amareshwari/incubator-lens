@@ -177,8 +177,6 @@ class AggregateResolver implements ContextRewriter {
     String msrname = StringUtils.isBlank(tabname) ? colname : tabname + "." + colname;
 
     if (cubeql.isCubeMeasure(msrname)) {
-      log.info("isCubeMeasure {} {}", msrname, colname);
-      log.info("cubeql.getQueriedExprs() {}", cubeql.getQueriedExprs());
       if (cubeql.getQueriedExprs().contains(colname)) {
         String alias = cubeql.getAliasForTableName(cubeql.getCube().getName());
         for (ASTNode exprNode : cubeql.getExprCtx().getExpressionContext(colname, alias).getAllASTNodes()) {
