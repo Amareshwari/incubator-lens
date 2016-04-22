@@ -167,6 +167,7 @@ class ColumnResolver implements ContextRewriter {
         selectAlias = cols.iterator().next().toLowerCase();
       } else {
         selectAlias = SELECT_ALIAS_PREFIX + exprInd;
+        selectFinalAlias = HQLParser.getString(selectExprChild);
       }
       exprInd++;
       cubeql.addSelectAlias(selectAlias, selectFinalAlias);

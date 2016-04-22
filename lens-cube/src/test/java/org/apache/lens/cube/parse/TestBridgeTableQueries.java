@@ -686,8 +686,10 @@ public class TestBridgeTableQueries extends TestQueryRewrite {
     TestCubeRewriter.compareContains(expected1, hqlQuery);
     TestCubeRewriter.compareContains(expected2, hqlQuery);
     String lower = hqlQuery.toLowerCase();
-    assertTrue(lower.startsWith("select coalesce(mq1.expr1, mq2.expr1) expr1, mq2.msr2 msr2, mq1.msr12 msr12 from ")
-      || lower.startsWith("select coalesce(mq1.expr1, mq2.expr1) expr1, mq1.msr2 msr2, mq2.msr12 msr12 from "),
+    assertTrue(lower.startsWith("select coalesce(mq1.expr1, mq2.expr1) `substr(( usersports . name ), 3 )`,"
+      + " mq2.msr2 msr2, mq1.msr12 msr12 from ")
+      || lower.startsWith("select coalesce(mq1.expr1, mq2.expr1) `substr(( usersports . name ), 3 )`, mq1.msr2 msr2, "
+        + "mq2.msr12 msr12 from "),
       hqlQuery);
 
     assertTrue(hqlQuery.contains("mq1 full outer join ") && hqlQuery.endsWith("mq2 on mq1.expr1 <=> mq2.expr1"),
@@ -760,8 +762,10 @@ public class TestBridgeTableQueries extends TestQueryRewrite {
     TestCubeRewriter.compareContains(expected1, hqlQuery);
     TestCubeRewriter.compareContains(expected2, hqlQuery);
     String lower = hqlQuery.toLowerCase();
-    assertTrue(lower.startsWith("select coalesce(mq1.expr1, mq2.expr1) expr1, mq2.msr2 msr2, mq1.msr12 msr12 from ")
-      || lower.startsWith("select coalesce(mq1.expr1, mq2.expr1) expr1, mq1.msr2 msr2, mq2.msr12 msr12 from "),
+    assertTrue(lower.startsWith("select coalesce(mq1.expr1, mq2.expr1) `substr(( usersports . name ), 3 )`,"
+      + " mq2.msr2 msr2, mq1.msr12 msr12 from ")
+      || lower.startsWith("select coalesce(mq1.expr1, mq2.expr1) `substr(( usersports . name ), 3 )`, mq1.msr2 msr2,"
+        + " mq2.msr12 msr12 from "),
       hqlQuery);
 
     assertTrue(hqlQuery.contains("mq1 full outer join ") && hqlQuery.endsWith("mq2 on mq1.expr1 <=> mq2.expr1"),

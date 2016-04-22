@@ -482,10 +482,11 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
         getWhereForDailyAndHourly2days(cubeName, "C1_testFact1_BASE"));
     compareContains(expected1, hqlQuery);
     compareContains(expected2, hqlQuery);
-    assertTrue(hqlQuery.toLowerCase().startsWith("select coalesce(mq1.expr1, mq2.expr1) expr1,"
-      + " coalesce(mq1.expr2, mq2.expr2) expr2, mq2.msr12 msr12, mq1.roundedmsr2 roundedmsr2 from ")
-      || hqlQuery.toLowerCase().startsWith("select coalesce(mq1.expr1, mq2.expr1) expr1, coalesce(mq1.expr2, mq2.expr2)"
-        + " expr2, mq1.msr12 msr12, mq2.roundedmsr2 roundedmsr2 from "), hqlQuery);
+    assertTrue(hqlQuery.toLowerCase().startsWith("select coalesce(mq1.expr1, mq2.expr1) `func1( dim1 )`,"
+      + " coalesce(mq1.expr2, mq2.expr2) `func2( dim1 )`, mq2.msr12 msr12, mq1.roundedmsr2 roundedmsr2 from ")
+      || hqlQuery.toLowerCase().startsWith("select coalesce(mq1.expr1, mq2.expr1) `func1( dim1 )`,"
+        + " coalesce(mq1.expr2, mq2.expr2) `func2( dim1 )`, mq1.msr12 msr12, mq2.roundedmsr2 roundedmsr2 from "),
+      hqlQuery);
     assertTrue(hqlQuery.contains("mq1 full outer join ")
       && hqlQuery.endsWith("mq2 on mq1.expr1 <=> mq2.expr1 AND mq1.expr2 <=> mq2.expr2"), hqlQuery);
   }
@@ -506,9 +507,11 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
     compareContains(expected1, hqlQuery);
     compareContains(expected2, hqlQuery);
     assertTrue(hqlQuery.toLowerCase().startsWith(
-        "select coalesce(mq1.expr1, mq2.expr1) expr1, mq2.expr2 `directmsr`, mq1.roundedmsr2 roundedmsr2 from ")
-        || hqlQuery.toLowerCase().startsWith(
-        "select coalesce(mq1.expr1, mq2.expr1) expr1, mq1.expr2 `directmsr`, mq2.roundedmsr2 roundedmsr2 from "),
+      "select coalesce(mq1.expr1, mq2.expr1) `func1( dim1 )`, mq2.expr2 `directmsr`, mq1.roundedmsr2 roundedmsr2 "
+        + "from ")
+      || hqlQuery.toLowerCase().startsWith(
+        "select coalesce(mq1.expr1, mq2.expr1) `func1( dim1 )`, mq1.expr2 `directmsr`, mq2.roundedmsr2 roundedmsr2 "
+          + "from "),
       hqlQuery.toLowerCase());
     assertTrue(hqlQuery.contains("mq1 full outer join ") && hqlQuery.endsWith("mq2 on mq1.expr1 <=> mq2.expr1"),
       hqlQuery);
@@ -527,9 +530,9 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
     compareContains(expected1, hqlQuery);
     compareContains(expected2, hqlQuery);
     assertTrue(hqlQuery.toLowerCase().startsWith(
-      "select coalesce(mq1.dim1, mq2.dim1) dim1, mq2.expr2 expr2, mq1.expr3 expr3 from ")
+      "select coalesce(mq1.dim1, mq2.dim1) dim1, mq2.expr2 `avg( msr12 )`, mq1.expr3 `avg( msr2 )` from ")
       || hqlQuery.toLowerCase().startsWith(
-        "select coalesce(mq1.dim1, mq2.dim1) dim1, mq1.expr2 expr2, mq2.expr3 expr3 from "), hqlQuery);
+        "select coalesce(mq1.dim1, mq2.dim1) dim1, mq1.expr2 `avg( msr12 )`, mq2.expr3 `avg( msr2 )` from "), hqlQuery);
 
     assertTrue(hqlQuery.contains("mq1 full outer join ") && hqlQuery.endsWith("mq2 on mq1.dim1 <=> mq2.dim1"),
       hqlQuery);
@@ -620,12 +623,10 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
         getWhereForHourly2days(cubeName, "C1_testfact1_raw_base"));
     compareContains(expected1, hqlQuery);
     compareContains(expected2, hqlQuery);
-    assertTrue(hqlQuery.toLowerCase()
-      .startsWith("select coalesce(mq1.booleancut, mq2.booleancut) booleancut, mq2.expr2 expr2,"
-        + " mq1.expr3 expr3 from ")
-      || hqlQuery.toLowerCase()
-        .startsWith("select coalesce(mq1.booleancut, mq2.booleancut) booleancut, mq1.expr2 expr2,"
-          + " mq2.expr3 expr3 from "), hqlQuery);
+    assertTrue(hqlQuery.toLowerCase().startsWith("select coalesce(mq1.booleancut, mq2.booleancut) booleancut, "
+      + "mq2.expr2 `round((sum( msr2 ) / 1000 ))`, mq1.expr3 `avg(( msr13 + msr14 ))` from ")
+      || hqlQuery.toLowerCase().startsWith("select coalesce(mq1.booleancut, mq2.booleancut) booleancut, "
+        + "mq1.expr2 `round((sum( msr2 ) / 1000 ))`, mq2.expr3 `avg(( msr13 + msr14 ))` from "), hqlQuery);
     assertTrue(hqlQuery.contains("mq1 full outer join ")
       && hqlQuery.endsWith("mq2 on mq1.booleancut <=> mq2.booleancut"),
       hqlQuery);
@@ -654,12 +655,10 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
         getWhereForHourly2days(cubeName, "C1_testfact1_raw_base"));
     compareContains(expected1, hqlQuery);
     compareContains(expected2, hqlQuery);
-    assertTrue(hqlQuery.toLowerCase()
-      .startsWith("select coalesce(mq1.booleancut, mq2.booleancut) booleancut, mq2.expr2 expr2,"
-        + " mq1.expr3 expr3 from ")
-      || hqlQuery.toLowerCase()
-        .startsWith("select coalesce(mq1.booleancut, mq2.booleancut) booleancut, mq1.expr2 expr2,"
-          + " mq2.expr3 expr3 from "), hqlQuery);
+    assertTrue(hqlQuery.toLowerCase().startsWith("select coalesce(mq1.booleancut, mq2.booleancut) booleancut, "
+      + "mq2.expr2 `round((sum( msr2 ) / 1000 ))`, mq1.expr3 `avg(( msr13 + msr14 ))` from ")
+      || hqlQuery.toLowerCase().startsWith("select coalesce(mq1.booleancut, mq2.booleancut) booleancut, "
+        + "mq1.expr2 `round((sum( msr2 ) / 1000 ))`, mq2.expr3 `avg(( msr13 + msr14 ))` from "), hqlQuery);
     assertTrue(hqlQuery.contains("mq1 full outer join ")
         && hqlQuery.endsWith("mq2 on mq1.booleancut <=> mq2.booleancut"),
       hqlQuery);
