@@ -704,8 +704,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
               }
             } catch (Exception e) {
               log.error("Error launching query: {}", query.getQueryHandle(), e);
-              setFailedStatus(query, "Launching query failed",
-                (e instanceof LensException) ? (LensException) e : new LensException(e));
+              setFailedStatus(query, "Launching query failed", e);
               continue;
             } finally {
               release(query.getLensSessionIdentifier());
@@ -824,11 +823,11 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
    * @param e    the LensException
    * @throws LensException the lens exception
    */
-  void setFailedStatus(QueryContext ctx, String statusMsg, LensException e) throws LensException {
+  void setFailedStatus(QueryContext ctx, String statusMsg, Exception e) throws LensException {
 
     QueryStatus before = ctx.getStatus();
     ctx.setStatus(new QueryStatus(0.0f, null, FAILED, statusMsg, false, null, LensUtil.getCauseMessage(e),
-      e.buildLensErrorTO(this.errorCollection)));
+      e instanceof LensException ? ((LensException)e).buildLensErrorTO(this.errorCollection) : null));
     updateFinishedQuery(ctx, before);
     fireStatusChangeEvent(ctx, ctx.getStatus(), before);
   }
