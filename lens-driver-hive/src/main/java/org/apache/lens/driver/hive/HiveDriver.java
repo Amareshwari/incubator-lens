@@ -801,10 +801,20 @@ public class HiveDriver extends AbstractLensDriver {
 
   @Override
   public Priority decidePriority(AbstractQueryContext ctx) {
-    if (whetherCalculatePriority && ctx.getDriverConf(this).get("mapred.job.priority") == null) {
+    return decidePriority(ctx, queryPriorityDecider, false);
+  }
+
+  Priority decidePriority(AbstractQueryContext ctx, QueryPriorityDecider queryPriorityDecider, boolean recompute) {
+    if (whetherCalculatePriority && (recompute || ctx.getDriverConf(this).get("mapred.job.priority") == null)) {
       try {
+        // On-demand re-computation of cost, in case it's not alredy set by a previous estimate call.
+        // In driver test cases, estimate doesn't happen. Hence this code path ensures cost is computed and
+        // priority is set based on correct cost.
+        if (ctx.getDriverQueryCost(this) == null) {
+          ctx.setDriverCost(this, this.estimate(ctx));
+        }
         // Inside try since non-data fetching queries can also be executed by async method.
-        Priority priority = ctx.decidePriority(this, queryPriorityDecider);
+        Priority priority = queryPriorityDecider.decidePriority(ctx.getDriverQueryCost(this));
         String priorityStr = priority.toString();
         ctx.getDriverConf(this).set("mapred.job.priority", priorityStr);
         log.info("set priority to {}", priority);

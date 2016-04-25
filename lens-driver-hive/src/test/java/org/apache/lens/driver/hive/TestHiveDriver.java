@@ -887,8 +887,7 @@ public class TestHiveDriver {
     ctx.setOlapQuery(true);
     Priority priority = driver.decidePriority(ctx);
     assertEquals(priority, expected, "cost: " + ctx.getDriverQueryCost(driver) + "priority: " + priority);
-    assertEquals(ctx.decidePriority(driver,
-      alwaysNormalPriorityDecider), Priority.NORMAL);
+    assertEquals(driver.decidePriority(ctx, alwaysNormalPriorityDecider, true), Priority.NORMAL);
   }
 
   @Test

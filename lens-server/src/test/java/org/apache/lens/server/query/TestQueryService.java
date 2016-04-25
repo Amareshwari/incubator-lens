@@ -253,6 +253,16 @@ public class TestQueryService extends LensJerseyTest {
     assertTrue(lensQuery.getFinishTime() > 0);
   }
 
+  @Test(dataProvider = "mediaTypeData")
+  public void testPriorityOnMockQuery(MediaType mt) throws Exception {
+    String query = "select mock, fail from " + TEST_TABLE;
+    QueryContext ctx = queryService.createContext(query, null, new LensConf(), new Configuration(), 5000L);
+    ctx.setLensSessionIdentifier(lensSessionId.getPublicId().toString());
+    queryService.rewriteAndSelect(ctx);
+    assertNotNull(ctx.getSelectedDriver());
+    assertEquals(ctx.getPriority(), Priority.NORMAL);
+  }
+
   // test with execute async post, get all queries, get query context,
   // get wrong uuid query
 

@@ -39,6 +39,7 @@ import javax.ws.rs.core.StreamingOutput;
 
 import org.apache.lens.api.LensConf;
 import org.apache.lens.api.LensSessionHandle;
+import org.apache.lens.api.Priority;
 import org.apache.lens.api.error.ErrorCollection;
 import org.apache.lens.api.query.*;
 import org.apache.lens.api.query.QueryStatus.Status;
@@ -1333,7 +1334,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
    * @param ctx query context
    * @throws LensException the lens exception
    */
-  private void rewriteAndSelect(final AbstractQueryContext ctx) throws LensException {
+  void rewriteAndSelect(final AbstractQueryContext ctx) throws LensException {
     logSegregationContext.setLogSegragationAndQueryId(ctx.getLogHandle());
     MethodMetricsContext parallelCallGauge = MethodMetricsFactory.createMethodGauge(ctx.getConf(), false,
       PARALLEL_CALL_GAUGE);
@@ -1428,7 +1429,8 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
       ctx.setSelectedDriver(driver);
       QueryCost selectedDriverQueryCost = ctx.getDriverContext().getDriverQueryCost(driver);
       ctx.setSelectedDriverQueryCost(selectedDriverQueryCost);
-      driver.decidePriority(ctx);
+      Priority priority = driver.decidePriority(ctx);
+      ctx.setPriority(priority == null ? Priority.NORMAL : priority);
       selectGauge.markSuccess();
     } finally {
       parallelCallGauge.markSuccess();
