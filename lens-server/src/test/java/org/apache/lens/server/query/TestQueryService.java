@@ -253,8 +253,8 @@ public class TestQueryService extends LensJerseyTest {
     assertTrue(lensQuery.getFinishTime() > 0);
   }
 
-  @Test(dataProvider = "mediaTypeData")
-  public void testPriorityOnMockQuery(MediaType mt) throws Exception {
+  @Test
+  public void testPriorityOnMockQuery() throws Exception {
     String query = "select mock, fail from " + TEST_TABLE;
     QueryContext ctx = queryService.createContext(query, null, new LensConf(), new Configuration(), 5000L);
     ctx.setLensSessionIdentifier(lensSessionId.getPublicId().toString());
