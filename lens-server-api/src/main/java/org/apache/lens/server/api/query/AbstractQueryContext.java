@@ -477,4 +477,16 @@ public abstract class AbstractQueryContext implements Serializable {
     driverContext.clearTransientStateAfterCompleted();
     hiveConf = null;
   }
+
+  /**
+   * Update conf.
+   *
+   * @param confoverlay the conf to set
+   */
+  public void updateConf(Map<String, String> confoverlay) {
+    lensConf.getProperties().putAll(confoverlay);
+    for (Map.Entry<String, String> prop : confoverlay.entrySet()) {
+      this.conf.set(prop.getKey(), prop.getValue());
+    }
+  }
 }

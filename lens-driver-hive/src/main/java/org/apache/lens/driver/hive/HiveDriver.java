@@ -817,6 +817,9 @@ public class HiveDriver extends AbstractLensDriver {
         Priority priority = queryPriorityDecider.decidePriority(ctx.getDriverQueryCost(this));
         String priorityStr = priority.toString();
         ctx.getDriverConf(this).set("mapred.job.priority", priorityStr);
+        Map<String, String> confUpdate = new HashMap<>();
+        confUpdate.put("mapred.job.priority", priorityStr);
+        ctx.updateConf(confUpdate);
         log.info("set priority to {}", priority);
         return priority;
       } catch (Exception e) {

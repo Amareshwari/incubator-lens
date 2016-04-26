@@ -887,6 +887,7 @@ public class TestHiveDriver {
     ctx.setOlapQuery(true);
     Priority priority = driver.decidePriority(ctx);
     assertEquals(priority, expected, "cost: " + ctx.getDriverQueryCost(driver) + "priority: " + priority);
+    assertEquals(ctx.getConf().get("mapred.job.priority"), priority.toString());
     assertEquals(driver.decidePriority(ctx, alwaysNormalPriorityDecider), Priority.NORMAL);
   }
 
