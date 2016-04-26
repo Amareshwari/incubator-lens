@@ -258,7 +258,12 @@ public class TestQueryService extends LensJerseyTest {
     String query = "select mock, fail from " + TEST_TABLE;
     QueryContext ctx = queryService.createContext(query, null, new LensConf(), new Configuration(), 5000L);
     ctx.setLensSessionIdentifier(lensSessionId.getPublicId().toString());
-    queryService.rewriteAndSelect(ctx);
+    queryService.acquire(lensSessionId);
+    try {
+      queryService.rewriteAndSelect(ctx);
+    } finally {
+      queryService.release(lensSessionId);
+    }
     assertNotNull(ctx.getSelectedDriver());
     assertEquals(ctx.getPriority(), Priority.NORMAL);
   }
