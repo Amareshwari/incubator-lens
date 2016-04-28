@@ -357,19 +357,6 @@ public class TestDenormalizationResolver extends TestQueryRewrite {
   }
 
   @Test
-  public void testDimensionQueryWithTwoRefCols() throws Exception {
-    Configuration tConf = new Configuration(conf);
-    tConf.set(CubeQueryConfUtil.DRIVER_SUPPORTED_STORAGES, "");
-    CubeQueryContext cubeql = rewriteCtx("select citydim.zipcode, citydim.statename from" + " citydim", tConf);
-    Set<String> candidateDims = new HashSet<String>();
-    for (CandidateDim cdim : cubeql.getCandidateDims().get(cubeql.getMetastoreClient().getDimension("citydim"))) {
-      candidateDims.add(cdim.getName());
-    }
-    // city_table2 contains stateid, but not zipcode - it should have been removed.
-    Assert.assertFalse(candidateDims.contains("city_table2"));
-  }
-
-  @Test
   public void testDimensionQueryWithExpressionHavingDenormColumn() throws Exception {
     String hqlQuery = rewrite("select citydim.name, citydim.citystate from" + " citydim", conf);
     String joinExpr =

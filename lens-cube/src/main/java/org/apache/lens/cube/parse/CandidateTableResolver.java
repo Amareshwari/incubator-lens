@@ -37,8 +37,6 @@ import com.google.common.collect.Sets;
 
 import lombok.extern.slf4j.Slf4j;
 
-import com.google.common.collect.Sets;
-
 /**
  * This resolver prunes the candidate tables for following cases
  * <p/>
@@ -617,6 +615,7 @@ class CandidateTableResolver implements ContextRewriter {
     }
 
     // remove optional dims which are not required any more.
+    Set<Aliased<Dimension>> tobeRemoved = new HashSet<>();
     for (Map.Entry<Aliased<Dimension>, OptionalDimCtx> optdimEntry : cubeql.getOptionalDimensionMap().entrySet()) {
       Aliased<Dimension> dim = optdimEntry.getKey();
       OptionalDimCtx optdim = optdimEntry.getValue();
