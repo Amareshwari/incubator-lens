@@ -22,9 +22,12 @@ import java.lang.reflect.Constructor;
 import java.util.*;
 
 import org.apache.commons.lang.StringUtils;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.metadata.Table;
 
+import lombok.NonNull;
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class Cube extends AbstractBaseTable implements CubeInterface {
   private final Set<CubeMeasure> measures;
   private final Set<CubeDimAttribute> dimensions;
@@ -52,12 +55,12 @@ public class Cube extends AbstractBaseTable implements CubeInterface {
     this.measures = measures;
     this.dimensions = dimensions;
 
-    measureMap = new HashMap<String, CubeMeasure>();
+    measureMap = new HashMap<>();
     for (CubeMeasure m : measures) {
       measureMap.put(m.getName().toLowerCase(), m);
     }
 
-    dimMap = new HashMap<String, CubeDimAttribute>();
+    dimMap = new HashMap<>();
     for (CubeDimAttribute dim : dimensions) {
       dimMap.put(dim.getName().toLowerCase(), dim);
     }
@@ -70,12 +73,12 @@ public class Cube extends AbstractBaseTable implements CubeInterface {
     this.measures = getMeasures(getName(), getProperties());
     this.dimensions = getDimensions(getName(), getProperties());
 
-    measureMap = new HashMap<String, CubeMeasure>();
+    measureMap = new HashMap<>();
     for (CubeMeasure m : measures) {
       measureMap.put(m.getName().toLowerCase(), m);
     }
 
-    dimMap = new HashMap<String, CubeDimAttribute>();
+    dimMap = new HashMap<>();
     for (CubeDimAttribute dim : dimensions) {
       addAllDimsToMap(dim);
     }
@@ -100,7 +103,7 @@ public class Cube extends AbstractBaseTable implements CubeInterface {
 
   public Set<String> getTimedDimensions() {
     String str = getProperties().get(MetastoreUtil.getCubeTimedDimensionListKey(getName()));
-    Set<String> timedDimensions = new HashSet<String>();
+    Set<String> timedDimensions = new HashSet<>();
     if (str != null) {
       timedDimensions.addAll(Arrays.asList(StringUtils.split(str, ',')));
     }
@@ -134,7 +137,7 @@ public class Cube extends AbstractBaseTable implements CubeInterface {
   }
 
   public static Set<CubeMeasure> getMeasures(String name, Map<String, String> props) {
-    Set<CubeMeasure> measures = new HashSet<CubeMeasure>();
+    Set<CubeMeasure> measures = new HashSet<>();
     String measureStr = MetastoreUtil.getNamedStringValue(props, MetastoreUtil.getCubeMeasureListKey(name));
     String[] names = measureStr.split(",");
     for (String measureName : names) {
@@ -154,21 +157,23 @@ public class Cube extends AbstractBaseTable implements CubeInterface {
   }
 
   public static Set<CubeDimAttribute> getDimensions(String name, Map<String, String> props) {
-    Set<CubeDimAttribute> dimensions = new HashSet<CubeDimAttribute>();
+    Set<CubeDimAttribute> dimensions = new HashSet<>();
     String dimStr = MetastoreUtil.getNamedStringValue(props, MetastoreUtil.getCubeDimensionListKey(name));
-    String[] names = dimStr.split(",");
-    for (String dimName : names) {
-      String className = props.get(MetastoreUtil.getDimensionClassPropertyKey(dimName));
-      CubeDimAttribute dim;
-      try {
-        Class<?> clazz = Class.forName(className);
-        Constructor<?> constructor;
-        constructor = clazz.getConstructor(String.class, Map.class);
-        dim = (CubeDimAttribute) constructor.newInstance(new Object[]{dimName, props});
-      } catch (Exception e) {
-        throw new IllegalArgumentException("Invalid dimension", e);
+    if (StringUtils.isNotBlank(dimStr)) {
+      String[] names = dimStr.split(",");
+      for (String dimName : names) {
+        String className = props.get(MetastoreUtil.getDimensionClassPropertyKey(dimName));
+        CubeDimAttribute dim;
+        try {
+          Class<?> clazz = Class.forName(className);
+          Constructor<?> constructor;
+          constructor = clazz.getConstructor(String.class, Map.class);
+          dim = (CubeDimAttribute) constructor.newInstance(new Object[]{dimName, props});
+        } catch (Exception e) {
+          throw new IllegalArgumentException("Invalid dimension", e);
+        }
+        dimensions.add(dim);
       }
-      dimensions.add(dim);
     }
     return dimensions;
   }
@@ -202,19 +207,19 @@ public class Cube extends AbstractBaseTable implements CubeInterface {
   }
 
   public CubeDimAttribute getDimAttributeByName(String dimension) {
-    return dimMap.get(dimension == null ? dimension : dimension.toLowerCase());
+    return dimMap.get(dimension == null ? null : dimension.toLowerCase());
   }
 
   public CubeMeasure getMeasureByName(String measure) {
-    return measureMap.get(measure == null ? measure : measure.toLowerCase());
+    return measureMap.get(measure == null ? null : measure.toLowerCase());
   }
 
   public CubeColumn getColumnByName(String column) {
-    CubeColumn cubeCol = (CubeColumn) super.getExpressionByName(column);
+    CubeColumn cubeCol = super.getExpressionByName(column);
     if (cubeCol == null) {
-      cubeCol = (CubeColumn) getMeasureByName(column);
+      cubeCol = getMeasureByName(column);
       if (cubeCol == null) {
-        cubeCol = (CubeColumn) getDimAttributeByName(column);
+        cubeCol = getDimAttributeByName(column);
       }
     }
     return cubeCol;
@@ -223,18 +228,13 @@ public class Cube extends AbstractBaseTable implements CubeInterface {
   /**
    * Alters the measure if already existing or just adds if it is new measure.
    *
-   * @param measure
-   * @throws HiveException
+   * @param measure new measure definition
    */
-  public void alterMeasure(CubeMeasure measure) throws HiveException {
-    if (measure == null) {
-      throw new NullPointerException("Cannot add null measure");
-    }
-
+  public void alterMeasure(@NonNull CubeMeasure measure) {
     // Replace measure if already existing
     if (measureMap.containsKey(measure.getName().toLowerCase())) {
       measures.remove(getMeasureByName(measure.getName()));
-      LOG.info("Replacing measure " + getMeasureByName(measure.getName()) + " with " + measure);
+      log.info("Replacing measure {} with {}", getMeasureByName(measure.getName()), measure);
     }
 
     measures.add(measure);
@@ -246,11 +246,11 @@ public class Cube extends AbstractBaseTable implements CubeInterface {
   /**
    * Remove the joinchain with name specified
    *
-   * @param chainName
+   * @param chainName chain name
    */
-  public boolean removeJoinChain(String chainName) {
+  public boolean removeJoinChain(@NonNull String chainName) {
     if (super.removeJoinChain(chainName)) {
-      LOG.info("Removing dimension " + getDimAttributeByName(chainName));
+      log.info("Removing dimension {}", getDimAttributeByName(chainName));
       return true;
     }
     return false;
@@ -259,18 +259,13 @@ public class Cube extends AbstractBaseTable implements CubeInterface {
   /**
    * Alters the dimension if already existing or just adds if it is new dimension
    *
-   * @param dimension
-   * @throws HiveException
+   * @param dimension the dim attribute
    */
-  public void alterDimension(CubeDimAttribute dimension) throws HiveException {
-    if (dimension == null) {
-      throw new NullPointerException("Cannot add null dimension");
-    }
-
+  public void alterDimension(@NonNull CubeDimAttribute dimension) {
     // Replace dimension if already existing
     if (dimMap.containsKey(dimension.getName().toLowerCase())) {
       dimensions.remove(getDimAttributeByName(dimension.getName()));
-      LOG.info("Replacing dimension " + getDimAttributeByName(dimension.getName()) + " with " + dimension);
+      log.info("Replacing dimension {} with {}", getDimAttributeByName(dimension.getName()), dimension);
     }
 
     dimensions.add(dimension);
@@ -281,13 +276,13 @@ public class Cube extends AbstractBaseTable implements CubeInterface {
 
 
   /**
-   * Remove the dimension with name specified
+   * Remove the attribute with name specified
    *
-   * @param dimName
+   * @param dimName attribute name
    */
-  public void removeDimension(String dimName) {
+  public void removeDimension(@NonNull String dimName) {
     if (dimMap.containsKey(dimName.toLowerCase())) {
-      LOG.info("Removing dimension " + getDimAttributeByName(dimName));
+      log.info("Removing dimension {}", getDimAttributeByName(dimName));
       dimensions.remove(getDimAttributeByName(dimName));
       dimMap.remove(dimName.toLowerCase());
       MetastoreUtil.addNameStrings(getProperties(), MetastoreUtil.getCubeDimensionListKey(getName()), dimensions);
@@ -297,11 +292,11 @@ public class Cube extends AbstractBaseTable implements CubeInterface {
   /**
    * Remove the measure with name specified
    *
-   * @param msrName
+   * @param msrName measure name
    */
-  public void removeMeasure(String msrName) {
+  public void removeMeasure(@NonNull String msrName) {
     if (measureMap.containsKey(msrName.toLowerCase())) {
-      LOG.info("Removing measure " + getMeasureByName(msrName));
+      log.info("Removing measure {}", getMeasureByName(msrName));
       measures.remove(getMeasureByName(msrName));
       measureMap.remove(msrName.toLowerCase());
       MetastoreUtil.addNameStrings(getProperties(), MetastoreUtil.getCubeMeasureListKey(getName()), measures);
@@ -311,20 +306,16 @@ public class Cube extends AbstractBaseTable implements CubeInterface {
   /**
    * Adds the timed dimension
    *
-   * @param timedDimension
-   * @throws HiveException
+   * @param timedDimension time dimension
    */
-  public void addTimedDimension(String timedDimension) throws HiveException {
-    if (timedDimension == null || timedDimension.isEmpty()) {
-      throw new HiveException("Invalid timed dimension " + timedDimension);
-    }
+  public void addTimedDimension(@NonNull String timedDimension) {
     timedDimension = timedDimension.toLowerCase();
     Set<String> timeDims = getTimedDimensions();
     if (timeDims == null) {
-      timeDims = new LinkedHashSet<String>();
+      timeDims = new LinkedHashSet<>();
     }
     if (timeDims.contains(timedDimension)) {
-      LOG.info("Timed dimension " + timedDimension + " is" + " already present in cube " + getName());
+      log.info("Timed dimension {} is already present in cube {}", timedDimension, getName());
       return;
     }
 
@@ -335,13 +326,9 @@ public class Cube extends AbstractBaseTable implements CubeInterface {
   /**
    * Removes the timed dimension
    *
-   * @param timedDimension
-   * @throws HiveException
+   * @param timedDimension time dimension
    */
-  public void removeTimedDimension(String timedDimension) throws HiveException {
-    if (timedDimension == null || timedDimension.isEmpty()) {
-      throw new HiveException("Invalid timed dimension " + timedDimension);
-    }
+  public void removeTimedDimension(@NonNull String timedDimension) {
     timedDimension = timedDimension.toLowerCase();
     Set<String> timeDims = getTimedDimensions();
     if (timeDims != null && timeDims.contains(timedDimension)) {
@@ -357,7 +344,7 @@ public class Cube extends AbstractBaseTable implements CubeInterface {
 
   @Override
   public Set<String> getMeasureNames() {
-    Set<String> measureNames = new HashSet<String>();
+    Set<String> measureNames = new HashSet<>();
     for (CubeMeasure f : getMeasures()) {
       measureNames.add(f.getName().toLowerCase());
     }
@@ -366,7 +353,7 @@ public class Cube extends AbstractBaseTable implements CubeInterface {
 
   @Override
   public Set<String> getDimAttributeNames() {
-    Set<String> dimNames = new HashSet<String>();
+    Set<String> dimNames = new HashSet<>();
     for (CubeDimAttribute f : getDimAttributes()) {
       MetastoreUtil.addColumnNames(f, dimNames);
     }
@@ -375,9 +362,9 @@ public class Cube extends AbstractBaseTable implements CubeInterface {
 
   @Override
   public boolean allFieldsQueriable() {
-    String canbeQueried = getProperties().get(MetastoreConstants.CUBE_ALL_FIELDS_QUERIABLE);
-    if (canbeQueried != null) {
-      return Boolean.parseBoolean(canbeQueried);
+    String canBeQueried = getProperties().get(MetastoreConstants.CUBE_ALL_FIELDS_QUERIABLE);
+    if (canBeQueried != null) {
+      return Boolean.parseBoolean(canBeQueried);
     }
     return true;
   }
@@ -395,22 +382,21 @@ public class Cube extends AbstractBaseTable implements CubeInterface {
    * @see org.apache.lens.cube.metadata.AbstractBaseTable
    */
   @Override
-  protected String getJoinChainListPropKey(String tblname) {
+  protected String getJoinChainListPropKey(@NonNull String tblname) {
     return MetastoreUtil.getCubeJoinChainListKey(getName());
   }
 
-  public String getPartitionColumnOfTimeDim(String timeDimName) {
+  public String getPartitionColumnOfTimeDim(@NonNull String timeDimName) {
     String partCol = getProperties().get(MetastoreConstants.TIMEDIM_TO_PART_MAPPING_PFX + timeDimName);
     return StringUtils.isNotBlank(partCol) ? partCol : timeDimName;
   }
 
-  public String getTimeDimOfPartitionColumn(String partCol) {
+  public String getTimeDimOfPartitionColumn(@NonNull String partCol) {
     Map<String, String> properties = getProperties();
     for (Map.Entry<String, String> entry : properties.entrySet()) {
       if (entry.getKey().startsWith(MetastoreConstants.TIMEDIM_TO_PART_MAPPING_PFX)
         && entry.getValue().equalsIgnoreCase(partCol)) {
-        String timeDim = entry.getKey().replace(MetastoreConstants.TIMEDIM_TO_PART_MAPPING_PFX, "");
-        return timeDim;
+        return entry.getKey().replace(MetastoreConstants.TIMEDIM_TO_PART_MAPPING_PFX, "");
       }
     }
     return partCol;

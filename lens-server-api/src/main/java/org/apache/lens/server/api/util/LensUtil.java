@@ -18,7 +18,20 @@
  */
 package org.apache.lens.server.api.util;
 
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
+import java.util.HashMap;
+import java.util.Set;
+
+import org.apache.lens.server.api.common.ConfigBasedObjectCreationFactory;
+
 import org.apache.commons.lang3.StringUtils;
+import org.apache.hadoop.conf.Configuration;
+
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
+
+import lombok.NonNull;
 
 /**
  * Utility methods for Lens
@@ -36,7 +49,7 @@ public final class LensUtil {
    * @param e
    * @return message
    */
-  public static String getCauseMessage(Throwable e) {
+  public static String getCauseMessage(@NonNull Throwable e) {
     String expMsg = null;
     if (e.getCause() != null) {
       expMsg = getCauseMessage(e.getCause());
@@ -47,4 +60,55 @@ public final class LensUtil {
     return expMsg;
   }
 
+  public static Throwable getCause(@NonNull Throwable e) {
+    if (e.getCause() != null) {
+      return getCause(e.getCause());
+    }
+    return e;
+  }
+
+  public static boolean isSocketException(@NonNull Throwable e) {
+    Throwable cause = getCause(e);
+    if (cause instanceof SocketException || cause instanceof SocketTimeoutException) {
+      return true;
+    }
+    return false;
+  }
+  public static <T> ImmutableSet<T> getImplementations(final String factoriesKey, final Configuration conf) {
+
+    Set<T> implSet = Sets.newLinkedHashSet();
+    final String[] factoryNames = conf.getStrings(factoriesKey);
+
+    if (factoryNames == null) {
+      return ImmutableSet.copyOf(implSet);
+    }
+
+    for (String factoryName : factoryNames) {
+      if (StringUtils.isNotBlank(factoryName)) {
+        final T implementation = getImplementation(factoryName, conf);
+        implSet.add(implementation);
+      }
+    }
+    return ImmutableSet.copyOf(implSet);
+  }
+
+  public static <T> T getImplementation(final String factoryName, final Configuration conf) {
+
+    try {
+      ConfigBasedObjectCreationFactory<T> factory
+        = (ConfigBasedObjectCreationFactory<T>) Class.forName(factoryName).newInstance();
+      return factory.create(conf);
+    } catch (final ReflectiveOperationException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  public static <K, V> HashMap<K, V> getHashMap(Object... args) {
+    assert (args.length % 2 == 0);
+    HashMap<K, V> map = new HashMap<>();
+    for (int i = 0; i < args.length; i += 2) {
+      map.put((K) args[i], (V) args[i + 1]);
+    }
+    return map;
+  }
 }

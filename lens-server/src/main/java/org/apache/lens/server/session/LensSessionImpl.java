@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.ws.rs.NotFoundException;
 
@@ -34,8 +35,6 @@ import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.session.SessionService;
 import org.apache.lens.server.util.UtilityMethods;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.common.JavaUtils;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -49,14 +48,13 @@ import lombok.AccessLevel;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * The Class LensSessionImpl.
  */
+@Slf4j
 public class LensSessionImpl extends HiveSessionImpl {
-
-  /** The Constant LOG. */
-  public static final Log LOG = LogFactory.getLog(LensSessionImpl.class);
 
   /** The persist info. */
   private LensSessionPersistInfo persistInfo = new LensSessionPersistInfo();
@@ -105,16 +103,28 @@ public class LensSessionImpl extends HiveSessionImpl {
     persistInfo.setSessionConf(sessionConf);
   }
 
+  private static Configuration sessionDefaultConfig;
   /**
    * Creates the default conf.
    *
    * @return the configuration
    */
-  public static Configuration createDefaultConf() {
-    Configuration conf = new Configuration(false);
-    conf.addResource("lenssession-default.xml");
-    conf.addResource("lens-site.xml");
-    return conf;
+  public static synchronized Configuration createDefaultConf() {
+    if (sessionDefaultConfig == null) {
+      Configuration conf = new Configuration(false);
+      conf.addResource("lenssession-default.xml");
+      conf.addResource("lens-site.xml");
+      sessionDefaultConfig = new Configuration(false);
+      Iterator<Map.Entry<String, String>> confItr = conf.iterator();
+      while (confItr.hasNext()) {
+        Map.Entry<String, String> prop = confItr.next();
+        if (!prop.getKey().startsWith(LensConfConstants.SERVER_PFX)) {
+          sessionDefaultConfig.set(prop.getKey(), prop.getValue());
+        }
+      }
+    }
+    //Not exposing sessionDefaultConfig directly to insulate it form modifications
+    return new Configuration(sessionDefaultConfig);
   }
 
   /** The default hive session conf. */
@@ -185,7 +195,7 @@ public class LensSessionImpl extends HiveSessionImpl {
             JavaUtils.closeClassLoader(entry.getValue());
           }
         } catch (Exception e) {
-          LOG.error("Error closing session classloader for session: " + getSessionHandle().getSessionId(), e);
+          log.error("Error closing session classloader for session: {}", getSessionHandle().getSessionId(), e);
         }
       }
       sessionDbClassLoaders.clear();
@@ -240,11 +250,10 @@ public class LensSessionImpl extends HiveSessionImpl {
   /**
    * Sets the config.
    *
-   * @param key   the key
-   * @param value the value
+   * @param config   the config to overlay
    */
-  public void setConfig(String key, String value) {
-    persistInfo.getConfig().put(key, value);
+  public void setConfig(Map<String, String> config) {
+    persistInfo.getConfig().putAll(config);
   }
 
   /**
@@ -324,9 +333,7 @@ public class LensSessionImpl extends HiveSessionImpl {
         try {
           ClassLoader classLoader = getDbResService().getClassLoader(database);
           if (classLoader == null) {
-            if (LOG.isDebugEnabled()) {
-              LOG.debug("DB resource service gave null class loader for " + database);
-            }
+            log.debug("DB resource service gave null class loader for {}", database);
           } else {
             if (areResourcesAdded()) {
               // We need to update DB specific classloader with added resources
@@ -337,8 +344,8 @@ public class LensSessionImpl extends HiveSessionImpl {
 
           return classLoader == null ? getSessionState().getConf().getClassLoader() : classLoader;
         } catch (LensException e) {
-          LOG.error("Error getting classloader for database " + database + " for session "
-            + getSessionHandle().getSessionId() + " defaulting to session state class loader", e);
+          log.error("Error getting classloader for database {} for session {} "
+            + " defaulting to session state class loader", database, getSessionHandle().getSessionId(), e);
           return getSessionState().getConf().getClassLoader();
         }
       }
@@ -430,12 +437,10 @@ public class LensSessionImpl extends HiveSessionImpl {
     final String location;
     // For tests
     /** The restore count. */
-    @Getter
-    transient int restoreCount;
+    transient AtomicInteger restoreCount = new AtomicInteger();
 
     /** Set of databases for which this resource has been added */
     final transient Set<String> databases = new HashSet<String>();
-
 
     /**
      * Instantiates a new resource entry.
@@ -463,7 +468,15 @@ public class LensSessionImpl extends HiveSessionImpl {
      * Restored resource.
      */
     public void restoredResource() {
-      restoreCount++;
+      restoreCount.incrementAndGet();
+    }
+
+    /**
+     * Returns the value of restoreCount for the resource
+     * @return
+     */
+    public int getRestoreCount(){
+      return restoreCount.get();
     }
 
     /*

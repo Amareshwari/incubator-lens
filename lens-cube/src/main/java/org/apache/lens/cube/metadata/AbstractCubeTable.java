@@ -20,16 +20,20 @@ package org.apache.lens.cube.metadata;
 
 import java.util.*;
 
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
-import org.apache.hadoop.hive.ql.metadata.Table;
-import org.apache.log4j.Logger;
+import org.apache.lens.server.api.error.LensException;
 
+import org.apache.commons.lang.StringUtils;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.hadoop.hive.ql.metadata.Table;
+
+import lombok.NonNull;
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public abstract class AbstractCubeTable implements Named {
-  public static final Logger LOG = Logger.getLogger(AbstractCubeTable.class);
   private final String name;
   private final List<FieldSchema> columns;
-  private final Map<String, String> properties = new HashMap<String, String>();
+  private final Map<String, String> properties = new HashMap<>();
   private double weight;
 
   protected AbstractCubeTable(String name, List<FieldSchema> columns, Map<String, String> props, double weight) {
@@ -81,7 +85,7 @@ public abstract class AbstractCubeTable implements Named {
   /**
    * Alters the weight of table
    *
-   * @param weight
+   * @param weight Weight of the table.
    */
   public void alterWeight(double weight) {
     this.weight = weight;
@@ -91,7 +95,7 @@ public abstract class AbstractCubeTable implements Named {
   /**
    * Add more table properties
    *
-   * @param properties
+   * @param props  properties
    */
   public void addProperties(Map<String, String> props) {
     this.properties.putAll(props);
@@ -101,7 +105,7 @@ public abstract class AbstractCubeTable implements Named {
   /**
    * Remove property specified by the key
    *
-   * @param propKey
+   * @param propKey property key
    */
   public void removeProperty(String propKey) {
     properties.remove(propKey);
@@ -110,13 +114,9 @@ public abstract class AbstractCubeTable implements Named {
   /**
    * Alters the column if already existing or just adds it if it is new column
    *
-   * @param column
-   * @throws HiveException
+   * @param column The column spec as FieldSchema - name, type and a comment
    */
-  protected void alterColumn(FieldSchema column) throws HiveException {
-    if (column == null) {
-      throw new HiveException("Column cannot be null");
-    }
+  protected void alterColumn(@NonNull FieldSchema column) {
     Iterator<FieldSchema> columnItr = columns.iterator();
     int alterPos = -1;
     int i = 0;
@@ -132,8 +132,8 @@ public abstract class AbstractCubeTable implements Named {
       i++;
     }
     if (alterPos != -1) {
-      LOG.info("In " + getName() + " replacing column " + toReplace.getName() + ":" + toReplace.getType() + " to "
-        + column.getName() + ":" + column.getType());
+      log.info("In {} replacing column {}:{} to {}:{}", getName(), toReplace.getName(), toReplace.getType(),
+        column.getName(), column.getType());
       columns.add(alterPos, column);
     } else {
       columns.add(column);
@@ -143,13 +143,9 @@ public abstract class AbstractCubeTable implements Named {
   /**
    * Adds or alters the columns passed
    *
-   * @param columns
-   * @throws HiveException
+   * @param columns The collection of columns
    */
-  protected void addColumns(Collection<FieldSchema> columns) throws HiveException {
-    if (columns == null) {
-      throw new HiveException("Columns cannot be null");
-    }
+  protected void addColumns(@NonNull Collection<FieldSchema> columns) {
     for (FieldSchema column : columns) {
       alterColumn(column);
     }
@@ -186,6 +182,23 @@ public abstract class AbstractCubeTable implements Named {
     return true;
   }
 
+  public Date getDateFromProperty(String propKey, boolean relative, boolean start) {
+    String prop = getProperties().get(propKey);
+    try {
+      if (StringUtils.isNotBlank(prop)) {
+        if (relative) {
+          return DateUtil.resolveRelativeDate(prop, now());
+        } else {
+          return DateUtil.resolveAbsoluteDate(prop);
+        }
+      }
+    } catch (LensException e) {
+      log.error("unable to parse {} {} date: {}", relative ? "relative" : "absolute", start ? "start" : "end", prop);
+    }
+    return start ? DateUtil.MIN_DATE : DateUtil.MAX_DATE;
+  }
+
+
   @Override
   public String toString() {
     return getName();
@@ -201,10 +214,15 @@ public abstract class AbstractCubeTable implements Named {
 
   public Set<String> getAllFieldNames() {
     List<FieldSchema> fields = getColumns();
-    Set<String> columns = new HashSet<String>(fields.size());
+    Set<String> columns = new HashSet<>(fields.size());
     for (FieldSchema f : fields) {
       columns.add(f.getName().toLowerCase());
     }
     return columns;
   }
+
+  public Date now() {
+    return new Date();
+  }
+
 }

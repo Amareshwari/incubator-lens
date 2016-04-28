@@ -81,7 +81,7 @@ public class HiveInMemoryResultSet extends InMemoryResultSet {
     this.closeAfterFecth = closeAfterFecth;
     this.metadata = client.getResultSetMetadata(opHandle);
     this.numColumns = metadata.getColumnDescriptors().size();
-    this.seekToStart();
+    this.orientation = FetchOrientation.FETCH_FIRST;
   }
 
   /*
@@ -90,8 +90,8 @@ public class HiveInMemoryResultSet extends InMemoryResultSet {
    * @see org.apache.lens.server.api.driver.LensResultSet#size()
    */
   @Override
-  public int size() throws LensException {
-    return -1;
+  public Integer size() throws LensException {
+    return null;
   }
 
   @Override
@@ -101,12 +101,6 @@ public class HiveInMemoryResultSet extends InMemoryResultSet {
     HiveResultSetMetadata hrsMeta = new HiveResultSetMetadata();
     hrsMeta.setColumns(metadata.getColumnDescriptors());
     return hrsMeta;
-  }
-
-  @Override
-  public boolean seekToStart() {
-    orientation = FetchOrientation.FETCH_FIRST;
-    return true;
   }
 
   /*

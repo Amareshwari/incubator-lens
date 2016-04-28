@@ -18,32 +18,48 @@
  */
 package org.apache.lens.server.api.query;
 
+import static org.apache.lens.server.api.LensConfConstants.DEFAULT_PREFETCH_INMEMORY_RESULTSET;
+import static org.apache.lens.server.api.LensConfConstants.DEFAULT_PREFETCH_INMEMORY_RESULTSET_ROWS;
+import static org.apache.lens.server.api.LensConfConstants.PREFETCH_INMEMORY_RESULTSET;
+import static org.apache.lens.server.api.LensConfConstants.PREFETCH_INMEMORY_RESULTSET_ROWS;
+
 import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
 
 import org.apache.lens.api.LensConf;
-import org.apache.lens.api.Priority;
 import org.apache.lens.api.query.LensQuery;
 import org.apache.lens.api.query.QueryHandle;
 import org.apache.lens.api.query.QueryStatus;
 import org.apache.lens.api.query.QueryStatus.Status;
 import org.apache.lens.server.api.LensConfConstants;
+import org.apache.lens.server.api.common.BackOffRetryHandler;
+import org.apache.lens.server.api.common.FailureContext;
 import org.apache.lens.server.api.driver.DriverQueryStatus;
+import org.apache.lens.server.api.driver.InMemoryResultSet;
 import org.apache.lens.server.api.driver.LensDriver;
+import org.apache.lens.server.api.driver.LensResultSet;
+import org.apache.lens.server.api.driver.PartiallyFetchedInMemoryResultSet;
 import org.apache.lens.server.api.error.LensException;
+import org.apache.lens.server.api.query.collect.WaitingQueriesSelectionPolicy;
+import org.apache.lens.server.api.query.constraint.QueryLaunchingConstraint;
+import org.apache.lens.server.api.util.LensUtil;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
+
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * The Class QueryContext.
  */
-public class QueryContext extends AbstractQueryContext implements Comparable<QueryContext> {
+@Slf4j
+public class QueryContext extends AbstractQueryContext {
 
   /**
    * The Constant serialVersionUID.
@@ -58,12 +74,6 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
   private QueryHandle queryHandle;
 
   /**
-   * The priority.
-   */
-  @Getter
-  private Priority priority;
-
-  /**
    * The is persistent.
    */
   @Getter
@@ -72,7 +82,8 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
   /**
    * The is driver persistent.
    */
-  @Getter private boolean isDriverPersistent;
+  @Getter
+  private boolean isDriverPersistent;
 
   /**
    * The status.
@@ -92,7 +103,7 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
    */
   @Getter
   @Setter
-  private String hdfsoutPath;
+  private String driverResultPath;
 
   /**
    * The submission time.
@@ -140,7 +151,7 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
 
   @Getter
   @Setter
-  private transient QueryOutputFormatter queryOutputFormatter;
+  private QueryOutputFormatter queryOutputFormatter;
 
   /**
    * The finished query persisted.
@@ -155,6 +166,30 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
   @Getter
   @Setter
   private String queryName;
+
+  /**
+   * This is the timeout that the client may have provided while initiating query execution
+   * This value is used for pre fetching in-memory result if applicable
+   *
+   * Note: in case the timeout is not provided, this value will not be set.
+   */
+  @Setter
+  @Getter
+  private transient long executeTimeoutMillis;
+
+  /**
+   * Query result registered by driver
+   */
+  @Getter
+  private transient LensResultSet driverResult;
+
+  /**
+   * True if driver has registered the result
+   */
+  @Getter
+  private transient boolean isDriverResultRegistered;
+
+  transient FailureContext statusUpdateFailures = new FailureContext();
 
   /**
    * Creates context from query
@@ -178,9 +213,10 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
    */
   public QueryContext(PreparedQueryContext prepared, String user, LensConf qconf, Configuration conf) {
     this(prepared.getUserQuery(), user, qconf, mergeConf(prepared.getConf(), conf), prepared.getDriverContext()
-      .getDriverQueryContextMap().keySet(), prepared.getDriverContext().getSelectedDriver(), true);
+        .getDriverQueryContextMap().keySet(), prepared.getDriverContext().getSelectedDriver(), true);
     setDriverContext(prepared.getDriverContext());
     setSelectedDriverQuery(prepared.getSelectedDriverQuery());
+    setSelectedDriverQueryCost(prepared.getSelectedDriverQueryCost());
   }
 
   /**
@@ -193,10 +229,11 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
    * @param drivers All the drivers
    * @param selectedDriver SelectedDriver
    */
-  private QueryContext(String userQuery, String user, LensConf qconf, Configuration conf,
-      Collection<LensDriver> drivers, LensDriver selectedDriver, boolean mergeDriverConf) {
+  QueryContext(String userQuery, String user, LensConf qconf, Configuration conf, Collection<LensDriver> drivers,
+      LensDriver selectedDriver, boolean mergeDriverConf) {
     this(userQuery, user, qconf, conf, drivers, selectedDriver, System.currentTimeMillis(), mergeDriverConf);
   }
+
   /**
    * Instantiates a new query context.
    *
@@ -208,19 +245,18 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
    * @param selectedDriver the selected driver
    * @param submissionTime the submission time
    */
-  QueryContext(String userQuery, String user, LensConf qconf, Configuration conf,
-    Collection<LensDriver> drivers, LensDriver selectedDriver, long submissionTime, boolean mergeDriverConf) {
+  QueryContext(String userQuery, String user, LensConf qconf, Configuration conf, Collection<LensDriver> drivers,
+      LensDriver selectedDriver, long submissionTime, boolean mergeDriverConf) {
     super(userQuery, user, qconf, conf, drivers, mergeDriverConf);
     this.submissionTime = submissionTime;
     this.queryHandle = new QueryHandle(UUID.randomUUID());
-    this.status = new QueryStatus(0.0f, Status.NEW, "Query just got created", false, null, null);
-    this.priority = Priority.NORMAL;
+    this.status = new QueryStatus(0.0f, null, Status.NEW, "Query just got created", false, null, null, null);
     this.lensConf = qconf;
     this.conf = conf;
     this.isPersistent = conf.getBoolean(LensConfConstants.QUERY_PERSISTENT_RESULT_SET,
-      LensConfConstants.DEFAULT_PERSISTENT_RESULT_SET);
+        LensConfConstants.DEFAULT_PERSISTENT_RESULT_SET);
     this.isDriverPersistent = conf.getBoolean(LensConfConstants.QUERY_PERSISTENT_RESULT_INDRIVER,
-      LensConfConstants.DEFAULT_DRIVER_PERSISTENT_RESULT_SET);
+        LensConfConstants.DEFAULT_DRIVER_PERSISTENT_RESULT_SET);
     this.userQuery = userQuery;
     if (selectedDriver != null) {
       this.setSelectedDriver(selectedDriver);
@@ -248,6 +284,11 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
     return ctx;
   }
 
+  public void initTransientState() {
+    super.initTransientState();
+    statusUpdateFailures = new FailureContext();
+  }
+
   /**
    * Merge conf.
    *
@@ -266,33 +307,6 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
     return conf;
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.lang.Comparable#compareTo(java.lang.Object)
-   */
-  @Override
-  public int compareTo(QueryContext other) {
-    int pcomp = this.priority.compareTo(other.priority);
-    if (pcomp == 0) {
-      return (int) (this.submissionTime - other.submissionTime);
-    } else {
-      return pcomp;
-    }
-  }
-
-  /**
-   * Update conf.
-   *
-   * @param confoverlay the conf to set
-   */
-  public void updateConf(Map<String, String> confoverlay) {
-    lensConf.getProperties().putAll(confoverlay);
-    for (Map.Entry<String, String> prop : confoverlay.entrySet()) {
-      this.conf.set(prop.getKey(), prop.getValue());
-    }
-  }
-
   public String getResultSetParentDir() {
     return conf.get(LensConfConstants.RESULT_SET_PARENT_DIR, LensConfConstants.RESULT_SET_PARENT_DIR_DEFAULT);
   }
@@ -308,9 +322,8 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
    * @return the lens query
    */
   public LensQuery toLensQuery() {
-    return new LensQuery(queryHandle, userQuery, super.getSubmittedUser(), priority, isPersistent,
-      getSelectedDriver() != null ? getSelectedDriver().getClass()
-        .getCanonicalName() : null,
+    return new LensQuery(queryHandle, userQuery, super.getSubmittedUser(), getPriority(), isPersistent,
+      getSelectedDriver() != null ? getSelectedDriver().getFullyQualifiedName() : null,
       getSelectedDriverQuery(),
       status,
       resultSetPath, driverOpHandle, lensConf, submissionTime, launchTime, driverStatus.getDriverStartTime(),
@@ -320,16 +333,15 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
   public boolean isResultAvailableInDriver() {
     // result is available in driver if driverStatus.isResultSetAvailable() - will be true for fetching inmemory
     // result set.
-    // if result is persisted in driver driverStatus.isResultSetAvailable() will be false
-    // so, for select queries, if result is persisted in driver, we return true sothat the result can be fetched thru
-    // persistent resultset
-    return isDriverPersistent() || driverStatus.isResultSetAvailable();
+    // if result is persisted in driver driverStatus.isResultSetAvailable() will be false but isDriverPersistent will
+    // be true. So, for select queries, if result is persisted in driver, we return true so that the result can be
+    //  fetched thru persistent resultset
+    return driverStatus.isSuccessful() && (isDriverPersistent() || driverStatus.isResultSetAvailable());
   }
 
   /**
    * Set whether result is persisted on driver to false. Set by drivers when drivers are not persisting
    *
-   * @return true/false
    */
   public void unSetDriverPersistent() {
     isDriverPersistent = false;
@@ -338,16 +350,42 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
   /*
    * Introduced for Recovering finished query.
    */
-  void setStatusSkippingTransitionTest(QueryStatus newStatus) throws LensException {
+  public void setStatusSkippingTransitionTest(final QueryStatus newStatus) {
     this.status = newStatus;
   }
 
-  public synchronized void setStatus(QueryStatus newStatus) throws LensException {
-    if (!this.status.isValidateTransition(newStatus.getStatus())) {
-      throw new LensException("Invalid state transition:[" + this.status.getStatus() + "->" + newStatus.getStatus()
-        + "]");
-    }
+  public synchronized void setStatus(final QueryStatus newStatus) throws LensException {
+    validateTransition(newStatus);
+    log.info("Updating status of {} from {} to {}", getQueryHandle(), this.status, newStatus);
     this.status = newStatus;
+  }
+
+  /**
+   * Update status from selected driver
+   *
+   * @param statusUpdateRetryHandler The exponential retry handler
+   *
+   * @throws LensException Throws exception if update from driver has failed.
+   */
+  public synchronized void updateDriverStatus(BackOffRetryHandler statusUpdateRetryHandler)
+    throws LensException {
+    if (statusUpdateRetryHandler.canTryOpNow(statusUpdateFailures)) {
+      try {
+        getSelectedDriver().updateStatus(this);
+        statusUpdateFailures.clear();
+      } catch (LensException exc) {
+        if (LensUtil.isSocketException(exc)) {
+          statusUpdateFailures.updateFailure();
+          if (!statusUpdateRetryHandler.hasExhaustedRetries(statusUpdateFailures)) {
+            // retries are not exhausted, so failure is ignored and update will be tried later
+            log.warn("Exception during update status from driver and update will be tried again at {}",
+              statusUpdateRetryHandler.getOperationNextTime(statusUpdateFailures), exc);
+            return;
+          }
+        }
+        throw exc;
+      }
+    }
   }
 
   public String getResultHeader() {
@@ -368,12 +406,12 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
 
   public boolean getCompressOutput() {
     return conf.getBoolean(LensConfConstants.QUERY_OUTPUT_ENABLE_COMPRESSION,
-        LensConfConstants.DEFAULT_OUTPUT_ENABLE_COMPRESSION);
+      LensConfConstants.DEFAULT_OUTPUT_ENABLE_COMPRESSION);
   }
 
   public long getMaxResultSplitRows() {
     return conf.getLong(LensConfConstants.RESULT_SPLIT_MULTIPLE_MAX_ROWS,
-        LensConfConstants.DEFAULT_RESULT_SPLIT_MULTIPLE_MAX_ROWS);
+      LensConfConstants.DEFAULT_RESULT_SPLIT_MULTIPLE_MAX_ROWS);
   }
 
   /**
@@ -383,7 +421,7 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
    */
   public boolean splitResultIntoMultipleFiles() {
     return conf.getBoolean(LensConfConstants.RESULT_SPLIT_INTO_MULTIPLE,
-        LensConfConstants.DEFAULT_RESULT_SPLIT_INTO_MULTIPLE);
+      LensConfConstants.DEFAULT_RESULT_SPLIT_INTO_MULTIPLE);
   }
 
   public String getClusterUser() {
@@ -403,4 +441,71 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
   public String getQueryHandleString() {
     return queryHandle.getHandleIdString();
   }
+
+  public void validateTransition(final QueryStatus newStatus) throws LensException {
+    if (!this.status.isValidTransition(newStatus.getStatus())) {
+      throw new LensException("Invalid state transition:from[" + this.status.getStatus() + " to "
+        + newStatus.getStatus() + "]");
+    }
+  }
+
+  public boolean finished() {
+    return this.status.finished();
+  }
+
+  public boolean successful() {
+    return this.status.successful();
+  }
+
+  public boolean launched() {
+    return this.status.launched();
+  }
+
+  public boolean running() {
+    return this.status.running();
+  }
+
+  public boolean queued() {
+    return this.status.queued();
+  }
+
+  public ImmutableSet<QueryLaunchingConstraint> getSelectedDriverQueryConstraints() {
+    return getSelectedDriver().getQueryConstraints();
+  }
+
+  public ImmutableSet<WaitingQueriesSelectionPolicy> getSelectedDriverSelectionPolicies() {
+    return getSelectedDriver().getWaitingQuerySelectionPolicies();
+  }
+
+  public synchronized void registerDriverResult(LensResultSet result) throws LensException {
+    if (isDriverResultRegistered) {
+      return; //already registered
+    }
+    this.isDriverResultRegistered = true;
+    /*
+     *  Check if results needs to be streamed to client in which case driver result needs to be wrapped in
+     *  PartiallyFetchedInMemoryResultSet
+     *
+     *  1. Driver Result should be of type InMemory (for streaming) as only such results can be streamed fast
+     *  2. Query result should be server persistent. Only in this case, an early streaming is required by client
+     *  that starts even before server level result persistence/formatting finishes.
+     *  3. When execiteTimeout is 0, it refers to an async query. In this case streaming result does not make sense
+     *  4. PREFETCH_INMEMORY_RESULTSET = true, implies client intends to get early streamed result
+     *  5. rowsToPreFetch should be > 0
+     */
+    if (isPersistent && executeTimeoutMillis > 0
+        && result instanceof InMemoryResultSet
+        && conf.getBoolean(PREFETCH_INMEMORY_RESULTSET, DEFAULT_PREFETCH_INMEMORY_RESULTSET)) {
+      int rowsToPreFetch = conf.getInt(PREFETCH_INMEMORY_RESULTSET_ROWS, DEFAULT_PREFETCH_INMEMORY_RESULTSET_ROWS);
+      if (rowsToPreFetch > 0) {
+        long executeTimeOutTime = submissionTime + executeTimeoutMillis;
+        if (System.currentTimeMillis() < executeTimeOutTime) {
+          this.driverResult = new PartiallyFetchedInMemoryResultSet((InMemoryResultSet) result, rowsToPreFetch);
+          return;
+        }
+      }
+    }
+    this.driverResult = result;
+  }
+
 }

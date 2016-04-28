@@ -31,6 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.testng.Assert;
+import org.testng.annotations.AfterTest;
 import org.testng.annotations.Test;
 
 
@@ -80,7 +81,7 @@ public class TestLensFactCommandsWithMissingWeight extends LensCliApplicationTes
     URL cubeSpec = TestLensCubeCommands.class.getClassLoader().getResource(CUBE_XML_FILE);
     String cubeList = getCubeCommand().showCubes();
     Assert.assertFalse(cubeList.contains(CUBE_NAME));
-    getCubeCommand().createCube(new File(cubeSpec.toURI()).getAbsolutePath());
+    getCubeCommand().createCube(new File(cubeSpec.toURI()));
     cubeList = getCubeCommand().showCubes();
     Assert.assertTrue(cubeList.contains(CUBE_NAME));
   }
@@ -108,6 +109,16 @@ public class TestLensFactCommandsWithMissingWeight extends LensCliApplicationTes
     return cubeCommands;
   }
 
+  @AfterTest
+  public void cleanUp() {
+    if (command != null) {
+      command.getClient().closeConnection();
+    }
+    if (cubeCommands != null) {
+      cubeCommands.getClient().closeConnection();
+    }
+  }
+
   /**
    * Adds the fact_without_wt table.
    *
@@ -117,12 +128,12 @@ public class TestLensFactCommandsWithMissingWeight extends LensCliApplicationTes
     LensFactCommands command = getCommand();
     String factList = command.showFacts(null);
     Assert.assertEquals(command.showFacts(CUBE_NAME), "No fact found for " + CUBE_NAME);
-    Assert.assertEquals("No fact found", factList, "Fact tables should not be found.");
+    Assert.assertEquals(factList, "No fact found", "Fact tables should not be found.");
     // add local storage before adding fact table
     TestLensStorageCommands.addLocalStorage(FACT_LOCAL);
     URL factSpec = TestLensFactCommandsWithMissingWeight.class.getClassLoader().getResource(FACT_XML_FILE);
     String response = null;
-    response = command.createFact(new File(factSpec.toURI()).getAbsolutePath());
+    response = command.createFact(new File(factSpec.toURI()));
 
     Assert.assertEquals(response, "failed", "Fact table creation should not be successful.");
     Assert.assertEquals(command.showFacts(CUBE_NAME), "No fact found for " + CUBE_NAME,

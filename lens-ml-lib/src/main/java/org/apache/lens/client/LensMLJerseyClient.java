@@ -23,7 +23,6 @@ import java.util.Map;
 
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.client.Client;
-import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.Form;
@@ -34,14 +33,13 @@ import org.apache.lens.api.StringList;
 import org.apache.lens.ml.api.ModelMetadata;
 import org.apache.lens.ml.api.TestReport;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 
 import org.glassfish.jersey.media.multipart.FormDataBodyPart;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
 import org.glassfish.jersey.media.multipart.FormDataMultiPart;
-import org.glassfish.jersey.media.multipart.MultiPartFeature;
+
+import lombok.extern.slf4j.Slf4j;
 
 /*
  * Client code to invoke server side ML API
@@ -50,15 +48,13 @@ import org.glassfish.jersey.media.multipart.MultiPartFeature;
 /**
  * The Class LensMLJerseyClient.
  */
+@Slf4j
 public class LensMLJerseyClient {
   /** The Constant LENS_ML_RESOURCE_PATH. */
   public static final String LENS_ML_RESOURCE_PATH = "lens.ml.resource.path";
 
   /** The Constant DEFAULT_ML_RESOURCE_PATH. */
   public static final String DEFAULT_ML_RESOURCE_PATH = "ml";
-
-  /** The Constant LOG. */
-  public static final Log LOG = LogFactory.getLog(LensMLJerseyClient.class);
 
   /** The connection. */
   private final LensConnection connection;
@@ -87,7 +83,7 @@ public class LensMLJerseyClient {
   }
 
   protected WebTarget getMLWebTarget() {
-    Client client = ClientBuilder.newBuilder().register(MultiPartFeature.class).build();
+    Client client = connection.buildClient();
     LensConnectionParams connParams = connection.getLensConnectionParams();
     String baseURI = connParams.getBaseConnectionUrl();
     String mlURI = connParams.getConf().get(LENS_ML_RESOURCE_PATH, DEFAULT_ML_RESOURCE_PATH);
@@ -257,7 +253,7 @@ public class LensMLJerseyClient {
     try {
       connection.close();
     } catch (Exception exc) {
-      LOG.error("Error closing connection", exc);
+      log.error("Error closing connection", exc);
     }
   }
 

@@ -211,6 +211,22 @@
 
     <fileSet>
       <directory>../lens-examples/src/main/resources/</directory>
+      <outputDirectory>/client/examples/data/customer_interests_local</outputDirectory>
+      <includes>
+        <include>customer-interests-local.data</include>
+      </includes>
+    </fileSet>
+
+    <fileSet>
+      <directory>../lens-examples/src/main/resources/</directory>
+      <outputDirectory>/client/examples/data/interests_local</outputDirectory>
+      <includes>
+        <include>interests-local.data</include>
+      </includes>
+    </fileSet>
+
+    <fileSet>
+      <directory>../lens-examples/src/main/resources/</directory>
       <outputDirectory>/client/examples/data/city_local</outputDirectory>
       <includes>
         <include>city-local.data</include>
@@ -408,13 +424,10 @@
       <outputDirectory>/server/webapp/</outputDirectory>
       <destName>lens-server.war</destName>
     </file>
-
     <file>
-      <source>../DISCLAIMER</source>
-      <outputDirectory>/</outputDirectory>
-      <destName>DISCLAIMER</destName>
+      <source>../lens-ship-jars/target/lens-ship-jars-${project.version}.jar</source>
+      <outputDirectory>/server/shipjars/</outputDirectory>
     </file>
-
   </files>
 
 </assembly>

@@ -20,6 +20,9 @@ package org.apache.lens.server.query;
 
 import static org.testng.Assert.*;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -30,6 +33,7 @@ import org.apache.lens.api.query.QueryStatus;
 import org.apache.lens.server.EventServiceImpl;
 import org.apache.lens.server.LensServerConf;
 import org.apache.lens.server.LensServices;
+import org.apache.lens.server.api.LensConfConstants;
 import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.events.AsyncEventListener;
 import org.apache.lens.server.api.events.LensEvent;
@@ -43,19 +47,17 @@ import org.apache.lens.server.api.session.SessionRestored;
 import org.apache.lens.server.query.QueryExecutionServiceImpl.QueryStatusLogger;
 import org.apache.lens.server.stats.event.query.QueryExecutionStatistics;
 
-import org.apache.log4j.Logger;
-
 import org.testng.annotations.BeforeTest;
 import org.testng.annotations.Test;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * The Class TestEventService.
  */
 @Test(groups = "unit-test")
+@Slf4j
 public class TestEventService {
-
-  /** The Constant LOG. */
-  public static final Logger LOG = Logger.getLogger(TestEventService.class);
 
   /** The service. */
   EventServiceImpl service;
@@ -94,7 +96,6 @@ public class TestEventService {
    * the genericEvent event occurs, that object's appropriate
    * method is invoked.
    *
-   * @see GenericEventEvent
    */
   class GenericEventListener extends AsyncEventListener<LensEvent> {
 
@@ -110,7 +111,7 @@ public class TestEventService {
     public void process(LensEvent event) {
       processed = true;
       latch.countDown();
-      LOG.info("LensEvent:" + event.getEventId());
+      log.info("LensEvent: {}", event.getEventId());
     }
   }
 
@@ -121,7 +122,6 @@ public class TestEventService {
    * the mockFailed event occurs, that object's appropriate
    * method is invoked.
    *
-   * @see MockFailedEvent
    */
   class MockFailedListener implements LensEventListener<QueryFailed> {
 
@@ -137,7 +137,7 @@ public class TestEventService {
     public void onEvent(QueryFailed change) throws LensException {
       processed = true;
       latch.countDown();
-      LOG.info("Query Failed event: " + change);
+      log.info("Query Failed event: {}", change);
     }
   }
 
@@ -148,7 +148,6 @@ public class TestEventService {
    * the mockEnded event occurs, that object's appropriate
    * method is invoked.
    *
-   * @see MockEndedEvent
    */
   class MockEndedListener implements LensEventListener<QueryEnded> {
 
@@ -164,7 +163,7 @@ public class TestEventService {
     public void onEvent(QueryEnded change) throws LensException {
       processed = true;
       latch.countDown();
-      LOG.info("Query ended event: " + change);
+      log.info("Query ended event: {}", change);
     }
   }
 
@@ -185,7 +184,7 @@ public class TestEventService {
     public void onEvent(QueuePositionChange change) throws LensException {
       processed = true;
       latch.countDown();
-      LOG.info("Query position changed: " + change);
+      log.info("Query position changed: {}", change);
     }
   }
 
@@ -206,7 +205,7 @@ public class TestEventService {
     public void onEvent(SessionOpened event) throws LensException {
       processed = true;
       latch.countDown();
-      LOG.info("Session opened: " + event);
+      log.info("Session opened: {}", event);
     }
   }
 
@@ -227,7 +226,7 @@ public class TestEventService {
     public void onEvent(SessionClosed event) throws LensException {
       processed = true;
       latch.countDown();
-      LOG.info("Session closed: " + event);
+      log.info("Session closed: {}", event);
     }
   }
 
@@ -248,7 +247,7 @@ public class TestEventService {
     public void onEvent(SessionExpired event) throws LensException {
       processed = true;
       latch.countDown();
-      LOG.info("Session expired: " + event);
+      log.info("Session expired: {}", event);
     }
   }
 
@@ -269,7 +268,7 @@ public class TestEventService {
     public void onEvent(SessionRestored event) throws LensException {
       processed = true;
       latch.countDown();
-      LOG.info("Session restored: " + event);
+      log.info("Session restored: {}", event);
     }
   }
 
@@ -280,11 +279,12 @@ public class TestEventService {
    */
   @BeforeTest
   public void setup() throws Exception {
+    System.setProperty(LensConfConstants.CONFIG_LOCATION, "target/test-classes/");
     LensServices.get().init(LensServerConf.getHiveConf());
     LensServices.get().start();
     service = LensServices.get().getService(LensEventService.NAME);
     assertNotNull(service);
-    LOG.info("Service started " + service);
+    log.info("Service started {}", service);
   }
 
   /**
@@ -292,7 +292,7 @@ public class TestEventService {
    */
   @Test
   public void testAddListener() {
-    int listenersBefore = ((EventServiceImpl) service).getEventListeners().keySet().size();
+    int listenersBefore = service.getEventListeners().keySet().size();
     genericEventListener = new GenericEventListener();
     service.addListenerForType(genericEventListener, LensEvent.class);
     endedListener = new MockEndedListener();
@@ -369,9 +369,9 @@ public class TestEventService {
 
     try {
       latch = new CountDownLatch(3);
-      LOG.info("Sending session opened  event: " + sessionOpenedEvent);
+      log.info("Sending session opened  event: {}", sessionOpenedEvent);
       service.notifyEvent(sessionOpenedEvent);
-      LOG.info("Sending session restored event: " + sessionRestored);
+      log.info("Sending session restored event: {}", sessionRestored);
       service.notifyEvent(sessionRestored);
       latch.await(5, TimeUnit.SECONDS);
       assertTrue(genericEventListener.processed);
@@ -387,16 +387,16 @@ public class TestEventService {
       };
 
       latch = new CountDownLatch(2);
-      LOG.info("Sending generic event " + genEvent.getEventId());
+      log.info("Sending generic event {}", genEvent.getEventId());
       service.notifyEvent(genEvent);
       latch.await(5, TimeUnit.SECONDS);
       assertTrue(genericEventListener.processed);
       resetSessionListeners();
 
       latch = new CountDownLatch(3);
-      LOG.info("Sending session closed event " + sessionClosedEvent);
+      log.info("Sending session closed event {}", sessionClosedEvent);
       service.notifyEvent(sessionClosedEvent);
-      LOG.info("Sending session expired event " + sessionExpired);
+      log.info("Sending session expired event {}", sessionExpired);
       service.notifyEvent(sessionExpired);
       latch.await(5, TimeUnit.SECONDS);
       assertTrue(sessionClosedListener.processed);
@@ -419,13 +419,15 @@ public class TestEventService {
     QueryHandle query = new QueryHandle(UUID.randomUUID());
     String user = "user";
     long now = System.currentTimeMillis();
-    QueryFailed failed = new QueryFailed(now, QueryStatus.Status.RUNNING, QueryStatus.Status.FAILED, query, user, null);
-    QuerySuccess success = new QuerySuccess(now, QueryStatus.Status.RUNNING, QueryStatus.Status.SUCCESSFUL, query);
+    QueryFailed failed
+      = new QueryFailed(null, now, QueryStatus.Status.RUNNING, QueryStatus.Status.FAILED, query, user, null);
+    QuerySuccess success
+      = new QuerySuccess(null, now, QueryStatus.Status.RUNNING, QueryStatus.Status.SUCCESSFUL, query);
     QueuePositionChange positionChange = new QueuePositionChange(now, 1, 0, query);
 
     try {
       latch = new CountDownLatch(3);
-      LOG.info("Sending event: " + failed);
+      log.info("Sending event: {}", failed);
       service.notifyEvent(failed);
       latch.await(5, TimeUnit.SECONDS);
       assertTrue(genericEventListener.processed);
@@ -435,7 +437,7 @@ public class TestEventService {
       resetListeners();
 
       latch = new CountDownLatch(2);
-      LOG.info("Sending event : " + success);
+      log.info("Sending event : {}", success);
       service.notifyEvent(success);
       latch.await(5, TimeUnit.SECONDS);
       assertTrue(genericEventListener.processed);
@@ -445,7 +447,7 @@ public class TestEventService {
       resetListeners();
 
       latch = new CountDownLatch(2);
-      LOG.info("Sending event: " + positionChange);
+      log.info("Sending event: {}", positionChange);
       service.notifyEvent(positionChange);
       latch.await(5, TimeUnit.SECONDS);
       assertTrue(genericEventListener.processed);
@@ -462,7 +464,7 @@ public class TestEventService {
       };
 
       latch = new CountDownLatch(1);
-      LOG.info("Sending generic event " + genEvent.getEventId());
+      log.info("Sending generic event {}", genEvent.getEventId());
       service.notifyEvent(genEvent);
       latch.await(5, TimeUnit.SECONDS);
       assertTrue(genericEventListener.processed);
@@ -502,6 +504,48 @@ public class TestEventService {
 
     latch.await();
 
+  }
+
+  @Test
+  public void testAysncEventListenerPoolThreads(){
+    AsyncEventListener<QuerySuccess> ayncListener = new DummyAsncEventListener();
+    for(int i=0; i<10; i++){
+      try {
+        //A pool thread is created each time an event is submitted until core pool size is reached which is 5
+        //for this test case.  @see org.apache.lens.server.api.events.AsyncEventListener.processor
+        ayncListener.onEvent(null);
+      } catch (LensException e) {
+        assert(false); //Not Expected
+      }
+    }
+
+    //Verify the core pool Threads after the events have been fired
+    ThreadGroup currentTG = Thread.currentThread().getThreadGroup();
+    int count = currentTG.activeCount();
+    Thread[] threads = new Thread[count];
+    currentTG.enumerate(threads);
+    Set<String> aysncThreadNames = new HashSet<String>();
+    for(Thread t : threads){
+      if (t.getName().contains("DummyAsncEventListener_AsyncThread")){
+        aysncThreadNames.add(t.getName());
+      }
+    }
+    assertTrue(aysncThreadNames.containsAll(Arrays.asList(
+      "DummyAsncEventListener_AsyncThread-1",
+      "DummyAsncEventListener_AsyncThread-2",
+      "DummyAsncEventListener_AsyncThread-3",
+      "DummyAsncEventListener_AsyncThread-4",
+      "DummyAsncEventListener_AsyncThread-5")));
+  }
+
+  private static class DummyAsncEventListener extends AsyncEventListener<QuerySuccess> {
+    public DummyAsncEventListener(){
+      super(5); //core pool = 5
+    }
+    @Override
+    public void process(QuerySuccess event) {
+      throw new RuntimeException("Simulated Exception");
+    }
   }
 
 }

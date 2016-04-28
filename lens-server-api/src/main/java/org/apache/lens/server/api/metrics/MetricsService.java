@@ -18,13 +18,15 @@
  */
 package org.apache.lens.server.api.metrics;
 
+import org.apache.lens.server.api.LensService;
+
 import org.glassfish.jersey.server.ContainerRequest;
 import org.glassfish.jersey.server.model.ResourceMethod;
 
 /**
  * The Interface MetricsService.
  */
-public interface MetricsService {
+public interface MetricsService extends LensService {
 
   /**
    * The Constant NAME.
@@ -33,22 +35,21 @@ public interface MetricsService {
 
   /**
    * Increment a counter with the given name Actual name of the counter will be
-   * <p/>
-   * <pre>MetricRegistry.name(MetricsService.class, counter)
-   * <p/>
-   * <pre>
+   * <p></p>
+   * <pre>MetricRegistry.name(MetricsService.class, counter)</pre>
+   * <p></p>
    *
    * @param counter the counter
    */
+
   void incrCounter(String counter);
 
   /**
    * Increment a counter with the name constructed using given class and counter name Actual name of the counter will
    * be
-   * <p/>
-   * <pre>MetricRegistry.name(cls, counter)
-   * <p/>
-   * <pre>
+   * <p></p>
+   * <pre>MetricRegistry.name(cls, counter)</pre>
+   * <p></p>
    *
    * @param cls     Class of the counter for namespacing the counter
    * @param counter the counter
@@ -57,10 +58,9 @@ public interface MetricsService {
 
   /**
    * Decrement a counter with the name costructed using given class and counter name Actual name of the counter will be
-   * <p/>
-   * <pre>MetricRegistry.name(cls, counter)
-   * <p/>
-   * <pre>
+   * <p></p>
+   * <pre>MetricRegistry.name(cls, counter)</pre>
+   * <p></p>
    *
    * @param cls     Class of the counter for namespacing of counters
    * @param counter the counter
@@ -69,10 +69,9 @@ public interface MetricsService {
 
   /**
    * Decrement a counter with the given name Actual name of the counter will be
-   * <p/>
-   * <pre>MetricRegistry.name(MetricsService.class, counter)
-   * <p/>
-   * <pre>
+   * <p></p>
+   * <pre>MetricRegistry.name(MetricsService.class, counter)</pre>
+   * <p></p>
    *
    * @param counter the counter
    */
@@ -121,6 +120,11 @@ public interface MetricsService {
   String RUNNING_QUERIES = "running-queries";
 
   /**
+   * The Constant WAITING_QUERIES.
+   */
+  String WAITING_QUERIES = "waiting-queries";
+
+  /**
    * The Constant FINISHED_QUERIES.
    */
   String FINISHED_QUERIES = "finished-queries";
@@ -138,6 +142,8 @@ public interface MetricsService {
   long getQueuedQueries();
 
   long getRunningQueries();
+
+  long getWaitingQueries();
 
   long getFinishedQueries();
 
@@ -189,4 +195,5 @@ public interface MetricsService {
    * Specifies the count of all opened sessions which are not closed after restarted and  the restored sessions
    */
   int getActiveSessions();
+
 }

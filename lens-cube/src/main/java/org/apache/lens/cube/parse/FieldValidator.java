@@ -24,13 +24,14 @@ import org.apache.lens.cube.error.ConflictingFields;
 import org.apache.lens.cube.error.FieldsCannotBeQueriedTogetherException;
 import org.apache.lens.cube.metadata.CubeInterface;
 import org.apache.lens.cube.metadata.DerivedCube;
-import org.apache.lens.cube.metadata.ReferencedDimAtrribute;
+import org.apache.lens.cube.metadata.ReferencedDimAttribute;
+import org.apache.lens.cube.metadata.ReferencedDimAttribute.ChainRefCol;
 import org.apache.lens.cube.parse.ExpressionResolver.ExprSpecContext;
+import org.apache.lens.server.api.error.LensException;
 
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 import org.apache.hadoop.hive.ql.parse.HiveParser;
-import org.apache.hadoop.hive.ql.parse.SemanticException;
 
 import com.google.common.collect.ImmutableSet;
 
@@ -40,11 +41,11 @@ import com.google.common.collect.ImmutableSet;
 public class FieldValidator implements ContextRewriter {
 
   @Override
-  public void rewriteContext(CubeQueryContext cubeql) throws FieldsCannotBeQueriedTogetherException, SemanticException {
+  public void rewriteContext(CubeQueryContext cubeql) throws LensException {
     validateFields(cubeql);
   }
 
-  public void validateFields(CubeQueryContext cubeql) throws FieldsCannotBeQueriedTogetherException, SemanticException {
+  public void validateFields(CubeQueryContext cubeql) throws LensException {
     CubeInterface cube = cubeql.getCube();
     if (cube == null) {
       return;
@@ -56,7 +57,7 @@ public class FieldValidator implements ContextRewriter {
       try {
         dcubes = cubeql.getMetastoreClient().getAllDerivedQueryableCubes(cube);
       } catch (HiveException e) {
-        throw new SemanticException(e);
+        throw new LensException(e);
       }
 
       ImmutableSet<String> queriedTimeDimCols = cubeql.getQueriedTimeDimCols();
@@ -134,7 +135,7 @@ public class FieldValidator implements ContextRewriter {
                                                  final ASTNode tree,
                                                  final Set<String> dimAttributes,
                                                  final Set<String> chainSourceColumns,
-                                                 final Set<String> nonQueryableColumns) throws SemanticException {
+                                                 final Set<String> nonQueryableColumns) throws LensException {
     if (tree == null || !cubeql.hasCubeInQuery()) {
       return;
     }
@@ -143,7 +144,7 @@ public class FieldValidator implements ContextRewriter {
 
     HQLParser.bft(tree, new HQLParser.ASTNodeVisitor() {
       @Override
-      public void visit(HQLParser.TreeNode treeNode) throws SemanticException {
+      public void visit(HQLParser.TreeNode treeNode) throws LensException {
         ASTNode astNode = treeNode.getNode();
         if (astNode.getToken().getType() == HiveParser.DOT) {
           // At this point alias replacer has run, so all columns are of the type table.column name
@@ -165,10 +166,11 @@ public class FieldValidator implements ContextRewriter {
 
               // If this is a referenced dim attribute leading to a chain, then instead of adding this
               // column, we add the source columns of the chain.
-              if (cube.getDimAttributeByName(colName) instanceof ReferencedDimAtrribute
-                && ((ReferencedDimAtrribute) cube.getDimAttributeByName(colName)).isChainedColumn()) {
-                ReferencedDimAtrribute rdim = (ReferencedDimAtrribute) cube.getDimAttributeByName(colName);
-                chainSourceColumns.addAll(cube.getChainByName(rdim.getChainName()).getSourceColumns());
+              if (cube.getDimAttributeByName(colName) instanceof ReferencedDimAttribute) {
+                ReferencedDimAttribute rdim = (ReferencedDimAttribute) cube.getDimAttributeByName(colName);
+                for (ChainRefCol refCol : rdim.getChainRefColumns()) {
+                  chainSourceColumns.addAll(cube.getChainByName(refCol.getChainName()).getSourceColumns());
+                }
               } else {
                 // This is a dim attribute, needs to be validated
                 dimAttributes.add(colName);

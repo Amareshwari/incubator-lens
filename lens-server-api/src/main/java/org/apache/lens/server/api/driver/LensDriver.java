@@ -20,7 +20,7 @@ package org.apache.lens.server.api.driver;
 
 import java.io.Externalizable;
 
-import org.apache.lens.api.query.QueryCost;
+import org.apache.lens.api.Priority;
 import org.apache.lens.api.query.QueryHandle;
 import org.apache.lens.api.query.QueryPrepareHandle;
 import org.apache.lens.server.api.error.LensException;
@@ -28,15 +28,18 @@ import org.apache.lens.server.api.events.LensEventListener;
 import org.apache.lens.server.api.query.AbstractQueryContext;
 import org.apache.lens.server.api.query.PreparedQueryContext;
 import org.apache.lens.server.api.query.QueryContext;
-import org.apache.lens.server.api.user.UserConfigLoader;
+import org.apache.lens.server.api.query.collect.WaitingQueriesSelectionPolicy;
+import org.apache.lens.server.api.query.constraint.QueryLaunchingConstraint;
+import org.apache.lens.server.api.query.cost.QueryCost;
 
 import org.apache.hadoop.conf.Configuration;
+
+import com.google.common.collect.ImmutableSet;
 
 /**
  * The Interface LensDriver.
  */
 public interface LensDriver extends Externalizable {
-
   /**
    * Get driver configuration
    */
@@ -46,9 +49,11 @@ public interface LensDriver extends Externalizable {
    * Configure driver with {@link Configuration} passed.
    *
    * @param conf The configuration object
+   * @param driverType Type of the driver (Example: hive, jdbc, el)
+   * @param driverName Name of this driver
    * @throws LensException the lens exception
    */
-  void configure(Configuration conf) throws LensException;
+  void configure(Configuration conf, String driverType, String driverName) throws LensException;
 
   /**
    * Estimate the cost of execution for given query.
@@ -57,7 +62,7 @@ public interface LensDriver extends Externalizable {
    *
    * @param qctx The query context
    *
-   * @return The QueryCost object
+   * @return The QueryCostTO object
    *
    * @throws LensException the lens exception if driver cannot estimate
    */
@@ -100,7 +105,7 @@ public interface LensDriver extends Externalizable {
 
   /**
    * Blocking execute of the query
-   * <p/>
+   * <p></p>
    * The driver would be closing the driver handle, once the results are fetched.
    *
    * @param context the context
@@ -146,7 +151,7 @@ public interface LensDriver extends Externalizable {
   LensResultSet fetchResultSet(QueryContext context) throws LensException;
 
   /**
-   * Close the resultset for the query.
+   * Close the resultset for the query. Closing an already closed resultset should not result in failures.
    *
    * @param handle The query handle
    * @throws LensException the lens exception
@@ -185,8 +190,39 @@ public interface LensDriver extends Externalizable {
   void registerDriverEventListener(LensEventListener<DriverEvent> driverEventListener);
 
   /**
-   * Add the user config loader to driver for use
-   * @param userConfigLoader
+   *
+   * @return The {@link QueryLaunchingConstraint}s to be checked before launching a query on driver. If there are no
+   * driver level constraints, then an empty set is returned. null is never returned.
    */
-  void registerUserConfigLoader(UserConfigLoader userConfigLoader);
+  ImmutableSet<QueryLaunchingConstraint> getQueryConstraints();
+
+  /**
+   *
+   * @return The {@link WaitingQueriesSelectionPolicy}s to be used to select waiting queries eligible to be moved out
+   * of waiting state. If there are no driver level waiting query selection policies, then an empty set is returned.
+   * null is never returned.
+   */
+  ImmutableSet<WaitingQueriesSelectionPolicy> getWaitingQuerySelectionPolicies();
+
+
+  /**
+   * @return fully qualified name of this driver. This should be unique for each driver instance. This name can be used
+   * for referring to the driver while logging, persisting and restoring driver details,etc.
+   * (Examples: hive/hive1, jdbc/mysql1 )
+   */
+  String getFullyQualifiedName();
+
+  /**
+   * decide priority based on query's cost. The cost should be already computed by estimate call, but it's
+   * not guaranteed to be pre-computed. It's up to the driver to do an on-demand computation of cost.
+   * @see AbstractQueryContext#decidePriority(LensDriver, QueryPriorityDecider) that handles this on-demand computation.
+   * @param queryContext
+   */
+  Priority decidePriority(AbstractQueryContext queryContext);
+
+  /**
+   * @return the DriverQueryHook implementation for the driver.
+   * @see DriverQueryHook for more details.
+   */
+  DriverQueryHook getQueryHook();
 }

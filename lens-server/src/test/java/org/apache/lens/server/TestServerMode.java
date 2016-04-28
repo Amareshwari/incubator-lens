@@ -35,9 +35,9 @@ import org.apache.lens.api.LensSessionHandle;
 import org.apache.lens.api.query.LensQuery;
 import org.apache.lens.api.query.QueryHandle;
 import org.apache.lens.api.query.QueryStatus;
-import org.apache.lens.api.response.LensResponse;
-import org.apache.lens.api.response.NoErrorPayload;
+import org.apache.lens.api.result.LensAPIResult;
 import org.apache.lens.server.LensServices.SERVICE_MODE;
+import org.apache.lens.server.common.RestAPITestUtil;
 
 import org.glassfish.jersey.media.multipart.FormDataBodyPart;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
@@ -53,6 +53,8 @@ import org.testng.annotations.Test;
 @Test(alwaysRun = true, groups = "filter-test", dependsOnGroups = "restart-test")
 public class TestServerMode extends LensAllApplicationJerseyTest {
 
+  private LensSessionHandle lensSessionHandle;
+
   /*
    * (non-Javadoc)
    *
@@ -61,6 +63,8 @@ public class TestServerMode extends LensAllApplicationJerseyTest {
   @BeforeTest
   public void setUp() throws Exception {
     super.setUp();
+    LensServerTestUtil.createTable("test_table", target(), RestAPITestUtil.openFooBarSession(target(), defaultMT),
+      defaultMT);
   }
 
   /*
@@ -70,6 +74,7 @@ public class TestServerMode extends LensAllApplicationJerseyTest {
    */
   @AfterTest
   public void tearDown() throws Exception {
+    RestAPITestUtil.closeSession(target(), lensSessionHandle, defaultMT);
     super.tearDown();
   }
 
@@ -174,7 +179,7 @@ public class TestServerMode extends LensAllApplicationJerseyTest {
 
     query.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("sessionid").build(), lensSessionId,
       MediaType.APPLICATION_XML_TYPE));
-    query.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("query").build(), "select name from table"));
+    query.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("query").build(), "select id from test_table"));
     query.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("operation").build(), "execute"));
     query.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("conf").fileName("conf").build(),
       new LensConf(), MediaType.APPLICATION_XML_TYPE));
@@ -182,7 +187,7 @@ public class TestServerMode extends LensAllApplicationJerseyTest {
     QueryHandle qhandle = null;
     try {
       qhandle = queryTarget.request().post(Entity.entity(query, MediaType.MULTIPART_FORM_DATA_TYPE),
-          new GenericType<LensResponse<QueryHandle, NoErrorPayload>>() {}).getData();
+          new GenericType<LensAPIResult<QueryHandle>>() {}).getData();
     } catch (NotAllowedException nae) {
       if (mode.equals(SERVICE_MODE.READ_ONLY)) {
         // expected

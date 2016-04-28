@@ -18,39 +18,57 @@
  */
 package org.apache.lens.server;
 
+import static org.apache.lens.server.LensServerTestUtil.DB_WITH_JARS;
+import static org.apache.lens.server.LensServerTestUtil.DB_WITH_JARS_2;
+import static org.apache.lens.server.LensServerTestUtil.createTestDatabaseResources;
+
 import static org.testng.Assert.*;
 
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.URI;
+import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
+import javax.ws.rs.client.Entity;
+import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.UriBuilder;
 
+import org.apache.lens.api.jaxb.LensJAXBContextResolver;
+import org.apache.lens.api.util.MoxyJsonConfigurationContextResolver;
 import org.apache.lens.driver.hive.TestRemoteHiveDriver;
 import org.apache.lens.server.api.LensConfConstants;
 import org.apache.lens.server.api.metrics.LensMetricsUtil;
 import org.apache.lens.server.api.metrics.MetricsService;
+import org.apache.lens.server.api.query.QueryExecutionService;
 import org.apache.lens.server.model.LogSegregationContext;
 import org.apache.lens.server.model.MappedDiagnosticLogSegregationContext;
+import org.apache.lens.server.query.QueryExecutionServiceImpl;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hive.service.Service;
 import org.apache.hive.service.Service.STATE;
 
+import org.glassfish.jersey.client.ClientConfig;
+import org.glassfish.jersey.media.multipart.MultiPartFeature;
+import org.glassfish.jersey.moxy.json.MoxyJsonFeature;
 import org.glassfish.jersey.test.JerseyTest;
 import org.testng.annotations.AfterSuite;
 import org.testng.annotations.BeforeSuite;
+import org.testng.annotations.DataProvider;
+
+import com.google.common.collect.Lists;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Extend this class for unit testing Lens Jersey resources
  */
+@Slf4j
 public abstract class LensJerseyTest extends JerseyTest {
 
-  public static final Log LOG = LogFactory.getLog(LensJerseyTest.class);
-
   private int port = -1;
+  protected MediaType defaultMT = MediaType.APPLICATION_XML_TYPE;
 
   private final LogSegregationContext logSegregationContext = new MappedDiagnosticLogSegregationContext();
 
@@ -63,15 +81,15 @@ public abstract class LensJerseyTest extends JerseyTest {
   }
 
   public void setUp() throws Exception {
-    LOG.info("setUp in class: " + this.getClass().getCanonicalName());
+    log.info("setUp in class: {}", this.getClass().getCanonicalName());
     super.setUp();
   }
   public void tearDown() throws Exception {
-    LOG.info("tearDown in class: " + this.getClass().getCanonicalName());
+    log.info("tearDown in class: {}", this.getClass().getCanonicalName());
     super.tearDown();
   }
   protected int getTestPort() {
-    if (!isPortAlreadyFound()) {
+    if (isPortAlreadyFound()) {
       return port;
     }
     ServerSocket socket = null;
@@ -79,14 +97,14 @@ public abstract class LensJerseyTest extends JerseyTest {
       socket = new ServerSocket(0);
       setPort(socket.getLocalPort());
     } catch (IOException e) {
-      LOG.info("Exception occured while creating socket. Use a default port number " + port);
+      log.info("Exception occured while creating socket. Use a default port number {}", port);
     } finally {
       try {
         if (socket != null) {
           socket.close();
         }
       } catch (IOException e) {
-        LOG.info("Exception occured while closing the socket ", e);
+        log.info("Exception occured while closing the socket", e);
       }
     }
     return port;
@@ -101,6 +119,14 @@ public abstract class LensJerseyTest extends JerseyTest {
     return UriBuilder.fromUri(getUri()).path("lens-server").build();
   }
 
+  @Override
+  protected void configureClient(ClientConfig config) {
+    config.register(MultiPartFeature.class);
+    config.register(MoxyJsonFeature.class);
+    config.register(MoxyJsonConfigurationContextResolver.class);
+    config.register(LensJAXBContextResolver.class);
+  }
+
   public HiveConf getServerConf() {
     return LensServerConf.getHiveConf();
   }
@@ -112,7 +138,9 @@ public abstract class LensJerseyTest extends JerseyTest {
    */
   @BeforeSuite
   public void startAll() throws Exception {
-    LOG.info("Before suite");
+    log.info("Before suite");
+    System.setProperty("lens.log.dir", "target/");
+    System.setProperty(LensConfConstants.CONFIG_LOCATION, "target/test-classes/");
     TestRemoteHiveDriver.createHS2Service();
     System.out.println("Remote hive server started!");
     HiveConf hiveConf = new HiveConf();
@@ -120,10 +148,10 @@ public abstract class LensJerseyTest extends JerseyTest {
     hiveConf.setIntVar(HiveConf.ConfVars.HIVE_SERVER2_THRIFT_CLIENT_CONNECTION_RETRY_LIMIT, 3);
     hiveConf.setIntVar(HiveConf.ConfVars.HIVE_SERVER2_THRIFT_CLIENT_RETRY_LIMIT, 3);
 
-    LensTestUtil.createTestDatabaseResources(new String[]{LensTestUtil.DB_WITH_JARS, LensTestUtil.DB_WITH_JARS_2},
+    createTestDatabaseResources(new String[]{DB_WITH_JARS, DB_WITH_JARS_2},
       hiveConf);
 
-    LensServices.get().init(LensServerConf.getHiveConf());
+    LensServices.get().init(getServerConf());
     LensServices.get().start();
 
     // Check if mock service is started
@@ -141,7 +169,7 @@ public abstract class LensJerseyTest extends JerseyTest {
    */
   @AfterSuite
   public void stopAll() throws Exception {
-    LOG.info("After suite");
+    log.info("After suite");
     verifyMetrics();
     LensServices.get().stop();
     System.out.println("Lens services stopped!");
@@ -155,7 +183,7 @@ public abstract class LensJerseyTest extends JerseyTest {
   protected void verifyMetrics() {
     // print final metrics
     System.out.println("Final report");
-    MetricsService metrics = ((MetricsService) LensServices.get().getService(MetricsService.NAME));
+    MetricsService metrics = LensServices.get().getService(MetricsService.NAME);
     metrics.publishReport();
 
     // validate http error count
@@ -186,22 +214,60 @@ public abstract class LensJerseyTest extends JerseyTest {
    */
   public void restartLensServer() {
     HiveConf h = getServerConf();
-    h.set(LensConfConstants.MAX_NUMBER_OF_FINISHED_QUERY, "0");
-    restartLensServer(h);
+    restartLensServer(h, false);
   }
 
   /**
    * Restart lens server.
    *
    * @param conf the conf
+   * @param pauseQuerySubmitter whether to pause query submitter while starting lens server
    */
-  public void restartLensServer(HiveConf conf) {
+  public void restartLensServer(HiveConf conf, boolean pauseQuerySubmitter) {
     LensServices.get().stop();
     LensMetricsUtil.clearRegistry();
     System.out.println("Lens services stopped!");
     LensServices.setInstance(new LensServices(LensServices.LENS_SERVICES_NAME, this.logSegregationContext));
     LensServices.get().init(conf);
+    if (pauseQuerySubmitter) {
+      QueryExecutionServiceImpl queryService = LensServices.get().getService(QueryExecutionService.NAME);
+      queryService.pauseQuerySubmitter(true);
+      System.out.println("Paused Query Submitter");
+    }
     LensServices.get().start();
     System.out.println("Lens services restarted!");
+  }
+
+  public static void waitForPurge(int allowUnpurgable,
+    ConcurrentLinkedQueue<QueryExecutionServiceImpl.FinishedQuery> finishedQueries) throws InterruptedException {
+    List<QueryExecutionServiceImpl.FinishedQuery> unPurgable = Lists.newArrayList();
+    for (QueryExecutionServiceImpl.FinishedQuery finishedQuery : finishedQueries) {
+      if (!finishedQuery.canBePurged()) {
+        unPurgable.add(finishedQuery);
+      }
+    }
+    if (unPurgable.size() > allowUnpurgable) {
+      throw new RuntimeException("finished queries can't be purged: " + unPurgable);
+    }
+    while (finishedQueries.size() > allowUnpurgable) {
+      Thread.sleep(5000);
+    }
+  }
+
+  @DataProvider(name = "mediaTypeData")
+  public Object[][] mediaTypeData() {
+    return new Object[][] {
+      {MediaType.APPLICATION_XML_TYPE},
+      {MediaType.APPLICATION_JSON_TYPE},
+    };
+  }
+
+  public static Entity getEntityForString(String o, MediaType mt) {
+    if (mt.equals(MediaType.APPLICATION_JSON_TYPE)) {
+      return Entity.json(o);
+    } else if (mt.equals(MediaType.APPLICATION_XML_TYPE)) {
+      return Entity.xml(o);
+    }
+    return Entity.entity(o, mt);
   }
 }

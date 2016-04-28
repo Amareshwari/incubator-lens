@@ -52,9 +52,9 @@ public final class LensConfConstants {
   public static final String METASTORE_PFX = "lens.metastore.";
 
   /**
-   * The Constant DRIVER_CLASSES.
+   * The Constant DRIVER_TYPES_AND_CLASSES
    */
-  public static final String DRIVER_CLASSES = SERVER_PFX + "drivers";
+  public static final String DRIVER_TYPES_AND_CLASSES = SERVER_PFX + "drivers";
   /**
    * The Constant DRIVER_SELECTOR_CLASS.
    */
@@ -88,6 +88,12 @@ public final class LensConfConstants {
    * The Constant WS_FEATURE_NAMES.
    */
   public static final String WS_FEATURE_NAMES = SERVER_PFX + "ws.featurenames";
+
+  public static final String MAX_SESSIONS_PER_USER = SERVER_PFX + "max.sessions.per.user";
+
+  public static final String QUERY_COMPARATOR_CLASS = SERVER_PFX + "query.comparator.class";
+
+  public static final Integer DEFAULT_MAX_SESSIONS_PER_USER = 10;
 
   /**
    * The Constant SERVICE_IMPL_SFX.
@@ -403,6 +409,26 @@ public final class LensConfConstants {
   public static final String NATIVE_TABLE_NAME = METASTORE_PFX + "native.table.name";
 
   /**
+   * The property name for setting the column mapping, if column names in native table are different
+   */
+  public static final String NATIVE_TABLE_COLUMN_MAPPING = METASTORE_PFX + "native.table.column.mapping";
+
+  /**
+   * The property name for setting the column mapping, if column names in cubes are different
+   */
+  public static final String CUBE_COLUMN_MAPPING = METASTORE_PFX + "cube.column.mapping";
+
+  /**
+   * The Constant ES_INDEX_NAME.
+   */
+  public static final String ES_INDEX_NAME = METASTORE_PFX + "es.index.name";
+
+  /**
+   * The Constant ES_TYPE_NAME.
+   */
+  public static final String ES_TYPE_NAME = METASTORE_PFX + "es.type.name";
+
+  /**
    * Gets the service impl conf key.
    *
    * @param sName the s name
@@ -716,7 +742,7 @@ public final class LensConfConstants {
    * Interval at which lens session expiry service runs
    */
   public static final String SESSION_EXPIRY_SERVICE_INTERVAL_IN_SECS = SERVER_PFX
-      + "session.expiry.serivce.interval.secs";
+    + "session.expiry.service.interval.secs";
 
   public static final int DEFAULT_SESSION_EXPIRY_SERVICE_INTERVAL_IN_SECS = 3600;
 
@@ -759,14 +785,14 @@ public final class LensConfConstants {
   // Query Purge Configuration
 
   /**
-   * The Constant MAX_NUMBER_OF_FINISHED_QUERY.
+   * The Constant PURGE_INTERVAL.
    */
-  public static final String MAX_NUMBER_OF_FINISHED_QUERY = SERVER_PFX + "max.finished.queries";
+  public static final String PURGE_INTERVAL = SERVER_PFX + "querypurger.sleep.interval";
 
   /**
-   * The Constant DEFAULT_FINISHED_QUERIES.
+   * The Constant DEFAULT_PURGE_INTERVAL.
    */
-  public static final int DEFAULT_FINISHED_QUERIES = 100;
+  public static final int DEFAULT_PURGE_INTERVAL = 10000;
 
   // Server DB configuration
   /**
@@ -892,4 +918,165 @@ public final class LensConfConstants {
   public static final String ESTIMATE_POOL_KEEP_ALIVE_MILLIS = SERVER_PFX + "estimate.pool.keepalive.millis";
   public static final int DEFAULT_ESTIMATE_POOL_KEEP_ALIVE_MILLIS = 60000; // 1 minute
 
+  public static final String QUERY_PHASE1_REWRITERS = SERVER_PFX + "query.phase1.rewriters";
+
+  /**
+   * Key to get the implementations of query constraint factories.
+   */
+  public static final String QUERY_LAUNCHING_CONSTRAINT_FACTORIES_KEY = SERVER_PFX
+    + "query.launching.constraint.factories";
+
+  /**
+   * Key to get the total query cost ceiling per user.
+   */
+  public static final String TOTAL_QUERY_COST_CEILING_PER_USER_KEY = SERVER_PFX
+      + "total.query.cost.ceiling.per.user";
+
+  /**
+   * Key to get the implementations of waiting queries selection policy factories.
+   */
+  public static final String WAITING_QUERIES_SELECTION_POLICY_FACTORIES_KEY = SERVER_PFX
+      + "waiting.queries.selection.policy.factories";
+
+  /**
+   * Key denoting the dialect class property of saved query service.
+   */
+  public static final String JDBC_DIALECT_PROVIDER_CLASS_KEY = "lens.server.savedquery.jdbc.dialectclass";
+
+  /**
+   * Key denoting the default fetch value of saved query list api.
+   */
+  public static final String FETCH_COUNT_SAVED_QUERY_LIST_KEY = "lens.server.savedquery.list.default.count";
+
+  /**
+   * Default fetch count of saved query list api.
+   */
+  public static final int DEFAULT_FETCH_COUNT_SAVED_QUERY_LIST = 20;
+
+  /**
+   * This is the base directory where all drivers are available under lens-server's Conf directory.
+   */
+  public static final String DRIVERS_BASE_DIR = "drivers";
+
+  /**
+   * Name of the property that holds the path of "conf" directory of server
+   */
+  public static final String CONFIG_LOCATION = "config.location";
+
+  /**
+   * Default location of "conf" directory (wrt to lens-server/bin)
+   */
+  public static final String DEFAULT_CONFIG_LOCATION = "../conf";
+
+  /**
+   * The Constant RESULTSET_PURGE_ENABLED.
+   */
+  public static final String RESULTSET_PURGE_ENABLED = SERVER_PFX + "resultset.purge.enabled";
+
+  /**
+   * The Constant DEFAULT_RESULTSET_PURGE_ENABLED
+   */
+  public static final boolean DEFAULT_RESULTSET_PURGE_ENABLED = false;
+
+  /**
+   * The Constant RESULTSET_PURGE_INTERVAL_IN_SECONDS.
+   */
+  public static final String RESULTSET_PURGE_INTERVAL_IN_SECONDS = SERVER_PFX + "resultsetpurger.sleep.interval.secs";
+
+  /*
+   * The Constant DEFAULT_RESULTSET_PURGE_INTERVAL_IN_SECONDS.
+   */
+  public static final int DEFAULT_RESULTSET_PURGE_INTERVAL_IN_SECONDS = 3600;
+
+  /**
+   * The Constant QUERY_RESULTSET_RETENTION.
+   */
+  public static final String QUERY_RESULTSET_RETENTION = SERVER_PFX + "query.resultset.retention";
+
+  /**
+   * The Constant DEFAULT_QUERY_RESULTSET_RETENTION.
+   */
+  public static final String DEFAULT_QUERY_RESULTSET_RETENTION = "1 day";
+
+  /**
+   * The Constant HDFS_OUTPUT_RETENTION.
+   */
+  public static final String HDFS_OUTPUT_RETENTION = SERVER_PFX + "hdfs.output.retention";
+
+  /**
+   * The Constant DEFAULT_HDFS_OUTPUT_RETENTION.
+   */
+  public static final String DEFAULT_HDFS_OUTPUT_RETENTION = "1 day";
+
+  /**
+   * Pre Fetch results in case of in memory result sets.
+   */
+  public static final String PREFETCH_INMEMORY_RESULTSET = QUERY_PFX + "prefetch.inmemory.resultset";
+
+  /**
+   * Pre Fetch results in case of in memory result sets is enabled by default
+   */
+  public static final boolean DEFAULT_PREFETCH_INMEMORY_RESULTSET = true;
+
+  /**
+   * Pre-Fetch size for in memory results. Makes sense only if {@link #PREFETCH_INMEMORY_RESULTSET} set to true
+   */
+  public static final String PREFETCH_INMEMORY_RESULTSET_ROWS = QUERY_PFX + "prefetch.inmemory.resultset.rows";
+
+  /**
+   * Default Pre-Fetch size for in memory results.
+   */
+  public static final int DEFAULT_PREFETCH_INMEMORY_RESULTSET_ROWS = 100;
+
+  /**
+   * The Constant EXCLUDE_CUBE_TABLES.
+   */
+  public static final String EXCLUDE_CUBE_TABLES = SESSION_PFX + "metastore.exclude.cubetables.from.nativetables";
+
+  /**
+   * The Constant DEFAULT_EXCLUDE_CUBE_TABLES.
+   */
+  public static final boolean DEFAULT_EXCLUDE_CUBE_TABLES = true;
+
+  /**
+   * This property defines the TTL secs for all result sets of
+   * type {@link org.apache.lens.server.api.driver.InMemoryResultSet} beyond which they are eligible for purging
+   */
+  public static final String INMEMORY_RESULT_SET_TTL_SECS = SERVER_PFX + "inmemory.resultset.ttl.secs";
+
+  /**
+   * Default value of  INMEMORY_RESULT_SET_TTL_SECS is 300 secs (5 minutes)
+   */
+  public static final int DEFAULT_INMEMORY_RESULT_SET_TTL_SECS = 300;
+
+  /**
+   * Number of retries status update will be retried, in case of transient failures
+   */
+  public static final String STATUS_UPDATE_EXPONENTIAL_RETRIES = SERVER_PFX + "status.update.num.retries";
+
+  /**
+   * Default value of STATUS_UPDATE_EXPONENTIAL_RETRIES is 10
+   */
+  public static final int DEFAULT_STATUS_UPDATE_EXPONENTIAL_RETRIES = 10;
+
+  /**
+   * Maximum delay a status update can wait for next update, in case of transient failures
+   */
+  public static final String MAXIMUM_STATUS_UPDATE_DELAY = SERVER_PFX + "status.update.maximum.delay.secs";
+
+  /**
+   * Default value of MAXIMUM_STATUS_UPDATE_DELAY is 1800 secs (30 minutes)
+   */
+  public static final long DEFAULT_MAXIMUM_STATUS_UPDATE_DELAY = 1800;
+
+  /**
+   * Number of seconds that would grow exponentially for next update, incase of transient failures.
+   */
+  public static final String STATUS_UPDATE_EXPONENTIAL_WAIT_FACTOR = SERVER_PFX
+    + "status.update.exponential.wait.millis";
+
+  /**
+   * Default value of DEFAULT_STATUS_UPDATE_EXPONENTIAL_WAIT_FACTOR is 30000 millis (30 seconds)
+   */
+  public static final long DEFAULT_STATUS_UPDATE_EXPONENTIAL_WAIT_FACTOR = 30000;
 }

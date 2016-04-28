@@ -167,7 +167,8 @@ public class DriverQueryStatus implements Serializable {
       break;
     }
 
-    return new QueryStatus(progress, qstate, statusMessage, isResultSetAvailable, progressMessage, errorMessage);
+    return new QueryStatus(progress, null, qstate, statusMessage, isResultSetAvailable, progressMessage,
+            errorMessage, null);
   }
 
   /**
@@ -178,8 +179,8 @@ public class DriverQueryStatus implements Serializable {
    * @return the query status
    */
   public static QueryStatus createQueryStatus(QueryStatus.Status state, DriverQueryStatus dstatus) {
-    return new QueryStatus(dstatus.progress, state, dstatus.statusMessage, dstatus.isResultSetAvailable,
-      dstatus.progressMessage, dstatus.errorMessage);
+    return new QueryStatus(dstatus.progress, null, state, dstatus.statusMessage,
+            dstatus.isResultSetAvailable, dstatus.progressMessage, dstatus.errorMessage, null);
   }
 
   /*
@@ -209,6 +210,10 @@ public class DriverQueryStatus implements Serializable {
   public boolean isFinished() {
     return state.equals(DriverQueryState.SUCCESSFUL) || state.equals(DriverQueryState.FAILED)
       || state.equals(DriverQueryState.CANCELED) || state.equals(DriverQueryState.CLOSED);
+  }
+
+  public boolean isSuccessful() {
+    return state.equals(DriverQueryState.SUCCESSFUL);
   }
 
 }

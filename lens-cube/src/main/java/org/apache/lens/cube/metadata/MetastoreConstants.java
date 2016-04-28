@@ -54,6 +54,16 @@ public final class MetastoreConstants {
   public static final String FACT_ABSOLUTE_START_TIME = "cube.fact.absolute.start.time";
   public static final String FACT_RELATIVE_START_TIME = "cube.fact.relative.start.time";
   public static final String FACT_ABSOLUTE_END_TIME = "cube.fact.absolute.end.time";
+  public static final String FACT_RELATIVE_END_TIME = "cube.fact.relative.end.time";
+
+  // cube segmentation constants
+  public static final String SEGMENTATION_KEY_PFX = "cube.segmentation.internal.";
+  public static final String SEGMENTATION_ABSOLUTE_START_TIME = "cube.segmentation.absolute.start.time";
+  public static final String SEGMENTATION_RELATIVE_START_TIME = "cube.segmentation.relative.start.time";
+  public static final String SEGMENTATION_ABSOLUTE_END_TIME = "cube.segmentation.absolute.end.time";
+  public static final String SEGMENTATION_RELATIVE_END_TIME = "cube.segmentation.relative.end.time";
+  public static final String SEGMENTATION_CUBE_SEGMENT_SFX = ".cubesegments";
+  public static final String SEGMENT_PROP_SFX = ".props.";
 
   // dim table constants
   // TODO: remove this and move to "dimtable."
@@ -73,6 +83,7 @@ public final class MetastoreConstants {
   public static final String DESC_SFX = ".description";
   public static final String DISPLAY_SFX = ".displaystring";
   public static final String NUM_DISTINCT_VALUES = ".num.distinct.values";
+  public static final String TAGS_PFX = ".tags.";
 
   // measure constants
   public static final String MEASURE_KEY_PFX = "cube.measure.";

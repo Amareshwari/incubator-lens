@@ -22,50 +22,45 @@ package org.apache.lens.server.util;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
-
 import org.apache.hadoop.fs.Path;
 
+import lombok.AllArgsConstructor;
+import lombok.Data;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
+
 @Slf4j
+@Data
+@AllArgsConstructor
 public class ScannedPaths implements Iterable<String> {
-  private String path = null;
-  private String type = null;
-
-  private Path fsPath;
-
-  /** Is the provided expression parsed **/
-  private boolean isScanned;
-
-  /* Keep all matched paths so we don't have to query filesystem multiple times */
-  private Map<String, String> matchedPaths = null;
+  private final Path path;
+  private final String type;
 
   /* The Chosen Ones */
-  @Getter(lazy=true) private final List<String> finalPaths = getMatchedPaths();
+  @Getter(lazy = true) private final List<String> finalPaths = getMatchedPaths(path, type);
 
   public ScannedPaths(String path, String type) {
-    this.path = path;
-    this.type = type;
+    this(new Path(path), type);
   }
+
 
   @Override
   public Iterator<String> iterator() {
-    /** Does all the pattern matching and returns the iterator to finalPaths collection **/
-    return (getFinalPaths() == null) ? null : getFinalPaths().iterator();
+    /** Does all the pattern matching and returns the iterator to finalPaths collection.
+     *  finalPaths should never be null.
+     **/
+    return getFinalPaths().iterator();
   }
 
   /**
@@ -75,123 +70,107 @@ public class ScannedPaths implements Iterable<String> {
    *
    * Updates finalPaths List with matched paths and returns an iterator for matched paths.
    */
-  private List<String> getMatchedPaths() {
-    List<String> finalPaths = null;
-    try {
-      FileSystem fs = FileSystem.get(new URI(path), new Configuration());
-      fsPath = new Path(new URI(path).getPath());
-
-      if (fs.isDirectory(fsPath)) {
-        findAllMatchedPaths(true);
-        filterByJarType();
-      /* Updates finalPaths List with restrictions imposed
-         by jar_order/glob_order file */
-        finalPaths = getMatchedPathsFilteredByOrder();
-      } else {
-        findAllMatchedPaths(false);
-        filterByJarType();
-        if (matchedPaths != null) {
-          finalPaths = new ArrayList<String>(matchedPaths.values());
-        }
-      }
-    } catch (FileNotFoundException fex) {
-      log.error("File not found while scanning path.", fex);
-    } catch (URISyntaxException | IOException ex) {
-      log.error("Exception while initializing PathScanner.", ex);
-    }
-    return finalPaths;
-  }
-
-  /**
-   * Populates the matchedPaths[] with all paths matching the pattern.
-   */
-  private void findAllMatchedPaths(boolean isDir) {
-    try {
-      Path path = isDir ? new Path(fsPath, "*") : fsPath;
-      FileStatus[] statuses = path.getFileSystem(new Configuration()).globStatus(path);
-
-      if (statuses == null || statuses.length == 0) {
-        log.info("No matched paths found for expression " + path);
-        return;
-      }
-      matchedPaths = new HashMap<String, String>();
-      for (int count = 0; count < statuses.length; count++) {
-        matchedPaths.put(statuses[count].getPath().getName(), statuses[count].getPath().toString());
-      }
-    } catch (FileNotFoundException fex) {
-      log.error("File not found while scanning path.", fex);
-      return;
-    } catch (IOException ioex) {
-      log.error("IOException while scanning path.", ioex);
-      return;
-    }
-  }
-
-  /**
-   * Filters the matchedPaths by "jar" type.
-   * Removes non-jar resources if type is specified as "jar".
-   */
-  private void filterByJarType() {
-    if (matchedPaths == null) {
-      return;
-    } else if (type.equalsIgnoreCase("jar")) {
-      Iterator<Map.Entry<String, String>> iter = matchedPaths.entrySet().iterator();
-
-      while (iter.hasNext()) {
-        Map.Entry<String, String> entry = iter.next();
-        if (!entry.getKey().endsWith(".jar")) {
-          iter.remove();
-        }
-      }
-    }
-  }
-
-  /**
-   * Filters the matchedPath[] to remove unwanted resources
-   * and apply ordering to the resources as specified in jar_order or glob_order file.
-   * Bypasses filtering if none of the files is present in the directory.
-   */
-  private List<String> getMatchedPathsFilteredByOrder() {
-    if (matchedPaths == null) {
-      return  null;
-    }
-
-    List<String> finalPaths = null;
+  private List<String> getMatchedPaths(Path pt, String type) {
+    List<String> finalPaths = new ArrayList<>();
     InputStream resourceOrderIStream = null;
-    List<String> resources;
+    FileSystem fs;
+
     try {
-      FileSystem fs = fsPath.getFileSystem(new Configuration());
-      Path resourceOrderFile = new Path(fsPath.toUri().getPath(), "jar_order");
+      fs = pt.getFileSystem(new Configuration());
+      if (fs.exists(pt)) {
+        if (fs.isFile(pt)) {
+          /**
+           * CASE 1 : Direct FILE provided in path
+           **/
+          finalPaths.add(pt.toUri().toString());
+        } else if (fs.isDirectory(pt)) {
+          /**
+           * CASE 2 : DIR provided in path
+           **/
+          Path resourceOrderFile;
+          FileStatus[] statuses;
+          List<String> newMatches;
+          List<String> resources;
 
-      if (!fs.exists(resourceOrderFile)) {
-        resourceOrderFile = new Path(fsPath.toUri().getPath(), "glob_order");
-        if (!fs.exists(resourceOrderFile)) {
-          /* No order file present. Bypass filtering and Add all resource matching pattern */
-          return new ArrayList<>(matchedPaths.values());
+          resourceOrderFile = new Path(pt, "jar_order");
+          /** Add everything in dir if no jar_order or glob_order is present **/
+          if (!fs.exists(resourceOrderFile)) {
+            resourceOrderFile = new Path(pt, "glob_order");
+            if (!fs.exists(resourceOrderFile)) {
+              resourceOrderFile = null;
+              /** Get matched resources recursively for all files **/
+              statuses = fs.globStatus(new Path(pt, "*"));
+              if (statuses != null) {
+                for (FileStatus st : statuses) {
+                  newMatches = getMatchedPaths(st.getPath(), type);
+                  finalPaths.addAll(newMatches);
+                }
+              }
+            }
+          }
+          if (resourceOrderFile != null) {
+            /** Else get jars as per order specified in jar_order/glob_order **/
+            resourceOrderIStream = fs.open(resourceOrderFile);
+            resources = IOUtils.readLines(resourceOrderIStream, Charset.forName("UTF-8"));
+            for (String resource : resources) {
+              if (StringUtils.isBlank(resource)) {
+                continue;
+              }
+              resource = resource.trim();
+
+              /** Get matched resources recursively for provided path/pattern **/
+              if (resource.startsWith("/") || resource.contains(":/")) {
+                newMatches = getMatchedPaths(new Path(resource), type);
+              } else {
+                newMatches = getMatchedPaths(new Path(pt, resource), type);
+              }
+              finalPaths.addAll(newMatches);
+            }
+          }
+        }
+      } else {
+        /**
+         * CASE 3 : REGEX provided in path
+         * */
+        FileStatus[] statuses = fs.globStatus(Path.getPathWithoutSchemeAndAuthority(pt));
+        if (statuses != null) {
+          for (FileStatus st : statuses) {
+            List<String> newMatches = getMatchedPaths(st.getPath(), type);
+            finalPaths.addAll(newMatches);
+          }
         }
       }
-
-      resourceOrderIStream = fs.open(resourceOrderFile);
-      resources = IOUtils.readLines(resourceOrderIStream, Charset.forName("UTF-8"));
-      finalPaths = new ArrayList<>();
-      for(String resource : resources) {
-        if (resource == null || resource.isEmpty()) {
-          continue;
-        }
-
-        if (matchedPaths.containsKey(resource)) {
-          finalPaths.add(matchedPaths.get(resource));
-        }
-      }
+      filterDirsAndJarType(fs, finalPaths);
     } catch (FileNotFoundException fex) {
-      log.error("File not found while scanning path.", fex);
-      finalPaths = null;
-    } catch (IOException ioex) {
-      log.error("IOException while scanning path.", ioex);
-      finalPaths = null;
+      log.error("File not found while scanning path. Path: {}, Type: {}", path, type, fex);
+    } catch (Exception e) {
+      log.error("Exception while initializing PathScanner. Path: {}, Type: {}", path, type, e);
     } finally {
       IOUtils.closeQuietly(resourceOrderIStream);
     }
+
     return finalPaths;
+  }
+
+
+  /**
+   * Skip Dirs from matched regex.
+   * We are interested only in file resources.
+   **/
+  private void filterDirsAndJarType(FileSystem fs, List<String> matches) {
+    try {
+      Iterator<String> iter = matches.iterator();
+      String path;
+      while (iter.hasNext()) {
+        path = iter.next();
+        if (fs.isDirectory(new Path(path))) {
+          iter.remove();
+        } else if (type.equalsIgnoreCase("jar") && !path.endsWith(".jar")) {
+          iter.remove();
+        }
+      }
+    } catch (IOException e) {
+      log.error("Exception while initializing filtering dirs", e);
+    }
   }
 }

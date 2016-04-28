@@ -45,13 +45,17 @@ public class TestLensDatabaseCommands extends LensCliApplicationTest {
   @Test
   public void testDatabaseCommands() throws URISyntaxException {
     LensClient client = new LensClient();
-    LensDatabaseCommands command = new LensDatabaseCommands();
-    LensCubeCommands cubeCommand = new LensCubeCommands();
-    command.setClient(client);
-    cubeCommand.setClient(client);
-    boolean cascade = true;
-    for(int i = 0; i < 4; i++, cascade = !cascade) {
-      testDrop(command, cubeCommand, cascade);
+    try {
+      LensDatabaseCommands command = new LensDatabaseCommands();
+      LensCubeCommands cubeCommand = new LensCubeCommands();
+      command.setClient(client);
+      cubeCommand.setClient(client);
+      boolean cascade = true;
+      for (int i = 0; i < 4; i++, cascade = !cascade) {
+        testDrop(command, cubeCommand, cascade);
+      }
+    } finally {
+      client.closeConnection();
     }
   }
 
@@ -67,8 +71,7 @@ public class TestLensDatabaseCommands extends LensCliApplicationTest {
     assertEquals(result, "Successfully switched to my_db");
     if (cascade) {
       String createOutput = cubeCommand.createCube(
-        new File(TestLensDatabaseCommands.class.getClassLoader().getResource("sample-cube.xml").toURI())
-          .getAbsolutePath());
+        new File(TestLensDatabaseCommands.class.getClassLoader().getResource("sample-cube.xml").toURI()));
       assertEquals(createOutput, "succeeded");
       assertTrue(cubeCommand.showCubes().contains("sample_cube"));
     }

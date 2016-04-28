@@ -35,19 +35,17 @@ import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.query.QueryExecutionService;
 
 import org.apache.commons.lang.StringUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 
 import org.glassfish.jersey.media.multipart.FormDataParam;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * The Class QueryServiceUIResource.
  */
 @Path("/queryuiapi")
+@Slf4j
 public class QueryServiceUIResource {
-
-  /** The Constant LOG. */
-  public static final Log LOG = LogFactory.getLog(QueryServiceUIResource.class);
 
   /** The query server. */
   private QueryExecutionService queryServer;
@@ -82,8 +80,8 @@ public class QueryServiceUIResource {
    * Instantiates a new query service ui resource.
    */
   public QueryServiceUIResource() {
-    LOG.info("Query UI Service");
-    queryServer = (QueryExecutionService) LensServices.get().getService("query");
+    log.info("Query UI Service");
+    queryServer = LensServices.get().getService(QueryExecutionService.NAME);
   }
 
   /**
@@ -105,9 +103,10 @@ public class QueryServiceUIResource {
    *
    * @param publicId  The public id of the session in which user is working
    * @param state     If any state is passed, all the queries in that state will be returned, otherwise all queries will
-   *                  be returned. Possible states are {@value QueryStatus.Status#values()}
+   *                  be returned. Possible states are {@link org.apache.lens.api.query.QueryStatus.Status#values()}
    * @param user      return queries matching the user. If set to "all", return queries of all users. By default,
    *                  returns queries of the current user.
+   * @param driver    Get queries submitted on a specific driver.
    * @param queryName human readable query name set by user (optional)
    * @param fromDate  the from date
    * @param toDate    the to date
@@ -115,16 +114,16 @@ public class QueryServiceUIResource {
    */
   @GET
   @Path("queries")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public List<QueryHandle> getAllQueries(@QueryParam("publicId") UUID publicId,
     @DefaultValue("") @QueryParam("state") String state, @DefaultValue("") @QueryParam("user") String user,
-    @DefaultValue("") @QueryParam("queryName") String queryName,
+    @DefaultValue("") @QueryParam("driver") String driver, @DefaultValue("") @QueryParam("queryName") String queryName,
     @DefaultValue("-1") @QueryParam("fromDate") long fromDate, @DefaultValue("-1") @QueryParam("toDate") long toDate) {
     LensSessionHandle sessionHandle = SessionUIResource.getOpenSession(publicId);
     checkSessionHandle(sessionHandle);
     try {
-      return queryServer.getAllQueries(sessionHandle, state, user, queryName, fromDate, toDate == -1L ? Long.MAX_VALUE
-        : toDate);
+      return queryServer.getAllQueries(sessionHandle, state, user, driver, queryName, fromDate,
+        toDate == -1L ? Long.MAX_VALUE : toDate);
     } catch (LensException e) {
       throw new WebApplicationException(e);
     }
@@ -142,7 +141,7 @@ public class QueryServiceUIResource {
   @POST
   @Path("queries")
   @Consumes({MediaType.MULTIPART_FORM_DATA})
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON,  MediaType.TEXT_PLAIN})
   public QuerySubmitResult query(@FormDataParam("publicId") UUID publicId, @FormDataParam("query") String query,
     @DefaultValue("") @FormDataParam("queryName") String queryName) {
     LensSessionHandle sessionHandle = SessionUIResource.getOpenSession(publicId);
@@ -166,7 +165,7 @@ public class QueryServiceUIResource {
    */
   @GET
   @Path("queries/{queryHandle}")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public LensQuery getStatus(@QueryParam("publicId") UUID publicId, @PathParam("queryHandle") String queryHandle) {
     LensSessionHandle sessionHandle = SessionUIResource.getOpenSession(publicId);
     checkSessionHandle(sessionHandle);
@@ -188,13 +187,13 @@ public class QueryServiceUIResource {
    */
   @GET
   @Path("queries/{queryHandle}/resultset")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public ResultRow getResultSet(@QueryParam("publicId") UUID publicId, @PathParam("queryHandle") String queryHandle,
     @QueryParam("pageNumber") int pageNumber, @QueryParam("fetchsize") int fetchSize) {
     LensSessionHandle sessionHandle = SessionUIResource.getOpenSession(publicId);
     checkSessionHandle(sessionHandle);
     List<Object> rows = new ArrayList<Object>();
-    LOG.info("FetchResultSet for queryHandle:" + queryHandle);
+    log.info("FetchResultSet for queryHandle:{}", queryHandle);
     try {
       QueryResultSetMetadata resultSetMetadata = queryServer.getResultSetMetadata(sessionHandle,
         getQueryHandle(queryHandle));
@@ -225,13 +224,13 @@ public class QueryServiceUIResource {
    *
    * @param publicId    The user session handle
    * @param queryHandle The query handle
-   * @return APIResult with state {@value org.apache.lens.api.APIResult.Status#SUCCEEDED} in case of successful
-   * cancellation. APIResult with state {@value org.apache.lens.api.APIResult.Status#FAILED} in case of cancellation
+   * @return APIResult with state {@link org.apache.lens.api.APIResult.Status#SUCCEEDED} in case of successful
+   * cancellation. APIResult with state {@link org.apache.lens.api.APIResult.Status#FAILED} in case of cancellation
    * failure.
    */
   @DELETE
   @Path("queries/{queryHandle}")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public APIResult cancelQuery(@QueryParam("sessionid") UUID publicId, @PathParam("queryHandle") String queryHandle) {
     LensSessionHandle sessionHandle = SessionUIResource.getOpenSession(publicId);
     checkSessionHandle(sessionHandle);

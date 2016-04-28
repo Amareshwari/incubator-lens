@@ -19,42 +19,42 @@
 package org.apache.lens.server.session;
 
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 
 import org.apache.lens.api.APIResult;
 import org.apache.lens.api.APIResult.Status;
 import org.apache.lens.api.LensConf;
 import org.apache.lens.api.LensSessionHandle;
 import org.apache.lens.api.StringList;
-import org.apache.lens.server.LensService;
+import org.apache.lens.api.error.ErrorCollection;
+import org.apache.lens.server.BaseLensService;
 import org.apache.lens.server.LensServices;
 import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.session.SessionService;
 import org.apache.lens.server.util.ScannedPaths;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import org.glassfish.jersey.media.multipart.FormDataParam;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Session resource api
- * <p/>
+ * <p></p>
  * This provides api for all things in session.
  */
-@Path("/session")
+@Path("session")
+@Slf4j
 public class SessionResource {
-
-  /** The Constant LOG. */
-  public static final Log LOG = LogFactory.getLog(SessionResource.class);
 
   /** The session service. */
   private SessionService sessionService;
+
+  private final ErrorCollection errorCollection;
 
   /**
    * API to know if session service is up and running
@@ -73,7 +73,8 @@ public class SessionResource {
    * @throws org.apache.lens.server.api.error.LensException the lens exception
    */
   public SessionResource() throws LensException {
-    sessionService = (SessionService) LensServices.get().getService("session");
+    sessionService = LensServices.get().getService(SessionService.NAME);
+    errorCollection = LensServices.get().getErrorCollection();
   }
 
   /**
@@ -87,11 +88,11 @@ public class SessionResource {
    */
   @POST
   @Consumes({MediaType.MULTIPART_FORM_DATA})
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public LensSessionHandle openSession(@FormDataParam("username") String username,
     @FormDataParam("password") String password,
     @FormDataParam("database")  @DefaultValue("") String database,
-    @FormDataParam("sessionconf") LensConf sessionconf) {
+    @FormDataParam("sessionconf") LensConf sessionconf) throws LensException {
     try {
       Map<String, String> conf;
       if (sessionconf != null) {
@@ -101,7 +102,10 @@ public class SessionResource {
       }
       return sessionService.openSession(username, password, database,   conf);
     } catch (LensException e) {
-      throw new WebApplicationException(e);
+      e.buildLensErrorResponse(errorCollection, null,
+          LensServices.get().getLogSegregationContext().getLogSegragationId());
+      Response response = Response.status(e.getLensAPIResult().getHttpStatusCode()).build();
+      throw new WebApplicationException(response);
     }
   }
 
@@ -112,11 +116,12 @@ public class SessionResource {
    * @return APIResult object indicating if the operation was successful (check result.getStatus())
    */
   @DELETE
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public APIResult closeSession(@QueryParam("sessionid") LensSessionHandle sessionid) {
     try {
       sessionService.closeSession(sessionid);
     } catch (LensException e) {
+      log.error("Got an exception while closing {} session: ", sessionid, e);
       return new APIResult(Status.FAILED, e.getMessage());
     }
     return new APIResult(Status.SUCCEEDED, "Close session with id" + sessionid + "succeeded");
@@ -124,7 +129,7 @@ public class SessionResource {
 
   /**
    * Add a resource to the session to all LensServices running in this Lens server
-   * <p/>
+   * <p></p>
    * <p>
    * The returned @{link APIResult} will have status SUCCEEDED <em>only if</em> the add operation was successful for all
    * services running in this Lens server.
@@ -140,20 +145,17 @@ public class SessionResource {
   @PUT
   @Path("resources/add")
   @Consumes({MediaType.MULTIPART_FORM_DATA})
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public APIResult addResource(@FormDataParam("sessionid") LensSessionHandle sessionid,
     @FormDataParam("type") String type, @FormDataParam("path") String path) {
-    Iterator<String> foundFiles = new ScannedPaths(path, type).iterator();
-    String matchedPath = null;
+    ScannedPaths scannedPaths = new ScannedPaths(path, type);
     int matchedPathsCount = 0;
 
-    if (foundFiles == null) {
-      return new APIResult(Status.FAILED, "No matching resources found for provided path.");
-    }
-
     int numAdded = 0;
-    while (foundFiles.hasNext()) {
-      matchedPath = foundFiles.next();
+    for (String matchedPath : scannedPaths) {
+      if (matchedPath.startsWith("file:") && !matchedPath.startsWith("file://")) {
+        matchedPath = "file://" + matchedPath.substring("file:".length());
+      }
       numAdded += sessionService.addResourceToAllServices(sessionid, type, matchedPath);
       matchedPathsCount++;
     }
@@ -176,7 +178,7 @@ public class SessionResource {
    */
   @GET
   @Path("resources/list")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public StringList listResources(@QueryParam("sessionid") LensSessionHandle sessionid,
     @QueryParam("type") String type) {
     List<String> resources = sessionService.listAllResources(sessionid, type);
@@ -200,27 +202,23 @@ public class SessionResource {
   @Path("resources/delete")
 
   @Consumes({MediaType.MULTIPART_FORM_DATA})
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public APIResult deleteResource(@FormDataParam("sessionid") LensSessionHandle sessionid,
     @FormDataParam("type") String type, @FormDataParam("path") String path) {
-    Iterator<String> foundFiles = new ScannedPaths(path, type).iterator();
-    String matchedPath = null;
-
-    if (foundFiles == null) {
-      return new APIResult(Status.PARTIAL, "No matching resources found for provided path.");
-    }
+    ScannedPaths scannedPaths = new ScannedPaths(path, type);
 
     int numDeleted = 0;
 
-    while(foundFiles.hasNext()) {
-      matchedPath = foundFiles.next();
-
-      for (LensService service : LensServices.get().getLensServices()) {
+    for(String matchedPath : scannedPaths) {
+      for (BaseLensService service : LensServices.get().getLensServices()) {
         try {
+          if (matchedPath.startsWith("file:") && !matchedPath.startsWith("file://")) {
+            matchedPath = "file://" + matchedPath.substring("file:".length());
+          }
           service.deleteResource(sessionid, type, matchedPath);
           numDeleted++;
         } catch (LensException e) {
-          LOG.error("Failed to delete resource in service:" + service, e);
+          log.error("Failed to delete resource in service:{}", service, e);
           if (numDeleted != 0) {
             return new APIResult(Status.PARTIAL, "Delete resource is partial, failed for service:" + service.getName());
           } else {
@@ -243,7 +241,7 @@ public class SessionResource {
    */
   @GET
   @Path("params")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public StringList getParams(@QueryParam("sessionid") LensSessionHandle sessionid,
     @DefaultValue("false") @QueryParam("verbose") boolean verbose, @DefaultValue("") @QueryParam("key") String key) {
     try {
@@ -256,7 +254,7 @@ public class SessionResource {
 
   /**
    * Set value for a parameter specified by key
-   * <p/>
+   * <p></p>
    * The parameters can be a hive variable or a configuration. To set key as a hive variable, the key should be prefixed
    * with 'hivevar:'. To set key as configuration parameter, the key should be prefixed with 'hiveconf:' If no prefix is
    * attached, the parameter is set as configuration.
@@ -268,7 +266,7 @@ public class SessionResource {
    */
   @PUT
   @Path("params")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public APIResult setParam(@FormDataParam("sessionid") LensSessionHandle sessionid, @FormDataParam("key") String key,
     @FormDataParam("value") String value) {
     sessionService.setSessionParameter(sessionid, key, value);

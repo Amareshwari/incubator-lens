@@ -18,9 +18,11 @@
  */
 package org.apache.lens.cli;
 
+import java.util.HashMap;
+
 import org.apache.lens.cli.commands.LensNativeTableCommands;
 import org.apache.lens.client.LensClient;
-import org.apache.lens.server.LensTestUtil;
+import org.apache.lens.server.LensServerTestUtil;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,14 +45,14 @@ public class TestLensNativeTableCommands extends LensCliApplicationTest {
    */
   @Test
   public void testNativeTableCommands() throws Exception {
+    LensClient client = new LensClient();
     try {
-      LensClient client = new LensClient();
       LensNativeTableCommands command = new LensNativeTableCommands();
       command.setClient(client);
       LOG.debug("Starting to test nativetable commands");
       String tblList = command.showNativeTables();
       Assert.assertFalse(tblList.contains("test_native_table_command"));
-      LensTestUtil.createHiveTable("test_native_table_command");
+      LensServerTestUtil.createHiveTable("test_native_table_command", new HashMap<String, String>());
       tblList = command.showNativeTables();
       Assert.assertTrue(tblList.contains("test_native_table_command"));
 
@@ -61,8 +63,8 @@ public class TestLensNativeTableCommands extends LensCliApplicationTest {
       Assert.assertTrue(desc.contains("MANAGED_TABLE"));
       Assert.assertTrue(desc.contains("test.hive.table.prop"));
     } finally {
-      LensTestUtil.dropHiveTable("test_native_table_command");
-
+      LensServerTestUtil.dropHiveTable("test_native_table_command");
+      client.closeConnection();
     }
   }
 }

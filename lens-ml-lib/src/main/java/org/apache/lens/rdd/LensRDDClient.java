@@ -28,11 +28,10 @@ import java.util.UUID;
 import org.apache.lens.api.query.*;
 import org.apache.lens.client.LensClient;
 import org.apache.lens.client.LensClientResultSet;
+import org.apache.lens.client.exceptions.LensAPIException;
 import org.apache.lens.ml.algo.spark.HiveTableRDD;
 import org.apache.lens.server.api.error.LensException;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
@@ -49,13 +48,14 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.rdd.RDD;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * <p>
  * Create RDD from a Lens query. User can poll returned query handle with isReadyForRDD() until the RDD is ready to be
  * used.
- * <p/>
+ * </p>
  * Example -
- * <p/>
  * <pre>
  *   LensRDDClient client = new LensRDDClient(javaSparkContext);
  *   QueryHandle query = client.createLensRDDAsync("SELECT msr1 from TEST_CUBE WHERE ...", conf);
@@ -64,27 +64,21 @@ import org.apache.spark.rdd.RDD;
  *     Thread.sleep(1000);
  *   }
  *
- *   JavaRDD<ResultRow> rdd = client.getRDD(query).toJavaRDD();
+ *   JavaRDD&lt;ResultRow&gt; rdd = client.getRDD(query).toJavaRDD();
  *
  *   // Consume RDD here -
  *   rdd.map(...);
  * </pre>
- * <p/>
- * </p>
- * <p/>
  * <p>
  * Alternatively in blocking mode
- * <p/>
+ * </p>
  * <pre>
  * JavaRDD&lt;ResultRow&gt; rdd = client.createLensRDD(&quot;SELECT msr1 from TEST_CUBE WHERE ...&quot;, conf);
  * </pre>
- * <p/>
- * </p>
  */
+@Slf4j
 public class LensRDDClient {
 
-  /** The Constant LOG. */
-  public static final Log LOG = LogFactory.getLog(LensRDDClient.class);
   // Default input format for table created from Lens result set
   /** The Constant INPUT_FORMAT. */
   private static final String INPUT_FORMAT = TextInputFormat.class.getName();
@@ -167,9 +161,9 @@ public class LensRDDClient {
    *
    * @param query the query
    * @return the query handle
-   * @throws LensException the lens exception
+   * @throws LensAPIException the lens exception
    */
-  public QueryHandle createLensRDDAsync(String query) throws LensException {
+  public QueryHandle createLensRDDAsync(String query) throws LensAPIException {
     return getClient().executeQueryAsynch(query, "");
   }
 
@@ -236,7 +230,7 @@ public class LensRDDClient {
     try {
       rdd = HiveTableRDD.createHiveTableRDD(sparkContext, HIVE_CONF, "default", tempTableName, TEMP_TABLE_PART_COL
         + "='" + TEMP_TABLE_PART_VAL + "'");
-      LOG.info("Created RDD " + rdd.name() + " for table " + tempTableName);
+      log.info("Created RDD {} for table {}", rdd.name(), tempTableName);
     } catch (IOException e) {
       throw new LensException("Error creating RDD for table " + tempTableName, e);
     }
@@ -273,7 +267,7 @@ public class LensRDDClient {
     tbl.getPartCols().add(new FieldSchema(TEMP_TABLE_PART_COL, "string", "default"));
     hiveClient.createTable(tbl);
 
-    LOG.info("Table " + tableName + " created");
+    log.info("Table {} created", tableName);
 
     // Add partition to the table
     AddPartitionDesc partitionDesc = new AddPartitionDesc("default", tableName, false);
@@ -281,7 +275,7 @@ public class LensRDDClient {
     partSpec.put(TEMP_TABLE_PART_COL, TEMP_TABLE_PART_VAL);
     partitionDesc.addPartition(partSpec, dataLocation);
     hiveClient.createPartitions(partitionDesc);
-    LOG.info("Created partition in " + tableName + " for data in " + dataLocation);
+    log.info("Created partition in {} for data in {}", tableName, dataLocation);
 
     return tableName;
   }
@@ -305,13 +299,13 @@ public class LensRDDClient {
    * @return the lens rdd result
    * @throws LensException the lens exception
    */
-  public LensRDDResult createLensRDD(String query) throws LensException {
+  public LensRDDResult createLensRDD(String query) throws LensAPIException, LensException {
     QueryHandle queryHandle = createLensRDDAsync(query);
     while (!isReadyForRDD(queryHandle)) {
       try {
         Thread.sleep(1000);
       } catch (InterruptedException e) {
-        LOG.warn("Interrupted while waiting for query", e);
+        log.warn("Interrupted while waiting for query", e);
         break;
       }
     }
@@ -374,7 +368,7 @@ public class LensRDDClient {
           JavaPairRDD<WritableComparable, HCatRecord> javaPairRDD = HiveTableRDD.createHiveTableRDD(sparkContext,
             HIVE_CONF, "default", tempTableName, TEMP_TABLE_PART_COL + "='" + TEMP_TABLE_PART_VAL + "'");
           resultRDD = javaPairRDD.map(new HCatRecordToObjectListMapper()).rdd();
-          LOG.info("Created RDD " + resultRDD.name() + " for table " + tempTableName);
+          log.info("Created RDD {} for table {}", resultRDD.name(), tempTableName);
         } catch (IOException e) {
           throw new LensException("Error creating RDD for table " + tempTableName, e);
         }
@@ -396,7 +390,7 @@ public class LensRDDClient {
       try {
         hiveClient = Hive.get(HIVE_CONF);
         hiveClient.dropTable("default." + tempTableName);
-        LOG.info("Dropped temp table " + tempTableName);
+        log.info("Dropped temp table {}", tempTableName);
       } catch (HiveException e) {
         throw new LensException(e);
       }

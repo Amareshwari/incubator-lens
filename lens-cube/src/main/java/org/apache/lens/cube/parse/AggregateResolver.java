@@ -24,21 +24,21 @@ import static org.apache.hadoop.hive.ql.parse.HiveParser.TOK_TABLE_OR_COL;
 
 import java.util.Iterator;
 
+import org.apache.lens.cube.error.LensCubeErrorCode;
 import org.apache.lens.cube.metadata.CubeMeasure;
 import org.apache.lens.cube.parse.CandidateTablePruneCause.CandidateTablePruneCode;
 import org.apache.lens.cube.parse.ExpressionResolver.ExprSpecContext;
+import org.apache.lens.server.api.error.LensException;
 
 import org.apache.commons.lang.StringUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hive.ql.ErrorMsg;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 import org.apache.hadoop.hive.ql.parse.BaseSemanticAnalyzer;
 import org.apache.hadoop.hive.ql.parse.HiveParser;
-import org.apache.hadoop.hive.ql.parse.SemanticException;
 
 import org.antlr.runtime.CommonToken;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * <p> Replace select and having columns with default aggregate functions on them, if default aggregate is defined and
@@ -46,14 +46,11 @@ import org.antlr.runtime.CommonToken;
  * contain aggregate sub-expressions will not be changed. </p> <p/> <p> At this point it's assumed that aliases have
  * been added to all columns. </p>
  */
+@Slf4j
 class AggregateResolver implements ContextRewriter {
-  public static final Log LOG = LogFactory.getLog(AggregateResolver.class.getName());
-
-  public AggregateResolver(Configuration conf) {
-  }
 
   @Override
-  public void rewriteContext(CubeQueryContext cubeql) throws SemanticException {
+  public void rewriteContext(CubeQueryContext cubeql) throws LensException {
     if (cubeql.getCube() == null) {
       return;
     }
@@ -83,7 +80,7 @@ class AggregateResolver implements ContextRewriter {
         }
       }
       nonDefaultAggregates = true;
-      LOG.info("Query has non default aggregates, no aggregate resolution will be done");
+      log.info("Query has non default aggregates, no aggregate resolution will be done");
     }
 
     cubeql.pruneCandidateFactSet(CandidateTablePruneCode.MISSING_DEFAULT_AGGREGATE);
@@ -99,7 +96,9 @@ class AggregateResolver implements ContextRewriter {
     Configuration distConf = cubeql.getConf();
     boolean isDimOnlyDistinctEnabled = distConf.getBoolean(CubeQueryConfUtil.ENABLE_ATTRFIELDS_ADD_DISTINCT,
       CubeQueryConfUtil.DEFAULT_ATTR_FIELDS_ADD_DISTINCT);
-    if (isDimOnlyDistinctEnabled) {
+    //Having clause will always work with measures, if only keys projected
+    //query should skip distinct and promote group by.
+    if (cubeql.getHavingAST() == null && isDimOnlyDistinctEnabled) {
       // Check if any measure/aggregate columns and distinct clause used in
       // select tree. If not, update selectAST token "SELECT" to "SELECT DISTINCT"
       if (!hasMeasures(cubeql, cubeql.getSelectAST()) && !isDistinctClauseUsed(cubeql.getSelectAST())
@@ -112,7 +111,7 @@ class AggregateResolver implements ContextRewriter {
   // We need to traverse the clause looking for eligible measures which can be
   // wrapped inside aggregates
   // We have to skip any columns that are already inside an aggregate UDAF
-  private String resolveClause(CubeQueryContext cubeql, ASTNode clause) throws SemanticException {
+  private String resolveClause(CubeQueryContext cubeql, ASTNode clause) throws LensException {
 
     if (clause == null) {
       return null;
@@ -163,20 +162,20 @@ class AggregateResolver implements ContextRewriter {
 
   // Wrap an aggregate function around the node if its a measure, leave it
   // unchanged otherwise
-  private ASTNode wrapAggregate(CubeQueryContext cubeql, ASTNode node) throws SemanticException {
+  private ASTNode wrapAggregate(CubeQueryContext cubeql, ASTNode node) throws LensException {
 
     String tabname = null;
     String colname;
 
     if (node.getToken().getType() == HiveParser.TOK_TABLE_OR_COL) {
-      colname = ((ASTNode) node.getChild(0)).getText();
+      colname = node.getChild(0).getText();
     } else {
       // node in 'alias.column' format
       ASTNode tabident = HQLParser.findNodeByPath(node, TOK_TABLE_OR_COL, Identifier);
       ASTNode colIdent = (ASTNode) node.getChild(1);
 
-      colname = colIdent.getText();
-      tabname = tabident.getText();
+      colname = colIdent.getText().toLowerCase();
+      tabname = tabident.getText().toLowerCase();
     }
 
     String msrname = StringUtils.isBlank(tabname) ? colname : tabname + "." + colname;
@@ -198,21 +197,14 @@ class AggregateResolver implements ContextRewriter {
         String aggregateFn = measure.getAggregate();
 
         if (StringUtils.isBlank(aggregateFn)) {
-          throw new SemanticException(ErrorMsg.NO_DEFAULT_AGGREGATE, colname);
-        }
-        ASTNode fnroot = new ASTNode(new CommonToken(HiveParser.TOK_FUNCTION, "TOK_FUNCTION"));
-        if (node.getParent() != null) {
-          fnroot.setParent(node.getParent());
+          throw new LensException(LensCubeErrorCode.NO_DEFAULT_AGGREGATE.getLensErrorInfo(), colname);
         }
 
+        ASTNode fnroot = new ASTNode(new CommonToken(HiveParser.TOK_FUNCTION));
         ASTNode fnIdentNode = new ASTNode(new CommonToken(HiveParser.Identifier, aggregateFn));
-        fnIdentNode.setParent(fnroot);
         fnroot.addChild(fnIdentNode);
-
-        node.setParent(fnroot);
         fnroot.addChild(node);
         LOG.info("returning is fnroot:" + fnroot.dump());
-
         return fnroot;
       }
     } else {
@@ -235,7 +227,7 @@ class AggregateResolver implements ContextRewriter {
 
       String colname;
       if (node.getToken().getType() == HiveParser.TOK_TABLE_OR_COL) {
-        colname = ((ASTNode) node.getChild(0)).getText();
+        colname = node.getChild(0).getText();
       } else {
         // node in 'alias.column' format
         ASTNode colIdent = (ASTNode) node.getChild(1);

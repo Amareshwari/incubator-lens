@@ -44,6 +44,10 @@ CREATE TABLE mydb_sales_aggr_fact1 (order_time timestamp, delivery_time timestam
 INSERT INTO mydb_sales_aggr_fact1 (order_time, delivery_time, customer_id, product_id, promotion_id, customer_city_id, production_city_id, delivery_city_id, unit_sales, store_sales, store_cost, max_line_item_price, max_line_item_discount) values ('2015-04-12 00:00:00','2015-04-12 00:00:00',1,1,1,1,1,1,1,5,0,5,0)
 INSERT INTO mydb_sales_aggr_fact1 (order_time, delivery_time, customer_id, product_id, promotion_id, customer_city_id, production_city_id, delivery_city_id, unit_sales, store_sales, store_cost, max_line_item_price, max_line_item_discount) values ('2015-04-12 00:00:00','2015-04-12 00:00:00',2,2,1,2,2,2,1,8,2,10,2)
 
+DROP TABLE IF EXISTS mydb_sales_aggr_continuous_fact
+CREATE TABLE mydb_sales_aggr_continuous_fact (order_time timestamp, delivery_time timestamp, customer_id integer, product_id integer, promotion_id integer, customer_city_id integer, production_city_id integer, delivery_city_id integer, unit_sales double, store_sales double, store_cost double, max_line_item_price float, max_line_item_discount float)
+
+
 DROP TABLE IF EXISTS mydb_product_db_table
 CREATE TABLE mydb_product_db_table (id integer, SKU_number integer, description varchar(255), color varchar(50), category varchar(255), weight float, manufacturer varchar(255))
 
@@ -68,3 +72,21 @@ INSERT INTO mydb_city_subset (id, name) values (1, 'Bangalore')
 INSERT INTO mydb_city_subset (id, name) values (2, 'Hyderabad')
 INSERT INTO mydb_city_subset (id, name) values (3, 'Austin')
 INSERT INTO mydb_city_subset (id, name) values (4, 'San Fransisco')
+
+DROP TABLE IF EXISTS mydb_customer_interests_table
+CREATE TABLE mydb_customer_interests_table (customer_id integer, interest_id integer)
+
+INSERT INTO mydb_customer_interests_table (customer_id, interest_id) values (1,1)
+INSERT INTO mydb_customer_interests_table (customer_id, interest_id) values (1,2)
+INSERT INTO mydb_customer_interests_table (customer_id, interest_id) values (3,1)
+INSERT INTO mydb_customer_interests_table (customer_id, interest_id) values (4,1)
+INSERT INTO mydb_customer_interests_table (customer_id, interest_id) values (4,1)
+INSERT INTO mydb_customer_interests_table (customer_id, interest_id) values (4,3)
+
+DROP TABLE IF EXISTS mydb_interests_table
+CREATE TABLE mydb_interests_table (id integer, name varchar(255))
+
+INSERT INTO mydb_interests_table (id, name) values (1,'Food')
+INSERT INTO mydb_interests_table (id, name) values (2,'Fashion')
+INSERT INTO mydb_interests_table (id, name) values (3,'Furniture')
+INSERT INTO mydb_interests_table (id, name) values (4,'Electronics')

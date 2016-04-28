@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -111,6 +111,6 @@ fi
 # finally, invoke the appropriate command
 
 exec ${JAVA_BIN} ${JAVA_PROPERTIES} -cp ${LENSCPPATH} \
-      "$CLI_JAR" $*
+      "$CLI_JAR" $args
 
 exit 0

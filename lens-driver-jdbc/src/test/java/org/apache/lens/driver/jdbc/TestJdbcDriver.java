@@ -18,46 +18,41 @@
  */
 package org.apache.lens.driver.jdbc;
 
-import static org.apache.lens.server.api.user.MockUserConfigLoader.*;
+import static org.apache.lens.driver.jdbc.JDBCDriverConfConstants.*;
+import static org.apache.lens.driver.jdbc.JDBCDriverConfConstants.ConnectionPoolProperties.*;
 
 import static org.testng.Assert.*;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.lens.api.LensConf;
-import org.apache.lens.api.query.QueryCost;
 import org.apache.lens.api.query.QueryHandle;
 import org.apache.lens.api.query.ResultRow;
 import org.apache.lens.server.api.LensConfConstants;
 import org.apache.lens.server.api.driver.*;
 import org.apache.lens.server.api.driver.DriverQueryStatus.DriverQueryState;
-import org.apache.lens.server.api.driver.LensDriver;
 import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.metrics.LensMetricsRegistry;
 import org.apache.lens.server.api.query.ExplainQueryContext;
 import org.apache.lens.server.api.query.PreparedQueryContext;
 import org.apache.lens.server.api.query.QueryContext;
-import org.apache.lens.server.api.user.MockUserConfigLoader;
+import org.apache.lens.server.api.query.cost.QueryCost;
 import org.apache.lens.server.api.util.LensUtil;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.ql.session.SessionState;
+
 import org.apache.hive.service.cli.ColumnDescriptor;
 
 import org.testng.Assert;
-import org.testng.annotations.AfterTest;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.BeforeTest;
-import org.testng.annotations.Test;
+import org.testng.annotations.*;
 
 import com.codahale.metrics.MetricRegistry;
+import com.google.common.collect.Lists;
 import com.mchange.v2.c3p0.ComboPooledDataSource;
 
 import lombok.extern.slf4j.Slf4j;
@@ -85,24 +80,20 @@ public class TestJdbcDriver {
   @BeforeTest
   public void testCreateJdbcDriver() throws Exception {
     baseConf = new Configuration();
-    baseConf.set(JDBCDriverConfConstants.JDBC_DRIVER_CLASS, "org.hsqldb.jdbc.JDBCDriver");
-    baseConf.set(JDBCDriverConfConstants.JDBC_DB_URI, "jdbc:hsqldb:mem:jdbcTestDB");
-    baseConf.set(JDBCDriverConfConstants.JDBC_USER, "SA");
-    baseConf.set(JDBCDriverConfConstants.JDBC_PASSWORD, "");
-    baseConf.set(JDBCDriverConfConstants.JDBC_EXPLAIN_KEYWORD_PARAM, "explain plan for ");
+    baseConf.set(JDBC_DRIVER_CLASS, "org.hsqldb.jdbc.JDBCDriver");
+    baseConf.set(JDBC_DB_URI, "jdbc:hsqldb:mem:jdbcTestDB");
+    baseConf.set(JDBC_USER, "SA");
+    baseConf.set(JDBC_PASSWORD, "");
+    baseConf.set(JDBC_EXPLAIN_KEYWORD_PARAM, "explain plan for ");
     hConf = new HiveConf(baseConf, this.getClass());
 
     driver = new JDBCDriver();
-    driver.configure(baseConf);
-    driver.registerUserConfigLoader(new MockUserConfigLoader(hConf));
+    driver.configure(baseConf, "jdbc", "jdbc1");
+
     assertNotNull(driver);
     assertTrue(driver.configured);
 
-    drivers = new ArrayList<LensDriver>() {
-      {
-        add(driver);
-      }
-    };
+    drivers = Lists.<LensDriver>newArrayList(driver);
   }
 
   /**
@@ -133,7 +124,7 @@ public class TestJdbcDriver {
 
   protected ExplainQueryContext createExplainContext(final String query, Configuration conf) {
     ExplainQueryContext ectx = new ExplainQueryContext(UUID.randomUUID().toString(), query, "testuser", null, conf,
-        drivers);
+      drivers);
     return ectx;
   }
 
@@ -265,16 +256,15 @@ public class TestJdbcDriver {
     ExplainQueryContext ctx = createExplainContext(query1, baseConf);
     Assert.assertNull(ctx.getFinalDriverQuery(driver));
     QueryCost cost = driver.estimate(ctx);
-    Assert.assertEquals(cost.getEstimatedExecTimeMillis(), 0);
-    Assert.assertEquals(cost.getEstimatedResourceUsage(), 0.0);
+    Assert.assertEquals(cost, JDBCDriver.JDBC_DRIVER_COST);
     Assert.assertNotNull(ctx.getFinalDriverQuery(driver));
 
     // Test connection leak for estimate
     final int maxEstimateConnections =
-      driver.getEstimateConnectionConf().getInt(JDBCDriverConfConstants.JDBC_POOL_MAX_SIZE, 50);
+      driver.getEstimateConnectionConf().getInt(JDBC_POOL_MAX_SIZE.getConfigKey(), 50);
     for (int i = 0; i < maxEstimateConnections + 10; i++) {
       try {
-        log.info("Iteration#" + (i + 1));
+        log.info("Iteration#{}", (i + 1));
         String query = i > maxEstimateConnections ? "SELECT * FROM estimate_test" : "CREATE TABLE FOO(ID INT)";
         ExplainQueryContext context = createExplainContext(query, baseConf);
         cost = driver.estimate(context);
@@ -319,12 +309,12 @@ public class TestJdbcDriver {
     metricConf.set(LensConfConstants.QUERY_METRIC_UNIQUE_ID_CONF_KEY, TestJdbcDriver.class.getSimpleName());
     driver.estimate(createExplainContext(query1, metricConf));
     MetricRegistry reg = LensMetricsRegistry.getStaticRegistry();
-
+    String driverQualifiledName = driver.getFullyQualifiedName();
     Assert.assertTrue(reg.getGauges().keySet().containsAll(Arrays.asList(
-      "lens.MethodMetricGauge.TestJdbcDriver-JDBCDriver-validate-columnar-sql-rewrite",
-      "lens.MethodMetricGauge.TestJdbcDriver-JDBCDriver-validate-jdbc-prepare-statement",
-      "lens.MethodMetricGauge.TestJdbcDriver-JDBCDriver-validate-thru-prepare",
-      "lens.MethodMetricGauge.TestJdbcDriver-JDBCDriver-jdbc-check-allowed-query")));
+      "lens.MethodMetricGauge.TestJdbcDriver-"+driverQualifiledName+"-validate-columnar-sql-rewrite",
+      "lens.MethodMetricGauge.TestJdbcDriver-"+driverQualifiledName+"-validate-jdbc-prepare-statement",
+      "lens.MethodMetricGauge.TestJdbcDriver-"+driverQualifiledName+"-validate-thru-prepare",
+      "lens.MethodMetricGauge.TestJdbcDriver-"+driverQualifiledName+"-jdbc-check-allowed-query")));
   }
 
   @Test
@@ -339,8 +329,7 @@ public class TestJdbcDriver {
     // run estimate and execute - because server would first run estimate and then execute with same context
     QueryContext ctx = createQueryContext(query1, metricConf);
     QueryCost cost = driver.estimate(ctx);
-    Assert.assertEquals(cost.getEstimatedExecTimeMillis(), 0);
-    Assert.assertEquals(cost.getEstimatedResourceUsage(), 0.0);
+    Assert.assertEquals(cost, JDBCDriver.JDBC_DRIVER_COST);
     LensResultSet result = driver.execute(ctx);
     Assert.assertNotNull(result);
 
@@ -348,15 +337,13 @@ public class TestJdbcDriver {
     // run estimate and prepare - because server would first run estimate and then prepare with same context
     PreparedQueryContext pContext = new PreparedQueryContext(query1, "SA", metricConf, drivers);
     cost = driver.estimate(pContext);
-    Assert.assertEquals(cost.getEstimatedExecTimeMillis(), 0);
-    Assert.assertEquals(cost.getEstimatedResourceUsage(), 0.0);
+    Assert.assertEquals(cost, JDBCDriver.JDBC_DRIVER_COST);
     driver.prepare(pContext);
 
     // test explain and prepare
     PreparedQueryContext pContext2 = new PreparedQueryContext(query1, "SA", metricConf, drivers);
     cost = driver.estimate(pContext2);
-    Assert.assertEquals(cost.getEstimatedExecTimeMillis(), 0);
-    Assert.assertEquals(cost.getEstimatedResourceUsage(), 0.0);
+    Assert.assertEquals(cost, JDBCDriver.JDBC_DRIVER_COST);
     driver.prepare(pContext2);
     driver.explainAndPrepare(pContext2);
   }
@@ -421,6 +408,102 @@ public class TestJdbcDriver {
       if (rs instanceof JDBCResultSet) {
         ((JDBCResultSet) rs).close();
       }
+    }
+  }
+
+  /**
+   * Data provider for test case {@link #testExecuteWithPreFetch()}
+   * @return
+   */
+  @DataProvider
+  public Object[][] executeWithPreFetchDP() {
+    return new Object[][] {
+      //int rowsToPreFecth, boolean isComplteleyFetched, int rowsPreFetched, boolean createTable, long executeTimeout
+      {10, true, 10, true, 20000}, //result has 10 rows and all 10 rows are pre fetched
+      {5, false, 6, false, 8000}, //result has 10 rows and 5 rows are pre fetched. (Extra row is  fetched = 5+1 = 6)
+      {15, true, 10, false, 8000}, //result has 10 rows and 15 rows are requested to be pre fetched
+      {10, false, 0, false, 10}, //similar to case 1 but executeTimeout is very less.
+    };
+  }
+
+  /**
+   * @param rowsToPreFecth  : requested number of rows to be pre-fetched
+   * @param isComplteleyFetched : whether the wrapped in memory result has been completely accessed due to pre fetch
+   * @param rowsPreFetched : actual rows pre-fetched
+   * @param createTable : whether to create a table before the test case is run
+   * @param executeTimeoutMillis :If the query does not finish with in this time pre fetch is ignored.
+   * @throws Exception
+   */
+  @Test(dataProvider = "executeWithPreFetchDP")
+  public void testExecuteWithPreFetch(int rowsToPreFecth, boolean isComplteleyFetched, int rowsPreFetched,
+      boolean createTable, long executeTimeoutMillis) throws Exception {
+    if (createTable) {
+      createTable("execute_prefetch_test");
+      insertData("execute_prefetch_test");
+    }
+
+    // Query
+    final String query = "SELECT * FROM execute_prefetch_test";
+    Configuration conf = new Configuration(baseConf);
+    conf.setBoolean(LensConfConstants.QUERY_PERSISTENT_RESULT_SET, true);
+    conf.setBoolean(LensConfConstants.QUERY_PERSISTENT_RESULT_INDRIVER, false);
+    conf.setBoolean(LensConfConstants.PREFETCH_INMEMORY_RESULTSET, true);
+    conf.setInt(LensConfConstants.PREFETCH_INMEMORY_RESULTSET_ROWS, rowsToPreFecth);
+    QueryContext context = createQueryContext(query, conf);
+    context.setExecuteTimeoutMillis(executeTimeoutMillis);
+    driver.executeAsync(context);
+    LensResultSet resultSet = driver.fetchResultSet(context);
+    assertNotNull(resultSet);
+
+    //Check Type
+    if (executeTimeoutMillis > 1000) { //enough time to execute the query
+      assertTrue(resultSet instanceof PartiallyFetchedInMemoryResultSet);
+    } else {
+      assertFalse(resultSet instanceof PartiallyFetchedInMemoryResultSet);
+      return; // NO need to check further in this  case
+    }
+
+    PartiallyFetchedInMemoryResultSet prs = (PartiallyFetchedInMemoryResultSet) resultSet;
+    assertEquals(prs.isComplteleyFetched(), isComplteleyFetched);
+
+    //Check Streaming flow
+    if (isComplteleyFetched) {
+      assertTrue(prs.isComplteleyFetched());
+      prs.getPreFetchedRows(); //This will be called while streaming
+      assertEquals(prs.size().intValue(), rowsPreFetched);
+    } else {
+      assertFalse(prs.isComplteleyFetched());
+      assertEquals(prs.getPreFetchedRows().size(), rowsPreFetched);
+    }
+
+    assertEquals(prs.getMetadata().getColumns().size(), 1);
+    assertEquals(prs.getMetadata().getColumns().get(0).getName(), "ID");
+
+    // Check Persistence flow
+    int rowCount = 0;
+    while (prs.hasNext()) {
+      ResultRow row = prs.next();
+      assertEquals(row.getValues().get(0), rowCount);
+      rowCount++;
+    }
+    assertEquals(rowCount, 10);
+    prs.setFullyAccessed(true);
+
+    //Check Purge
+    assertEquals(prs.canBePurged() , true);
+  }
+
+  @Test
+  public void testJdbcSqlException() throws Exception {
+    final String query = "SELECT invalid_column FROM execute_test";
+    try {
+      PreparedQueryContext pContext = new PreparedQueryContext(query, "SA", baseConf, drivers);
+      driver.validate(pContext);
+      driver.prepare(pContext);
+    } catch (LensException e) {
+      assertEquals(e.getErrorInfo().getErrorCode(), 4001);
+      assertEquals(e.getErrorInfo().getErrorName(), "SEMANTIC_ERROR");
+      assertTrue(e.getMessage().contains("user lacks privilege or object not found: EXECUTE_TEST"));
     }
   }
 
@@ -636,7 +719,7 @@ public class TestJdbcDriver {
     final String query = "SELECT * from invalid_conn_close2";
     QueryContext ctx = new QueryContext(query, "SA", new LensConf(), baseConf, drivers);
 
-    for (int i = 0; i < JDBCDriverConfConstants.JDBC_POOL_MAX_SIZE_DEFAULT; i++) {
+    for (int i = 0; i < JDBC_POOL_MAX_SIZE.getDefaultValue(); i++) {
       executeAsync(ctx);
       driver.updateStatus(ctx);
       System.out.println("@@@@ QUERY " + (i + 1));
@@ -661,7 +744,6 @@ public class TestJdbcDriver {
 
   private void executeAsync(QueryContext ctx) throws LensException {
     driver.executeAsync(ctx);
-    assertEquals(ctx.getSelectedDriverConf().get(KEY), VALUE);
   }
 
   /**
@@ -677,7 +759,7 @@ public class TestJdbcDriver {
     final String query = "SELECT * from valid_conn_close";
     QueryContext ctx = createQueryContext(query);
 
-    for (int i = 0; i < JDBCDriverConfConstants.JDBC_POOL_MAX_SIZE_DEFAULT; i++) {
+    for (int i = 0; i < ConnectionPoolProperties.JDBC_POOL_MAX_SIZE.getDefaultValue(); i++) {
       LensResultSet resultSet = driver.execute(ctx);
       assertNotNull(resultSet);
       if (resultSet instanceof InMemoryResultSet) {
@@ -797,12 +879,11 @@ public class TestJdbcDriver {
     assertTrue(estimateConf != driver.getConf());
 
     // Validate overridden conf
-    assertEquals(estimateConf.get(JDBCDriverConfConstants.JDBC_USER), "estimateUser");
-    assertEquals(estimateConf.get(JDBCDriverConfConstants.JDBC_POOL_MAX_SIZE), "50");
-    assertEquals(estimateConf.get(JDBCDriverConfConstants.JDBC_POOL_IDLE_TIME), "800");
-    assertEquals(estimateConf.get(JDBCDriverConfConstants.JDBC_GET_CONNECTION_TIMEOUT), "25000");
-    assertEquals(estimateConf.get(JDBCDriverConfConstants.JDBC_MAX_STATEMENTS_PER_CONNECTION),
-      "15");
+    assertEquals(estimateConf.get(JDBC_USER), "estimateUser");
+    assertEquals(estimateConf.get(JDBC_POOL_MAX_SIZE.getConfigKey()), "50");
+    assertEquals(estimateConf.get(JDBC_POOL_IDLE_TIME.getConfigKey()), "800");
+    assertEquals(estimateConf.get(JDBC_GET_CONNECTION_TIMEOUT.getConfigKey()), "25000");
+    assertEquals(estimateConf.get(JDBC_MAX_STATEMENTS_PER_CONNECTION.getConfigKey()), "15");
   }
 
   @Test
@@ -823,8 +904,8 @@ public class TestJdbcDriver {
     DataSourceConnectionProvider.DriverConfig queryCfg =
       queryCp.getDriverConfigfromConf(driver.getConf());
 
-    log.info("@@@ ESTIMATE_CFG " + estimateCfg);
-    log.info("@@@ QUERY CFG " + queryCfg);
+    log.info("@@@ ESTIMATE_CFG {}", estimateCfg);
+    log.info("@@@ QUERY CFG {}", queryCfg);
 
     // Get connection from each so that pools get initialized
     try {
@@ -853,6 +934,7 @@ public class TestJdbcDriver {
     assertEquals(estimatePool.getMaxIdleTime(), 800);
     assertEquals(estimatePool.getCheckoutTimeout(), 25000);
     assertEquals(estimatePool.getMaxStatementsPerConnection(), 15);
+    assertEquals(estimatePool.getProperties().get("random_key"), "random_value");
   }
 
 }

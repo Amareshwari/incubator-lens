@@ -36,4 +36,31 @@
     <value>http://0.0.0.0:9999/lensapi</value>
     <description>The base url for the lens server</description>
   </property>
+  <property>
+    <name>lens.client.ws.request.filternames</name>
+    <value>requestfilter</value>
+    <description>These JAX-RS filters would be started in the specified order when lens-client starts</description>
+  </property>
+  <property>
+    <name>lens.client.requestfilter.ws.filter.impl</name>
+    <value>org.apache.lens.client.RequestFilter</value>
+    <description>Implementation class for Request Filter</description>
+  </property>
+  <property>
+    <name>lens.client.query.poll.interval</name>
+    <value>10000</value>
+    <description>Interval at which query progress will be polled. Interval has to be given in milliseconds</description>
+  </property>
+  <property>
+    <name>lens.cli.json.pretty</name>
+    <value>false</value>
+    <description>Should CLI try to prettify the JSON of an object before priting.</description>
+  </property>
+  <property>
+    <name>lens.cli.query.execute.timeout.millis</name>
+    <value>10000</value>
+    <description>This property defines the timeout value when sync or --async false option
+    is used to execute a query. The default value is 10 seconds.
+    </description>
+  </property>
 </configuration>

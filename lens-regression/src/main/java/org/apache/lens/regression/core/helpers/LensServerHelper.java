@@ -21,26 +21,19 @@ package org.apache.lens.regression.core.helpers;
 
 import java.io.IOException;
 
-import javax.ws.rs.client.WebTarget;
+import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-
-import javax.xml.bind.JAXBException;
 
 import org.apache.lens.regression.util.AssertUtil;
 import org.apache.lens.regression.util.Util;
 import org.apache.lens.server.api.error.LensException;
 
-import org.apache.log4j.Logger;
-
 import com.jcraft.jsch.JSchException;
 
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class LensServerHelper extends ServiceManagerHelper {
-
-  private static Logger logger = Logger.getLogger(LensServerHelper.class);
-
-  private WebTarget servLens = ServiceManagerHelper.getServerLens();
-  private String sessionHandleString = ServiceManagerHelper.getSessionHandle();
 
   public LensServerHelper() {
   }
@@ -53,16 +46,16 @@ public class LensServerHelper extends ServiceManagerHelper {
    * Restart Lens server
    */
 
-  public void restart() throws JSchException, IOException, InterruptedException, JAXBException, LensException {
+  public void restart() throws JSchException, IOException, InterruptedException, LensException {
     int counter = 0;
     Util.runRemoteCommand("bash /usr/local/lens/server/bin/lens-ctl stop");
     Util.runRemoteCommand("bash /usr/local/lens/server/bin/lens-ctl start");
-    Response response = this.exec("get", "", servLens, null, null);
+    Response response = this.exec("get", "", servLens, null, null, MediaType.TEXT_PLAIN_TYPE, MediaType.TEXT_PLAIN);
     while (response == null && counter < 40) {
       Thread.sleep(5000);
-      logger.info("Waiting for Lens server to come up ");
-      response = this.exec("get", "", servLens, null, null);
-      logger.info(response);
+      log.info("Waiting for Lens server to come up ");
+      response = this.exec("get", "", servLens, null, null, MediaType.TEXT_PLAIN_TYPE, MediaType.TEXT_PLAIN);
+      log.info("Response:{}", response);
       counter++;
     }
     AssertUtil.assertSucceededResponse(response);

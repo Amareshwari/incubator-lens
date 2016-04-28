@@ -33,12 +33,12 @@ import org.apache.lens.api.LensConf;
 import org.apache.lens.api.LensSessionHandle;
 import org.apache.lens.api.error.ErrorCollection;
 import org.apache.lens.api.query.*;
-import org.apache.lens.api.response.LensResponse;
-import org.apache.lens.api.response.NoErrorPayload;
+import org.apache.lens.api.result.LensAPIResult;
 import org.apache.lens.server.LensServices;
 import org.apache.lens.server.api.annotations.MultiPurposeResource;
 import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.query.QueryExecutionService;
+import org.apache.lens.server.api.query.cost.QueryCostTOBuilder;
 import org.apache.lens.server.error.UnSupportedQuerySubmitOpException;
 import org.apache.lens.server.model.LogSegregationContext;
 
@@ -50,7 +50,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * queryapi resource
- * <p/>
+ * <p></p>
  * This provides api for all things query.
  */
 @Slf4j
@@ -77,7 +77,7 @@ public class QueryServiceResource {
 
   private void validateSessionId(final LensSessionHandle sessionHandle) throws LensException {
     if (sessionHandle == null) {
-      throw new LensException(SESSION_ID_NOT_PROVIDED.getValue());
+      throw new LensException(SESSION_ID_NOT_PROVIDED.getLensErrorInfo());
     }
   }
 
@@ -104,7 +104,7 @@ public class QueryServiceResource {
 
   private void validateQuery(String query) throws LensException {
     if (StringUtils.isBlank(query)) {
-      throw new LensException(NULL_OR_EMPTY_OR_BLANK_QUERY.getValue());
+      throw new LensException(NULL_OR_EMPTY_OR_BLANK_QUERY.getLensErrorInfo());
     }
   }
   /**
@@ -124,7 +124,7 @@ public class QueryServiceResource {
    * @throws LensException the lens exception
    */
   public QueryServiceResource() throws LensException {
-    queryServer = (QueryExecutionService) LensServices.get().getService("query");
+    queryServer = LensServices.get().getService(QueryExecutionService.NAME);
     errorCollection = LensServices.get().getErrorCollection();
     logSegregationContext = LensServices.get().getLogSegregationContext();
   }
@@ -140,28 +140,29 @@ public class QueryServiceResource {
    *
    * @param sessionid The sessionid in which queryName is working
    * @param state     If any state is passed, all the queries in that state will be returned, otherwise all queries will
-   *                  be returned. Possible states are {@value QueryStatus.Status#values()}
+   *                  be returned. Possible states are {link QueryStatus.Status#values()}
    * @param queryName If any queryName is passed, all the queries containing the queryName will be returned, otherwise
    *                  all the queries will be returned
    * @param user      Returns queries submitted by this user. If set to "all", returns queries of all users. By default,
    *                  returns queries of the current user.
-   * @param fromDate  from date to search queries in a time range, the range is inclusive(submitTime >= fromDate)
-   * @param toDate    to date to search queries in a time range, the range is inclusive(toDate >= submitTime)
+   * @param driver    Get queries submitted on a specific driver.
+   * @param fromDate  from date to search queries in a time range, the range is inclusive(submitTime &gt;= fromDate)
+   * @param toDate    to date to search queries in a time range, the range is inclusive(toDate &gt;= submitTime)
    * @return List of {@link QueryHandle} objects
    */
   @GET
   @Path("queries")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public List<QueryHandle> getAllQueries(@QueryParam("sessionid") LensSessionHandle sessionid,
     @DefaultValue("") @QueryParam("state") String state, @DefaultValue("") @QueryParam("queryName") String queryName,
-    @DefaultValue("") @QueryParam("user") String user, @DefaultValue("-1") @QueryParam("fromDate") long fromDate,
-    @DefaultValue("-1") @QueryParam("toDate") long toDate) {
+    @DefaultValue("") @QueryParam("user") String user, @DefaultValue("") @QueryParam("driver") String driver,
+    @DefaultValue("-1") @QueryParam("fromDate") long fromDate, @DefaultValue("-1") @QueryParam("toDate") long toDate) {
     checkSessionId(sessionid);
     try {
       if (toDate == -1L) {
         toDate = Long.MAX_VALUE;
       }
-      return queryServer.getAllQueries(sessionid, state, user, queryName, fromDate, toDate);
+      return queryServer.getAllQueries(sessionid, state, user, driver, queryName, fromDate, toDate);
     } catch (LensException e) {
       throw new WebApplicationException(e);
     }
@@ -184,28 +185,34 @@ public class QueryServiceResource {
    * @param sessionid     The session in which user is submitting the query. Any configuration set in the session will
    *                      be picked up.
    * @param query         The query to run
-   * @param operation     The operation on the query. Supported operations are values: {@value SubmitOp#ESTIMATE},
-   *                      {@value SubmitOp#EXPLAIN},{@value SubmitOp#EXECUTE} and {@value SubmitOp#EXECUTE_WITH_TIMEOUT}
+   * @param operation     The operation on the query. Supported operations are values:
+   *                      {@link org.apache.lens.api.query.SubmitOp#ESTIMATE},
+   *                      {@link org.apache.lens.api.query.SubmitOp#EXPLAIN},
+   *                      {@link org.apache.lens.api.query.SubmitOp#EXECUTE} and
+   *                      {@link org.apache.lens.api.query.SubmitOp#EXECUTE_WITH_TIMEOUT}
    * @param conf          The configuration for the query
-   * @param timeoutmillis The timeout for the query, honored only in case of value {@value
-   *                      SubmitOp#EXECUTE_WITH_TIMEOUT} operation
+   * @param timeoutmillis The timeout for the query, honored only in case of value {@link
+   *                      org.apache.lens.api.query.SubmitOp#EXECUTE_WITH_TIMEOUT} operation
    * @param queryName     human readable query name set by user (optional parameter)
-   * @return {@link LensResponse} with DATA as {@link QueryHandle} in case of {@value SubmitOp#EXECUTE} operation.
-   * {@link QueryPlan} in case of {@value SubmitOp#EXPLAIN} operation. {@link QueryHandleWithResultSet} in case
-   * {@value SubmitOp#EXECUTE_WITH_TIMEOUT} operation. {@link QueryCost} in case of
-   * {@value SubmitOp#ESTIMATE} operation.
+
+   * @return {@link LensAPIResult} with DATA as {@link QueryHandle} in case of
+   * {@link org.apache.lens.api.query.SubmitOp#EXECUTE} operation.
+   * {@link QueryPlan} in case of {@link org.apache.lens.api.query.SubmitOp#EXPLAIN} operation.
+   * {@link QueryHandleWithResultSet} in case {@link org.apache.lens.api.query.SubmitOp#EXECUTE_WITH_TIMEOUT}
+   * operation. {@link org.apache.lens.api.result.QueryCostTO} in case of
+   * {@link org.apache.lens.api.query.SubmitOp#ESTIMATE} operation.
    */
   @POST
   @Path("queries")
   @Consumes({MediaType.MULTIPART_FORM_DATA})
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   @MultiPurposeResource(formParamName = "operation")
-  public LensResponse<QuerySubmitResult, NoErrorPayload> query(@FormDataParam("sessionid") LensSessionHandle sessionid,
+  public LensAPIResult<QuerySubmitResult> query(@FormDataParam("sessionid") LensSessionHandle sessionid,
       @FormDataParam("query") String query, @FormDataParam("operation") String operation,
       @FormDataParam("conf") LensConf conf, @DefaultValue("30000") @FormDataParam("timeoutmillis") Long timeoutmillis,
       @DefaultValue("") @FormDataParam("queryName") String queryName) throws LensException {
 
-    final String requestId = this.logSegregationContext.get();
+    final String requestId = this.logSegregationContext.getLogSegragationId();
 
     try {
       validateSessionId(sessionid);
@@ -215,7 +222,7 @@ public class QueryServiceResource {
       QuerySubmitResult result;
       switch (sop) {
       case ESTIMATE:
-        result = queryServer.estimate(requestId, sessionid, query, conf);
+        result = new QueryCostTOBuilder(queryServer.estimate(requestId, sessionid, query, conf)).build();
         break;
       case EXECUTE:
         result = queryServer.executeAsync(sessionid, query, conf, queryName);
@@ -230,7 +237,7 @@ public class QueryServiceResource {
         throw new UnSupportedQuerySubmitOpException();
       }
 
-      return LensResponse.composedOf(null, requestId, result);
+      return LensAPIResult.composedOf(null, requestId, result);
     } catch (LensException e) {
       e.buildLensErrorResponse(errorCollection, null, requestId);
       throw e;
@@ -242,31 +249,36 @@ public class QueryServiceResource {
    *
    * @param sessionid The session in which cancel is issued
    * @param state     If any state is passed, all the queries in that state will be cancelled, otherwise all queries
-   *                  will be cancelled. Possible states are {@value QueryStatus.Status#values()} The queries in {@value
-   *                  QueryStatus.Status#FAILED}, {@value QueryStatus.Status#CLOSED}, {@value
-   *                  QueryStatus.Status#SUCCESSFUL} cannot be cancelled
+   *                  will be cancelled. Possible states are
+   *                  {@link org.apache.lens.api.query.QueryStatus.Status#values()}
+   *                  The queries in {@link org.apache.lens.api.query.QueryStatus.Status#FAILED},
+   *                  {@link org.apache.lens.api.query.QueryStatus.Status#CLOSED},
+   *                  {@link org.apache.lens.api.query.QueryStatus.Status#SUCCESSFUL} cannot be cancelled
    * @param user      If any user is passed, all the queries submitted by the user will be cancelled, otherwise all the
    *                  queries will be cancelled
+   * @param driver    Get queries submitted on a specific driver.
    * @param queryName Cancel queries matching the query name
-   * @param fromDate  the from date, inclusive(submitTime>=fromDate)
-   * @param toDate    the to date, inclusive(toDate>=submitTime)
-   * @return APIResult with state {@value Status#SUCCEEDED} in case of successful cancellation. APIResult with state
-   * {@value Status#FAILED} in case of cancellation failure. APIResult with state {@value Status#PARTIAL} in case of
-   * partial cancellation.
+   * @param fromDate  the from date, inclusive(submitTime&gt;=fromDate)
+   * @param toDate    the to date, inclusive(toDate&gt;=submitTime)
+   * @return APIResult with state {@link org.apache.lens.api.APIResult.Status#SUCCEEDED} in case of successful
+   *                   cancellation. APIResult with state {@link org.apache.lens.api.APIResult.Status#FAILED}
+   *                   in case of cancellation failure. APIResult with state
+   *                    {@link org.apache.lens.api.APIResult.Status#PARTIAL} in case of partial cancellation.
    */
   @DELETE
   @Path("queries")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public APIResult cancelAllQueries(@QueryParam("sessionid") LensSessionHandle sessionid,
     @DefaultValue("") @QueryParam("state") String state, @DefaultValue("") @QueryParam("user") String user,
-    @DefaultValue("") @QueryParam("queryName") String queryName,
+    @DefaultValue("") @QueryParam("queryName") String queryName, @DefaultValue("") @QueryParam("driver") String driver,
     @DefaultValue("-1") @QueryParam("fromDate") long fromDate, @DefaultValue("-1") @QueryParam("toDate") long toDate) {
     checkSessionId(sessionid);
     int numCancelled = 0;
     List<QueryHandle> handles = null;
     boolean failed = false;
     try {
-      handles = getAllQueries(sessionid, state, queryName, user, fromDate, toDate == -1L ? Long.MAX_VALUE : toDate);
+      handles = getAllQueries(sessionid, state, queryName, user, driver, fromDate,
+        toDate == -1L ? Long.MAX_VALUE : toDate);
       for (QueryHandle handle : handles) {
         if (cancelQuery(sessionid, handle)) {
           numCancelled++;
@@ -303,7 +315,7 @@ public class QueryServiceResource {
    */
   @GET
   @Path("preparedqueries")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public List<QueryPrepareHandle> getAllPreparedQueries(@QueryParam("sessionid") LensSessionHandle sessionid,
     @DefaultValue("") @QueryParam("user") String user, @DefaultValue("") @QueryParam("queryName") String queryName,
     @DefaultValue("-1") @QueryParam("fromDate") long fromDate, @DefaultValue("-1") @QueryParam("toDate") long toDate) {
@@ -324,25 +336,32 @@ public class QueryServiceResource {
    * @param sessionid The session in which user is preparing the query. Any configuration set in the session will be
    *                  picked up.
    * @param query     The query to prepare
-   * @param operation The operation on the query. Supported operations are {@value SubmitOp#EXPLAIN_AND_PREPARE} or
-   *                  {@value SubmitOp#PREPARE}
+   * @param operation The operation on the query. Supported operations are
+   *                  {@link org.apache.lens.api.query.SubmitOp#EXPLAIN_AND_PREPARE} or
+   *                  {@link org.apache.lens.api.query.SubmitOp#PREPARE}
    * @param conf      The configuration for preparing the query
    * @param queryName human readable query name set by user (optional parameter)
-   * @return {@link QueryPrepareHandle} incase of {@value SubmitOp#PREPARE} operation. {@link QueryPlan} incase of
-   * {@value SubmitOp#EXPLAIN_AND_PREPARE} and the query plan will contain the prepare handle as well.
+   * @return {@link QueryPrepareHandle} incase of {link org.apache.lens.api.query.SubmitOp#PREPARE} operation.
+   *         {@link QueryPlan} incase of {@link org.apache.lens.api.query.SubmitOp#EXPLAIN_AND_PREPARE}
+   *         and the query plan will contain the prepare handle as well.
+   * @throws LensException
    */
   @POST
   @Path("preparedqueries")
   @Consumes({MediaType.MULTIPART_FORM_DATA})
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   @MultiPurposeResource(formParamName = "operation")
-  public QuerySubmitResult prepareQuery(@FormDataParam("sessionid") LensSessionHandle sessionid,
-    @FormDataParam("query") String query, @DefaultValue("") @FormDataParam("operation") String operation,
-    @FormDataParam("conf") LensConf conf, @DefaultValue("") @FormDataParam("queryName") String queryName) {
+  public LensAPIResult<QuerySubmitResult> prepareQuery(
+      @FormDataParam("sessionid") LensSessionHandle sessionid, @FormDataParam("query") String query,
+      @DefaultValue("") @FormDataParam("operation") String operation, @FormDataParam("conf") LensConf conf,
+      @DefaultValue("") @FormDataParam("queryName") String queryName) throws LensException {
+    final String requestId = this.logSegregationContext.getLogSegragationId();
+
     try {
       checkSessionId(sessionid);
       checkQuery(query);
       SubmitOp sop = null;
+      QuerySubmitResult result;
       try {
         sop = SubmitOp.valueOf(operation.toUpperCase());
       } catch (IllegalArgumentException e) {
@@ -353,17 +372,20 @@ public class QueryServiceResource {
       }
       switch (sop) {
       case PREPARE:
-        return queryServer.prepare(sessionid, query, conf, queryName);
+        result = queryServer.prepare(sessionid, query, conf, queryName);
+        break;
       case EXPLAIN_AND_PREPARE:
-        return queryServer.explainAndPrepare(sessionid, query, conf, queryName);
+        result = queryServer.explainAndPrepare(sessionid, query, conf, queryName);
+        break;
       default:
         throw new BadRequestException("Invalid operation type: " + operation + prepareClue);
       }
+      return LensAPIResult.composedOf(null, requestId, result);
     } catch (LensException e) {
-      throw new WebApplicationException(e);
+      e.buildLensErrorResponse(errorCollection, null, requestId);
+      throw e;
     }
   }
-
   /**
    * Destroy all the prepared queries; Can be filtered with user.
    *
@@ -373,16 +395,18 @@ public class QueryServiceResource {
    * @param queryName destroys queries matching the query name
    * @param fromDate  the from date
    * @param toDate    the to date
-   * @return APIResult with state {@value Status#SUCCEEDED} in case of successful destroy. APIResult with state {@value
-   * Status#FAILED} in case of destroy failure. APIResult with state {@value Status#PARTIAL} in case of partial
-   * destroy.
+   * @return APIResult with state {@link org.apache.lens.api.APIResult.Status#SUCCEEDED} in case of successful
+   *         destroy. APIResult with state {@link org.apache.lens.api.APIResult.Status#FAILED} in case of destroy
+   *         failure. APIResult with state {@link org.apache.lens.api.APIResult.Status#PARTIAL} in case of
+   *         partial destroy.
    */
   @DELETE
   @Path("preparedqueries")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({ MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN })
   public APIResult destroyPreparedQueries(@QueryParam("sessionid") LensSessionHandle sessionid,
-    @DefaultValue("") @QueryParam("user") String user, @DefaultValue("") @QueryParam("queryName") String queryName,
-    @DefaultValue("-1") @QueryParam("fromDate") long fromDate, @DefaultValue("-1") @QueryParam("toDate") long toDate) {
+      @DefaultValue("") @QueryParam("user") String user, @DefaultValue("") @QueryParam("queryName") String queryName,
+      @DefaultValue("-1") @QueryParam("fromDate") long fromDate,
+      @DefaultValue("-1") @QueryParam("toDate") long toDate) {
     checkSessionId(sessionid);
     int numDestroyed = 0;
     boolean failed = false;
@@ -448,7 +472,7 @@ public class QueryServiceResource {
    */
   @GET
   @Path("preparedqueries/{prepareHandle}")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public LensPreparedQuery getPreparedQuery(@QueryParam("sessionid") LensSessionHandle sessionid,
     @PathParam("prepareHandle") String prepareHandle) {
     checkSessionId(sessionid);
@@ -464,12 +488,13 @@ public class QueryServiceResource {
    *
    * @param sessionid     The user session handle
    * @param prepareHandle The prepare handle
-   * @return APIResult with state {@link Status#SUCCEEDED} in case of successful destroy. APIResult with state {@link
-   * Status#FAILED} in case of destroy failure.
+   * @return APIResult with state {@link org.apache.lens.api.APIResult.Status#SUCCEEDED} in case of successful
+   *         destroy. APIResult with state {@link org.apache.lens.api.APIResult.Status#FAILED} in case of
+   *         destroy failure.
    */
   @DELETE
   @Path("preparedqueries/{prepareHandle}")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public APIResult destroyPrepared(@QueryParam("sessionid") LensSessionHandle sessionid,
     @PathParam("prepareHandle") String prepareHandle) {
     checkSessionId(sessionid);
@@ -490,7 +515,7 @@ public class QueryServiceResource {
    */
   @GET
   @Path("queries/{queryHandle}")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public LensQuery getStatus(@QueryParam("sessionid") LensSessionHandle sessionid,
     @PathParam("queryHandle") String queryHandle) {
     checkSessionId(sessionid);
@@ -506,12 +531,13 @@ public class QueryServiceResource {
    *
    * @param sessionid   The user session handle
    * @param queryHandle The query handle
-   * @return APIResult with state {@value Status#SUCCEEDED} in case of successful cancellation. APIResult with state
-   * {@value Status#FAILED} in case of cancellation failure.
+   * @return APIResult with state {@link org.apache.lens.api.APIResult.Status#SUCCEEDED} in case of successful
+   *         cancellation. APIResult with state {@link org.apache.lens.api.APIResult.Status#FAILED} in case of
+   *         cancellation failure.
    */
   @DELETE
   @Path("queries/{queryHandle}")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public APIResult cancelQuery(@QueryParam("sessionid") LensSessionHandle sessionid,
     @PathParam("queryHandle") String queryHandle) {
     checkSessionId(sessionid);
@@ -559,13 +585,13 @@ public class QueryServiceResource {
    * @param sessionid   The user session handle
    * @param queryHandle The query handle
    * @param conf        The new configuration, will be on top of old one
-   * @return APIResult with state {@value Status#SUCCEEDED} in case of successful update. APIResult with state {@value
-   * Status#FAILED} in case of udpate failure.
+   * @return APIResult with state {@link org.apache.lens.api.APIResult.Status#SUCCEEDED} in case of successful
+   * update. APIResult with state {@link org.apache.lens.api.APIResult.Status#FAILED} in case of udpate failure.
    */
   @PUT
   @Path("queries/{queryHandle}")
   @Consumes({MediaType.MULTIPART_FORM_DATA})
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public APIResult updateConf(@FormDataParam("sessionid") LensSessionHandle sessionid,
     @PathParam("queryHandle") String queryHandle, @FormDataParam("conf") LensConf conf) {
     checkSessionId(sessionid);
@@ -588,13 +614,13 @@ public class QueryServiceResource {
    * @param sessionid     The user session handle
    * @param prepareHandle The prepare handle
    * @param conf          The new configuration, will be on top of old one
-   * @return APIResult with state {@value Status#SUCCEEDED} in case of successful update. APIResult with state {@value
-   * Status#FAILED} in case of udpate failure.
+   * @return APIResult with state {@link org.apache.lens.api.APIResult.Status#SUCCEEDED} in case of successful
+   * update. APIResult with state {@link org.apache.lens.api.APIResult.Status#FAILED} in case of udpate failure.
    */
   @PUT
   @Path("preparedqueries/{prepareHandle}")
   @Consumes({MediaType.MULTIPART_FORM_DATA})
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public APIResult updatePreparedConf(@FormDataParam("sessionid") LensSessionHandle sessionid,
     @PathParam("prepareHandle") String prepareHandle, @FormDataParam("conf") LensConf conf) {
     checkSessionId(sessionid);
@@ -616,19 +642,21 @@ public class QueryServiceResource {
    * @param sessionid     The session in which user is submitting the query. Any configuration set in the session will
    *                      be picked up.
    * @param prepareHandle The Query to run
-   * @param operation     The operation on the query. Supported operations are {@value SubmitOp#EXECUTE} and {@value
-   *                      SubmitOp#EXECUTE_WITH_TIMEOUT}
+   * @param operation     The operation on the query. Supported operations are
+   *                      {@link org.apache.lens.api.query.SubmitOp#EXECUTE} and {@link
+   *                      org.apache.lens.api.query.SubmitOp#EXECUTE_WITH_TIMEOUT}
    * @param conf          The configuration for the execution of query
-   * @param timeoutmillis The timeout for the query, honored only in case of {@value SubmitOp#EXECUTE_WITH_TIMEOUT}
-   *                      operation
+   * @param timeoutmillis The timeout for the query, honored only in case of
+   * {@link org.apache.lens.api.query.SubmitOp#EXECUTE_WITH_TIMEOUT} operation
    * @param queryName     human readable query name set by user (optional parameter)
-   * @return {@link QueryHandle} in case of {@value SubmitOp#EXECUTE} operation. {@link QueryHandleWithResultSet} in
-   * case {@value SubmitOp#EXECUTE_WITH_TIMEOUT} operation.
+   * @return {@link QueryHandle} in case of {link org.apache.lens.api.query.SubmitOp#EXECUTE} operation.
+   * {@link QueryHandleWithResultSet} in case {@link org.apache.lens.api.query.SubmitOp#EXECUTE_WITH_TIMEOUT
+   * } operation.
    */
   @POST
   @Path("preparedqueries/{prepareHandle}")
   @Consumes({MediaType.MULTIPART_FORM_DATA})
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   @MultiPurposeResource(formParamName = "operation")
   public QuerySubmitResult executePrepared(@FormDataParam("sessionid") LensSessionHandle sessionid,
     @PathParam("prepareHandle") String prepareHandle,
@@ -668,7 +696,7 @@ public class QueryServiceResource {
    */
   @GET
   @Path("queries/{queryHandle}/resultsetmetadata")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public QueryResultSetMetadata getResultSetMetadata(@QueryParam("sessionid") LensSessionHandle sessionid,
     @PathParam("queryHandle") String queryHandle) {
     checkSessionId(sessionid);
@@ -690,7 +718,7 @@ public class QueryServiceResource {
    */
   @GET
   @Path("queries/{queryHandle}/resultset")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public QueryResult getResultSet(@QueryParam("sessionid") LensSessionHandle sessionid,
     @PathParam("queryHandle") String queryHandle, @QueryParam("fromindex") long startIndex,
     @QueryParam("fetchsize") int fetchSize) {
@@ -726,12 +754,12 @@ public class QueryServiceResource {
    *
    * @param sessionid   The user session handle
    * @param queryHandle The query handle
-   * @return APIResult with state {@value Status#SUCCEEDED} in case of successful close. APIResult with state {@value
-   * Status#FAILED} in case of close failure.
+   * @return APIResult with state {@link org.apache.lens.api.APIResult.Status#SUCCEEDED} in case of successful
+   * close. APIResult with state {@link org.apache.lens.api.APIResult.Status#FAILED} in case of close failure.
    */
   @DELETE
   @Path("queries/{queryHandle}/resultset")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public APIResult closeResultSet(@QueryParam("sessionid") LensSessionHandle sessionid,
     @PathParam("queryHandle") String queryHandle) {
     checkSessionId(sessionid);

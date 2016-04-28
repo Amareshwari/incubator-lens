@@ -26,6 +26,7 @@ import org.apache.lens.api.LensConf;
 import org.apache.lens.api.LensSessionHandle;
 import org.apache.lens.api.query.*;
 import org.apache.lens.server.api.error.LensException;
+import org.apache.lens.server.api.query.cost.QueryCost;
 
 /**
  * The Interface QueryExecutionService.
@@ -227,14 +228,15 @@ public interface QueryExecutionService {
    * @param state         return queries in this state. if null, all queries will be returned
    * @param user          Get queries submitted by a specific user.
    *                      If this set to "all", queries of all users are returned
+   * @param driver        Get queries submitted on a specific driver.
    * @param queryName     return queries containing the query name. If null, all queries will be returned
    * @param fromDate      start date of time range interval
    * @param toDate        end date of the time range interval
    * @return List of query handles
    * @throws LensException the lens exception
    */
-  List<QueryHandle> getAllQueries(LensSessionHandle sessionHandle, String state, String user, String queryName,
-    long fromDate, long toDate) throws LensException;
+  List<QueryHandle> getAllQueries(LensSessionHandle sessionHandle, String state, String user, String driver,
+    String queryName, long fromDate, long toDate) throws LensException;
 
   /**
    * Returns all the prepared queries for the specified user. If no user is passed, queries of all users will be
@@ -299,6 +301,13 @@ public interface QueryExecutionService {
    * @return running queries count
    */
   long getRunningQueriesCount();
+
+  /**
+   * Get waiting queries count
+   *
+   * @return waiting queries count
+   */
+  long getWaitingQueriesCount();
 
   /**
    * Get finished queries count

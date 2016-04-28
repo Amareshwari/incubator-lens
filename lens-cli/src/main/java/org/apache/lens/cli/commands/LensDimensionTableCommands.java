@@ -18,6 +18,7 @@
  */
 package org.apache.lens.cli.commands;
 
+import java.io.File;
 import java.util.List;
 
 import org.apache.lens.api.APIResult;
@@ -31,13 +32,15 @@ import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
+import lombok.NonNull;
+
 /**
  * The Class LensDimensionTableCommands.
  */
 @Component
-@UserDocumentation(title = "Commands for Dimension Tables",
+@UserDocumentation(title = "Commands for Dimension Tables Management",
   description = "These commands provide CRUD for dimension tables, associated storages, and fact partitions")
-public class LensDimensionTableCommands extends PhysicalTableCrudCommand<XDimensionTable>
+public class LensDimensionTableCommands extends LogicalTableCrudCommand<XDimensionTable>
   implements CommandMarker {
 
   /**
@@ -62,7 +65,7 @@ public class LensDimensionTableCommands extends PhysicalTableCrudCommand<XDimens
   @CliCommand(value = "create dimtable",
     help = "Create a new dimension table taking spec from <path-to-dimtable-spec-file>")
   public String createDimensionTable(
-    @CliOption(key = {"", "path"}, mandatory = true, help = "<path-to-dimtable-spec-file>") String path) {
+    @CliOption(key = {"", "path"}, mandatory = true, help = "<path-to-dimtable-spec-file>") @NonNull final File path) {
     return create(path, false);
   }
 
@@ -89,7 +92,7 @@ public class LensDimensionTableCommands extends PhysicalTableCrudCommand<XDimens
     help = "update dimtable <dimtable_name> taking spec from <path-to-dimtable-spec>")
   public String updateDimensionTable(
     @CliOption(key = {"", "dimtable_name"}, mandatory = true, help = "<dimtable_name>") String name,
-    @CliOption(key = {"", "path"}, mandatory = true, help = "<path-to-dimtable-spec>") String path) {
+    @CliOption(key = {"", "path"}, mandatory = true, help = "<path-to-dimtable-spec>") @NonNull final File path) {
     return update(name, path);
   }
 
@@ -135,7 +138,7 @@ public class LensDimensionTableCommands extends PhysicalTableCrudCommand<XDimens
     help = "adds a new storage to dimtable <dimtable_name>, taking storage spec from <path-to-storage-spec>")
   public String addNewDimStorage(
     @CliOption(key = {"", "dimtable_name"}, mandatory = true, help = "<dimtable_name>") String tableName,
-    @CliOption(key = {"", "path"}, mandatory = true, help = "<path-to-storage-spec>") String path) {
+    @CliOption(key = {"", "path"}, mandatory = true, help = "<path-to-storage-spec>") @NonNull final File path) {
     return addStorage(tableName, path);
   }
 
@@ -189,7 +192,7 @@ public class LensDimensionTableCommands extends PhysicalTableCrudCommand<XDimens
   @CliCommand(value = "dimtable list partitions",
     help = "get all partitions associated with dimtable <dimtable_name>, "
       + "storage <storage_name> filtered by <partition-filter>")
-  public String getAllPartitionsOfDim(
+  public String getAllPartitionsOfDimtable(
     @CliOption(key = {"", "dimtable_name"}, mandatory = true, help = "<dimtable_name>") String tableName,
     @CliOption(key = {"", "storage_name"}, mandatory = true, help = "<storage_name>") String storageName,
     @CliOption(key = {"", "filter"}, mandatory = false, help = "<partition-filter>") String filter) {
@@ -228,8 +231,18 @@ public class LensDimensionTableCommands extends PhysicalTableCrudCommand<XDimens
   public String addPartitionToDimtable(
     @CliOption(key = {"", "dimtable_name"}, mandatory = true, help = "<dimtable_name>") String tableName,
     @CliOption(key = {"", "storage_name"}, mandatory = true, help = "<storage_name>") String storageName,
-    @CliOption(key = {"", "path"}, mandatory = true, help = "<partition-spec-path>") String path) {
+    @CliOption(key = {"", "path"}, mandatory = true, help = "<partition-spec-path>") @NonNull final File path) {
     return addPartition(tableName, storageName, path);
+  }
+  @CliCommand(value = "dimtable update single-partition",
+    help = "update single partition to dimtable <dimtable_name>'s"
+      + " storage <storage_name>, reading spec from <partition-spec-path>"
+      + " The partition has to exist to be eligible for updation.")
+  public String updatePartitionOfDimtable(
+    @CliOption(key = {"", "dimtable_name"}, mandatory = true, help = "<dimtable_name>") String tableName,
+    @CliOption(key = {"", "storage_name"}, mandatory = true, help = "<storage_name>") String storageName,
+    @CliOption(key = {"", "path"}, mandatory = true, help = "<partition-spec-path>") @NonNull final File path) {
+    return updatePartition(tableName, storageName, path);
   }
 
   /**
@@ -247,8 +260,18 @@ public class LensDimensionTableCommands extends PhysicalTableCrudCommand<XDimens
   public String addPartitionsToDimtable(
     @CliOption(key = {"", "dimtable_name"}, mandatory = true, help = "<dimtable_name>") String tableName,
     @CliOption(key = {"", "storage_name"}, mandatory = true, help = "<storage_name>") String storageName,
+    @CliOption(key = {"", "path"}, mandatory = true, help = "<partition-list-spec-path>") @NonNull final File path) {
+    return addPartitions(tableName, storageName, path.getPath());
+  }
+  @CliCommand(value = "dimtable update partitions",
+    help = "update multiple partition to dimtable <dimtable_name>'s"
+      + " storage <storage_name>, reading partition list spec from <partition-list-spec-path>"
+      +" The partitions have to exist to be eligible for updation.")
+  public String updatePartitionsOfDimtable(
+    @CliOption(key = {"", "dimtable_name"}, mandatory = true, help = "<dimtable_name>") String tableName,
+    @CliOption(key = {"", "storage_name"}, mandatory = true, help = "<storage_name>") String storageName,
     @CliOption(key = {"", "path"}, mandatory = true, help = "<partition-list-spec-path>") String path) {
-    return addPartitions(tableName, storageName, path);
+    return updatePartitions(tableName, storageName, path);
   }
 
   @Override
@@ -295,6 +318,16 @@ public class LensDimensionTableCommands extends PhysicalTableCrudCommand<XDimens
   @Override
   protected APIResult doDropPartitions(String tableName, String storageName, String filter) {
     return getClient().dropAllPartitionsOfDim(tableName, storageName, filter);
+  }
+
+  @Override
+  protected APIResult doUpdatePartition(String tableName, String storageName, String validPath) {
+    return getClient().updatePartitionOfDim(tableName, storageName, validPath);
+  }
+
+  @Override
+  protected APIResult doUpdatePartitions(String tableName, String storageName, String validPath) {
+    return getClient().updatePartitionsOfDim(tableName, storageName, validPath);
   }
 
   @Override

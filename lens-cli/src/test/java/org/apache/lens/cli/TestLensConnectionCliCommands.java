@@ -24,6 +24,7 @@ import java.net.URI;
 
 import javax.ws.rs.BadRequestException;
 
+import org.apache.lens.api.LensSessionHandle;
 import org.apache.lens.cli.commands.LensConnectionCommands;
 import org.apache.lens.client.LensClient;
 
@@ -89,10 +90,10 @@ public class TestLensConnectionCliCommands extends LensCliApplicationTest {
     return f;
   }
 
-  private String getFilePathFromUri(String uripath){
+  private String getFilePathFromUri(String uripath) {
     try {
       return new URI(uripath).getPath();
-    } catch (Exception e){
+    } catch (Exception e) {
       return null;
     }
   }
@@ -139,7 +140,7 @@ public class TestLensConnectionCliCommands extends LensCliApplicationTest {
 
     File f = null;
     try {
-      String filename = "/tmp/data";
+      String filename = "target/data";
       f = createNewPath(filename);
 
       String result = commands.addFile(filename);
@@ -172,7 +173,7 @@ public class TestLensConnectionCliCommands extends LensCliApplicationTest {
 
     /* Tests input file pattern file: and file://  */
     String filenameA = "file:" + projectdir + "/target/tempdata_a.txt";
-    String filenameB = "file://" + projectdir +"/target/tempdata_b.txt";
+    String filenameB = "file://" + projectdir + "/target/tempdata_b.txt";
 
     String fileRegex = "file:" + projectdir + "/target/tempdata_*.txt";
 
@@ -194,7 +195,6 @@ public class TestLensConnectionCliCommands extends LensCliApplicationTest {
     }
   }
 
-
   /**
    * Test jar commands.
    */
@@ -207,7 +207,7 @@ public class TestLensConnectionCliCommands extends LensCliApplicationTest {
 
     File jar = null;
     try {
-      String filename = "/tmp/data.jar";
+      String filename = "target/data.jar";
       jar = createNewPath(filename);
 
       String result = commands.addJar(filename);
@@ -287,21 +287,21 @@ public class TestLensConnectionCliCommands extends LensCliApplicationTest {
     File file = null;
     File jar = null;
     try {
-      String fileName = "/tmp/data.txt";
+      String fileName = "target/data.txt";
       file = createNewPath(fileName);
       commands.addFile(fileName);
 
-      String jarName = "/tmp/data.jar";
+      String jarName = "target/data.jar";
       jar = createNewPath(jarName);
       commands.addJar(jarName);
 
       String fileResourcesList = commands.listResources("file");
       Assert.assertEquals(fileResourcesList.split("\n").length, 1);
-      Assert.assertTrue(fileResourcesList.split("\n")[0].contains("/tmp/data.txt"));
+      Assert.assertTrue(fileResourcesList.split("\n")[0].contains("target/data.txt"));
 
       String jarResourcesList = commands.listResources("jar");
       Assert.assertEquals(jarResourcesList.split("\n").length, 1);
-      Assert.assertTrue(jarResourcesList.split("\n")[0].contains("/tmp/data.jar"));
+      Assert.assertTrue(jarResourcesList.split("\n")[0].contains("target/data.jar"));
 
       String allResources = commands.listResources(null);
       Assert.assertEquals(allResources.split("\n").length, 2);
@@ -324,6 +324,24 @@ public class TestLensConnectionCliCommands extends LensCliApplicationTest {
       if (jar != null) {
         jar.delete();
       }
+      commands.quitShell();
+    }
+  }
+
+  /**
+   * Test CLI command to get session handle
+   */
+  @Test
+  public void testGetSessionHandle() {
+    LensClient client = new LensClient();
+    LensConnectionCommands commands = new LensConnectionCommands();
+    commands.setClient(client);
+    try {
+      LensSessionHandle sessionHandle = client.getConnection().getSessionHandle();
+      Assert.assertNotNull(sessionHandle);
+      String output = commands.getSessionHandle();
+      Assert.assertTrue(output.contains(sessionHandle.getPublicId().toString()), "session handle output: " + output);
+    } finally {
       commands.quitShell();
     }
   }

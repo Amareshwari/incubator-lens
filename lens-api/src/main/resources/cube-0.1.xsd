@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="UTF-8" ?>
 <!--
 
   Licensed to the Apache Software Foundation (ASF) under one
@@ -39,6 +40,16 @@
         some documentation
       </xs:documentation>
     </xs:annotation>
+    <xs:sequence>
+      <xs:element name="tags" type="x_properties" minOccurs="0" maxOccurs="1">
+        <xs:annotation>
+          <xs:documentation>
+            Tags can be key value pairs associated with a field so that similar
+            fields can be categorized into certain group.
+          </xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
     <xs:attribute type="xs:string" name="name" use="required"/>
     <xs:attribute type="xs:string" name="display_string">
       <xs:annotation>
@@ -64,7 +75,7 @@
     </xs:sequence>
   </xs:complexType>
 
-  <xs:element name="x_cube" abstract="true" type="x_cube"/>
+  <xs:element name="x_cube" type="x_cube"/>
 
   <xs:complexType name="x_cube" abstract="true">
     <xs:annotation>
@@ -212,7 +223,7 @@
       </xs:documentation>
     </xs:annotation>
     <xs:sequence>
-      <xs:element type="x_property" name="property" maxOccurs="unbounded" minOccurs="1"/>
+      <xs:element type="x_property" name="property" maxOccurs="unbounded" minOccurs="0"/>
     </xs:sequence>
   </xs:complexType>
 
@@ -224,7 +235,7 @@
     </xs:annotation>
     <xs:complexContent>
       <xs:extension base="x_field">
-        <xs:attribute type="x_measure_type" name="type" use="required"/>
+        <xs:attribute type="x_measure_type" name="_type" use="required"/>
         <xs:attribute type="xs:string" name="default_aggr">
           <xs:annotation>
             <xs:documentation>
@@ -322,7 +333,7 @@
           </xs:annotation>
           <xs:element type="x_expr_spec" name="expr_spec" maxOccurs="unbounded" minOccurs="1"/>
         </xs:sequence>
-        <xs:attribute type="xs:string" name="type" use="required">
+        <xs:attribute type="xs:string" name="_type" use="required">
           <xs:annotation>
             <xs:documentation>
               The type indicating what the evaluation of expression will produce. Allowed types are BOOLEAN, TINYINT,
@@ -392,28 +403,38 @@
     <xs:complexContent>
       <xs:extension base="x_field">
         <xs:sequence>
-          <xs:element name="ref_spec" maxOccurs="1" minOccurs="0">
+          <xs:element type="x_chain_column" name="chain_ref_column" maxOccurs="unbounded" minOccurs="0">
             <xs:annotation>
               <xs:documentation>
-                Reference specifiction needs to be specified if the attribute is a reference attribute. It
-                can either be table reference or a chained column
-
-                ref_spec can be specified as a list of table references to
-                which the attribute is refering to.
-                For ex : userid refers user.id, xuser.id, yuser.id, zuser.id.
-
-                Alternately, ref_spec could be a chained column specifed with chain name and column name.
+                Chain column specification needs to be specified if the attribute is a reference attribute.
+                It can be list of chained columns each specified with chain name and column name.
               </xs:documentation>
             </xs:annotation>
-            <xs:complexType>
-              <xs:choice maxOccurs="1" minOccurs="1">
-                <xs:element type="x_table_references" name="table_references" maxOccurs="1" minOccurs="1"/>
-                <xs:element type="x_chain_column" name="chain_ref_column" maxOccurs="1" minOccurs="1"/>
-              </xs:choice>
-            </xs:complexType>
+          </xs:element>
+          <xs:element name="hierarchy" type="x_dim_attributes" maxOccurs="1" minOccurs="0">
+            <xs:annotation>
+              <xs:documentation>
+                If the dim attribute is a hierarchical attribute consisting of more dim attribute. This specification
+                is supplied in the definition. When cube or dimension has a hierarchy defined, the underlying fact or
+                dimtables, can have one or more elements in the hierarchy.
+                For example, location can be hierarchical dim attribute with its hierarchy defined as zipcode, city,
+                state and country; A fact can have zipcode and city as columns in the table and another fact can have
+                city alone.
+              </xs:documentation>
+            </xs:annotation>
+          </xs:element>
+          <xs:element name="values" type="xs:string" maxOccurs="unbounded" minOccurs="0">
+            <xs:annotation>
+              <xs:documentation>
+                These values specified here represent what actual values the dim attribute can take. This value is
+                usually specified if the values the attribute can take are minimal and can be listed. This is more
+                indicative information specified, for user to understand what values the attribute can hold.
+                For example, a gender attribute can enumerate the values attribute can take and specify them here.
+              </xs:documentation>
+            </xs:annotation>
           </xs:element>
         </xs:sequence>
-        <xs:attribute type="xs:string" name="type" use="required">
+        <xs:attribute type="xs:string" name="_type">
           <xs:annotation>
             <xs:documentation>
               The type indicating what the evaluation of expression will produce. Allowed types are BOOLEAN,TINYINT,
@@ -445,13 +466,6 @@
               This would give an idea of how big the grouping will be when an attribute is chosen for groupby
               expressions.
               This is just an approximate value.
-            </xs:documentation>
-          </xs:annotation>
-        </xs:attribute>
-        <xs:attribute type="xs:boolean" name="join_key" default="true">
-          <xs:annotation>
-            <xs:documentation>
-              This flag will tell whether the attribute can be used as a join key or not
             </xs:documentation>
           </xs:annotation>
         </xs:attribute>
@@ -498,17 +512,14 @@
   <xs:complexType name="x_table_reference">
     <xs:attribute type="xs:string" name="table" use="required"/>
     <xs:attribute type="xs:string" name="column" use="required"/>
-  </xs:complexType>
-
-  <xs:complexType name="x_table_references">
-    <xs:annotation>
-      <xs:documentation>
-        Set of table references.
-      </xs:documentation>
-    </xs:annotation>
-    <xs:sequence>
-      <xs:element type="x_table_reference" name="table_reference" maxOccurs="unbounded" minOccurs="1"/>
-    </xs:sequence>
+    <xs:attribute type="xs:boolean" name="maps_to_many" use="optional" default="false">
+      <xs:annotation>
+        <xs:documentation>
+          This boolean is used to specify if the destination reference can map to many rows for single value of source
+          reference. Mainly signifies if there are bridge tables.
+        </xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
   </xs:complexType>
 
   <xs:element name="x_join_chains" type="x_join_chains"/>
@@ -520,7 +531,7 @@
       </xs:documentation>
     </xs:annotation>
     <xs:sequence>
-      <xs:element type="x_join_chain" name="join_chain" maxOccurs="unbounded" minOccurs="1"/>
+      <xs:element type="x_join_chain" name="join_chain" maxOccurs="unbounded" minOccurs="0"/>
     </xs:sequence>
   </xs:complexType>
 
@@ -530,13 +541,14 @@
         Join chain represents the paths to reach a dimension.
         For example, to reach Country from
         SalesCube, there can be the following equivalent paths:
-        SalesCube.deliveryStateid -> State.id, State.countryid ->Country.id
-        SalesCube.deliveryCityid -> City.id, City.stateid -> State.id, State.countryid ->Country.id
+        SalesCube.deliveryStateid -&amp;gt; State.id, State.countryid -&amp;gt; Country.id
+        SalesCube.deliveryCityid -&amp;gt; City.id, City.stateid -&amp;gt; State.id, State.countryid -&amp;gt;Country.id
         Both the above paths will be associated with same
         join chain i.e with same name, if they are equivalent and at
         runtime, LENS will choose the path to use. If the
         paths are not equivalent, they should be named differently.
-        SalesCube.productionStateid -> State.id, State.countryid ->Country.id will be named differently.
+        SalesCube.productionStateid -&amp;gt; State.id,
+        State.countryid -&amp;gt;Country.id will be named differently.
       </xs:documentation>
     </xs:annotation>
     <xs:complexContent>
@@ -662,7 +674,7 @@
       </xs:annotation>
       <xs:simpleType>
         <xs:restriction base="xs:double">
-          <xs:minExclusive value="0"></xs:minExclusive>
+          <xs:minInclusive value="0"></xs:minInclusive>
         </xs:restriction>
       </xs:simpleType>
     </xs:attribute>
@@ -670,7 +682,7 @@
 
   <xs:complexType name="x_update_periods">
     <xs:sequence>
-      <xs:element name="update_period" type="x_update_period" maxOccurs="unbounded" minOccurs="1"/>
+      <xs:element name="update_period" type="x_update_period" maxOccurs="unbounded" minOccurs="0"/>
     </xs:sequence>
   </xs:complexType>
 
@@ -687,7 +699,7 @@
       </xs:documentation>
     </xs:annotation>
     <xs:attribute name="name" type="xs:string" use="required"/>
-    <xs:attribute type="xs:string" name="type" use="required">
+    <xs:attribute type="xs:string" name="_type" use="required">
       <xs:annotation>
         <xs:documentation>
           The type indicating what the evaluation of expression will produce. Allowed types are BOOLEAN, TINYINT,
@@ -725,6 +737,7 @@
       </xs:documentation>
     </xs:annotation>
     <xs:restriction base="xs:string">
+      <xs:enumeration value="CONTINUOUS"/>
       <xs:enumeration value="SECONDLY"/>
       <xs:enumeration value="MINUTELY"/>
       <xs:enumeration value="HOURLY"/>
@@ -786,6 +799,24 @@
         <xs:annotation>
           <xs:documentation>
             Table properties.
+            The following properties can be specified for DBStorage table :
+            1. lens.metastore.native.db.name : The underlying databse name in DB storage.
+            2. lens.metastore.native.table.name : The underlying table name in DB storage.
+            3. lens.metastore.native.table.column.mapping : The column mapping for columns of the table if they are
+            different in underlying DB storage. The value is specified with comma separated map entries specified with
+            key-values separated by equalto. Example value: id=id1,name=name1
+            The following properties can be specified for Elastic search tables :
+            1. lens.metastore.es.index.name : The underlying ES index name.
+            2. lens.metastore.es.type.name : The underlying ES type name.
+            Start and End times for storage table:
+            1. cube.storagetable.start.times: Comma separated list of start times for this table.
+               Start times can be relative times(e.g. now.day - 1 month) or absolute times(e.g. 2014-02)
+               The max of the start times will be considered as the final start time. This storagetable will
+               not be candidate for answering time ranges completely before its start time.
+            2. cube.storagetable.end.times: Comma separated list of end times for this table.
+               End times can be relative times(e.g. now.day - 1 month) or absolute times(e.g. 2014-02)
+               The min of the end times will be considered as the final end time. This storagetable will not be
+               candidate for answering time ranges completely after its end time.
           </xs:documentation>
         </xs:annotation>
       </xs:element>
@@ -985,7 +1016,40 @@
       </xs:documentation>
     </xs:annotation>
     <xs:sequence>
-      <xs:element name="storage_table" minOccurs="1" maxOccurs="unbounded" type="x_storage_table_element"/>
+      <xs:element name="storage_table" minOccurs="0" maxOccurs="unbounded" type="x_storage_table_element"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="x_cube_segment">
+    <xs:annotation>
+      <xs:documentation>
+        cube segment belong to the segmentation
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="segment_parameters" type="x_properties" minOccurs="0" maxOccurs="1">
+        <xs:annotation>
+          <xs:documentation>
+            Segment properties.
+            The following properties can be specified at a cube segment level :
+            1. lens.metastore.cube.column.mapping : The column mapping for columns of cube segment if they are
+            different in underlying cube. The value is speciified with comma separated map entries specified with
+            key-values separated by equalto. Example value: id=id1,name=name1
+          </xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="cube_name"  type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="x_cube_segments">
+    <xs:annotation>
+      <xs:documentation>
+        Segments in segmentation. There can be two or more such cube segments.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="cube_segment" minOccurs="2" maxOccurs="unbounded" type="x_cube_segment"/>
     </xs:sequence>
   </xs:complexType>
 
@@ -1170,6 +1234,9 @@
             e.g. now.year or now.day - 6 hour etc.
             7. cube.fact.absolute.end.time: If you're deprecating this fact, put the final date till which the data of
             the fact will be valid here. Format same as absolute start time.
+            8. cube.fact.relative.end.time: You can specify the end date for fact table
+            relative to current date e.g. fact table is valid for next 90days starting from today.
+            This can be specified as just a time difference e.g. "+90 days"
           </xs:documentation>
         </xs:annotation>
       </xs:element>
@@ -1198,7 +1265,68 @@
       </xs:annotation>
       <xs:simpleType>
         <xs:restriction base="xs:double">
-          <xs:minExclusive value="0"></xs:minExclusive>
+          <xs:minInclusive value="0"></xs:minInclusive>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:element name="x_cube_segmentation" type="x_cube_segmentation"/>
+
+  <xs:complexType name="x_cube_segmentation">
+    <xs:annotation>
+      <xs:documentation>
+        Cube segmentation is associated to a base cube and consists of two or more cube segments. All
+        cube segments together make cube segmentation complete.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element type="x_properties" name="properties" maxOccurs="1" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>
+            Properties that can be set for cubesegmentation are
+            1. cube.segmentation.absolute.start.time: start time of the cube segmentation.
+            For queries that ask for time before this, this cubesegmentation is not a candidate. Time format
+            can be specified in yyyy[-mm[-dd[-hh[:MM[:ss[,SSS]]]]]] format.
+            2. cube.segmentation.relative.start.time: Here you can specify cubesegmentations's relative validity
+            relative to current time. Useful if you want to specify e.g. this cubesegmentation is valid
+            for today - 90 days. Can be specified as just a time difference e.g. "-90 days".
+            Or can be specified in relative syntax.
+            e.g. now.year or now.day - 6 hour etc.
+            3. cube.segmentation.absolute.end.time: If you're deprecating a cubesegmentation, put the final date till
+            which the data of the cubesegmentation will be valid here. Format same as absolute start time.
+            4. cube.segmentation.relative.end.time: You can specify the end date for cubesegmentation
+            relative to current date e.g. cubesegmentationas is valid for next 90 days starting from today.
+            This can be specified as just a time difference e.g. "+90 days".
+          </xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="cube_segements" type="x_cube_segments" maxOccurs="1" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="name" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>
+          Name of cube segmentation
+        </xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="cube_name" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>
+          The base or parent cube to which the cube segmentation is associated.
+        </xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="weight" use="required" >
+      <xs:annotation>
+        <xs:documentation>
+          The weight of the cube segmentation. LENS will use this attribute to decide the lightest table to
+          query when there are more than one eligible tables.
+        </xs:documentation>
+      </xs:annotation>
+      <xs:simpleType>
+        <xs:restriction base="xs:double">
+          <xs:minInclusive value="0"></xs:minInclusive>
         </xs:restriction>
       </xs:simpleType>
     </xs:attribute>
@@ -1243,7 +1371,7 @@
         </xs:documentation>
       </xs:annotation>
     </xs:attribute>
-    <xs:attribute name="owner" type="xs:string" use="required">
+    <xs:attribute name="owner" type="xs:string" use="optional">
       <xs:annotation>
         <xs:documentation>
           Owner of the table.

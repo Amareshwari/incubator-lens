@@ -18,7 +18,7 @@
  */
 package org.apache.lens.cli.commands;
 
-import java.io.IOException;
+import java.io.File;
 import java.util.List;
 
 import org.apache.lens.api.APIResult;
@@ -37,20 +37,18 @@ public abstract class LensCRUDCommand<T> extends BaseLensCommand {
     return Joiner.on("\n").join(all);
   }
 
-  public String create(String path, boolean ignoreIfExists) {
-    return doCreate(getValidPath(path, false, true), ignoreIfExists).getStatus().toString().toLowerCase();
+  public String create(File path, boolean ignoreIfExists) {
+    return doCreate(getValidPath(path, false, true), ignoreIfExists)
+        .getStatus().toString().toLowerCase();
   }
 
   public String describe(String name) {
-    try {
-      return formatJson(mapper.writer(pp).writeValueAsString(doRead(name)));
-    } catch (IOException e) {
-      throw new IllegalArgumentException(e);
-    }
+    return formatJson(doRead(name));
   }
 
-  public String update(String entity, String path) {
-    return doUpdate(entity, getValidPath(path, false, true)).getStatus().toString().toLowerCase();
+  public String update(String entity, File path) {
+    return doUpdate(entity, getValidPath(path, false, true))
+        .getStatus().toString().toLowerCase();
   }
 
   public String drop(String name, boolean cascade) {

@@ -21,11 +21,12 @@ package org.apache.lens.server.api.driver;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.apache.lens.api.query.QueryCost;
 import org.apache.lens.api.query.QueryHandle;
 import org.apache.lens.api.query.QueryPrepareHandle;
 import org.apache.lens.api.query.ResultRow;
@@ -35,15 +36,23 @@ import org.apache.lens.server.api.events.LensEventListener;
 import org.apache.lens.server.api.query.AbstractQueryContext;
 import org.apache.lens.server.api.query.PreparedQueryContext;
 import org.apache.lens.server.api.query.QueryContext;
-import org.apache.lens.server.api.user.UserConfigLoader;
+import org.apache.lens.server.api.query.collect.WaitingQueriesSelectionPolicy;
+import org.apache.lens.server.api.query.constraint.QueryLaunchingConstraint;
+import org.apache.lens.server.api.query.cost.FactPartitionBasedQueryCost;
+import org.apache.lens.server.api.query.cost.QueryCost;
 
 import org.apache.hadoop.conf.Configuration;
+
 import org.apache.hive.service.cli.ColumnDescriptor;
+
+import com.beust.jcommander.internal.Sets;
+import com.google.common.collect.ImmutableSet;
+import lombok.Getter;
 
 /**
  * The Class MockDriver.
  */
-public class MockDriver implements LensDriver {
+public class MockDriver extends AbstractLensDriver {
   private static AtomicInteger mockDriverId = new AtomicInteger();
 
   /**
@@ -72,7 +81,7 @@ public class MockDriver implements LensDriver {
 
   @Override
   public String toString() {
-    return "MockDriver:" + driverId;
+    return getFullyQualifiedName()+":"+driverId;
   }
 
   @Override
@@ -86,9 +95,15 @@ public class MockDriver implements LensDriver {
    * @see org.apache.lens.server.api.driver.LensDriver#configure(org.apache.hadoop.conf.Configuration)
    */
   @Override
-  public void configure(Configuration conf) throws LensException {
+  public void configure(Configuration conf, String driverType, String driverName) throws LensException {
     this.conf = conf;
     ioTestVal = conf.getInt("mock.driver.test.val", -1);
+    this.conf.addResource(getDriverResourcePath("failing-query-driver-site.xml"));
+  }
+
+  @Override
+  public String getFullyQualifiedName() {
+    return "mock/fail1";
   }
 
   /**
@@ -121,7 +136,7 @@ public class MockDriver implements LensDriver {
 
     @Override
     public QueryCost getCost() {
-      return new QueryCost(0L, 0.0);
+      return new FactPartitionBasedQueryCost(0);
     }
   }
 
@@ -136,6 +151,8 @@ public class MockDriver implements LensDriver {
     return new MockQueryPlan(explainCtx.getUserQuery());
   }
 
+  @Getter
+  private int updateCount = 0;
   /*
    * (non-Javadoc)
    *
@@ -143,6 +160,25 @@ public class MockDriver implements LensDriver {
    */
   @Override
   public void updateStatus(QueryContext context) throws LensException {
+    updateCount++;
+    if ("simulate status retries".equals(context.getUserQuery())) {
+      try {
+        if (updateCount < 3) {
+          throw new SocketTimeoutException("simulated timeout exception");
+        } else if (updateCount <= 5) {
+          throw new SocketException("simulated socket exception");
+        }
+      } catch (Exception e) {
+        throw new LensException(e);
+      }
+    }
+    if ("simulate status failure".equals(context.getUserQuery())) {
+      try {
+        throw new SocketTimeoutException("simulated timeout exception");
+      } catch (Exception e) {
+        throw new LensException(e);
+      }
+    }
     context.getDriverStatus().setProgress(1.0);
     context.getDriverStatus().setStatusMessage("Done");
     context.getDriverStatus().setState(DriverQueryState.SUCCESSFUL);
@@ -185,8 +221,15 @@ public class MockDriver implements LensDriver {
   public void registerDriverEventListener(LensEventListener<DriverEvent> driverEventListener) {
   }
 
+
   @Override
-  public void registerUserConfigLoader(UserConfigLoader userConfigLoader) {
+  public ImmutableSet<QueryLaunchingConstraint> getQueryConstraints() {
+    return ImmutableSet.copyOf(Sets.<QueryLaunchingConstraint>newHashSet());
+  }
+
+  @Override
+  public ImmutableSet<WaitingQueriesSelectionPolicy> getWaitingQuerySelectionPolicies() {
+    return ImmutableSet.copyOf(Sets.<WaitingQueriesSelectionPolicy>newHashSet());
   }
 
   /*
@@ -236,9 +279,15 @@ public class MockDriver implements LensDriver {
     return new PersistentResultSet() {
 
       @Override
-      public int size() throws LensException {
+      public Integer size() throws LensException {
         // TODO Auto-generated method stub
-        return 0;
+        return null;
+      }
+
+      @Override
+      public Long getFileSize() throws LensException {
+        // TODO Auto-generated method stub
+        return null;
       }
 
       @Override
@@ -278,13 +327,13 @@ public class MockDriver implements LensDriver {
    * @see org.apache.lens.server.api.driver.LensDriver#fetchResultSet(org.apache.lens.server.api.query.QueryContext)
    */
   @Override
-  public LensResultSet fetchResultSet(QueryContext context) throws LensException {
+  public LensResultSet fetchResultSet(final QueryContext context) throws LensException {
     return new InMemoryResultSet() {
 
       @Override
-      public int size() throws LensException {
+      public Integer size() throws LensException {
         // TODO Auto-generated method stub
-        return 0;
+        return null;
       }
 
       @Override
@@ -312,14 +361,14 @@ public class MockDriver implements LensDriver {
       }
 
       @Override
-      public boolean seekToStart() throws LensException {
+      public boolean hasNext() throws LensException {
+        // TODO Auto-generated method stub
         return false;
       }
 
       @Override
-      public boolean hasNext() throws LensException {
-        // TODO Auto-generated method stub
-        return false;
+      public boolean canBePurged() {
+        return true;
       }
     };
   }
@@ -375,7 +424,7 @@ public class MockDriver implements LensDriver {
 
   @Override
   public QueryCost estimate(AbstractQueryContext qctx) throws LensException {
-    return new QueryCost(0L, 0.0);
+    return new FactPartitionBasedQueryCost(0);
   }
 
 }

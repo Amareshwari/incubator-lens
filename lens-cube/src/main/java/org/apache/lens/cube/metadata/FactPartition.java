@@ -20,12 +20,11 @@
 package org.apache.lens.cube.metadata;
 
 import java.text.DateFormat;
-import java.util.Date;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.*;
 
 import org.apache.lens.server.api.error.LensException;
 
+import com.google.common.collect.ImmutableMap;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
@@ -43,6 +42,7 @@ public class FactPartition implements Comparable<FactPartition> {
   @Getter
   @Setter
   private FactPartition containingPart;
+  @Getter
   private final DateFormat partFormat;
   @Getter
   @Setter
@@ -60,7 +60,18 @@ public class FactPartition implements Comparable<FactPartition> {
   public FactPartition(String partCol, Date partSpec, UpdatePeriod period, FactPartition containingPart,
     DateFormat partFormat, Set<String> storageTables) {
     this(partCol, partSpec, period, containingPart, partFormat);
-    this.storageTables.addAll(storageTables);
+    if (storageTables != null) {
+      this.storageTables.addAll(storageTables);
+    }
+  }
+
+  public FactPartition(String partCol, TimePartition timePartition) {
+    this(partCol, timePartition, null, null);
+  }
+
+  public FactPartition(String partCol, TimePartition timePartition, FactPartition containingPart, Set<String>
+    storageTables) {
+    this(partCol, timePartition.getDate(), timePartition.getUpdatePeriod(), containingPart, null, storageTables);
   }
 
   public boolean hasContainingPart() {
@@ -76,7 +87,7 @@ public class FactPartition implements Comparable<FactPartition> {
   }
 
   public String getPartString() {
-    return period.format().format(partSpec);
+    return period.format(partSpec);
   }
 
   public String getFormattedFilter(String tableName) {
@@ -165,5 +176,20 @@ public class FactPartition implements Comparable<FactPartition> {
 
   public TimePartition getTimePartition() throws LensException {
     return TimePartition.of(getPeriod(), getPartSpec());
+  }
+
+  public double getAllTableWeights(ImmutableMap<String, Double> tableWeights) {
+    double weight = 0;
+    Map<String, Double> tblWithoutDBWeghts = new HashMap<>();
+    for (Map.Entry<String, Double> entry : tableWeights.entrySet()) {
+      tblWithoutDBWeghts.put(entry.getKey().substring(entry.getKey().indexOf('.') + 1), entry.getValue());
+    }
+    for (String tblName : getStorageTables()) {
+      Double tblWeight = tblWithoutDBWeghts.get(tblName);
+      if (tblWeight != null) {
+        weight += tblWeight;
+      }
+    }
+    return weight;
   }
 }

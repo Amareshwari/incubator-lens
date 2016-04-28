@@ -22,12 +22,18 @@ import java.util.concurrent.*;
 
 import org.apache.lens.server.api.error.LensException;
 
+import org.apache.commons.lang3.concurrent.BasicThreadFactory;
+
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 /**
  * Event listeners should implement this class if they wish to process events asynchronously. This should be used when
  * event processing can block, or is computationally intensive.
  *
  * @param <T> the generic type
  */
+@Slf4j
 public abstract class AsyncEventListener<T extends LensEvent> implements LensEventListener<T> {
 
   /**
@@ -39,6 +45,16 @@ public abstract class AsyncEventListener<T extends LensEvent> implements LensEve
    * The event queue.
    */
   protected final BlockingQueue<Runnable> eventQueue;
+
+  /**
+   * Name of this Asynchronous Event Listener. Will be used for logging and to name the threads in thread pool that
+   * allow asynchronous handling of events. If required, Sub Classes can override <code>getName</code> method to
+   * provide more appropriate name.
+   *
+   * Default value is the class Name (Example QueryEndNotifier, ResultFormatter, etc)
+   */
+  @Getter(AccessLevel.PROTECTED)
+  private final String name = this.getClass().getSimpleName();
 
   /**
    * Create a single threaded event listener with an unbounded queue, with daemon threads.
@@ -53,36 +69,28 @@ public abstract class AsyncEventListener<T extends LensEvent> implements LensEve
    * @param poolSize the pool size
    */
   public AsyncEventListener(int poolSize) {
-    this(poolSize, -1, 10, true);
+    this(poolSize, 60, true);
   }
 
   /**
    * Create an asynchronous event listener which uses a thread poool to process events.
    *
    * @param poolSize       size of the event processing pool
-   * @param maxQueueSize   max size of the event queue, if this is non positive, then the queue is unbounded
    * @param timeOutSeconds time out in seconds when an idle thread is destroyed
    * @param isDaemon       if the threads used to process should be daemon threads,
    *                       if false, then implementation should call stop()
    *                       to stop the thread pool
    */
-  public AsyncEventListener(int poolSize, int maxQueueSize, long timeOutSeconds, final boolean isDaemon) {
-    if (maxQueueSize <= 0) {
-      eventQueue = new LinkedBlockingQueue<Runnable>();
-    } else {
-      eventQueue = new ArrayBlockingQueue<Runnable>(maxQueueSize);
-    }
+  public AsyncEventListener(int poolSize, long timeOutSeconds, final boolean isDaemon) {
+    eventQueue = new LinkedBlockingQueue<>();
 
-    processor = new ThreadPoolExecutor(poolSize, poolSize, timeOutSeconds, TimeUnit.SECONDS, eventQueue,
-      new ThreadFactory() {
-        @Override
-        public Thread newThread(Runnable runnable) {
-          Thread th = new Thread(runnable);
-          th.setName("event_processor_thread");
-          th.setDaemon(isDaemon);
-          return th;
-        }
-      });
+    ThreadFactory factory = new BasicThreadFactory.Builder()
+      .namingPattern(getName()+"_AsyncThread-%d")
+      .daemon(isDaemon)
+      .priority(Thread.NORM_PRIORITY)
+      .build();
+    // fixed pool with min and max equal to poolSize
+    processor = new ThreadPoolExecutor(poolSize, poolSize, timeOutSeconds, TimeUnit.SECONDS, eventQueue, factory);
     processor.allowCoreThreadTimeOut(true);
   }
 
@@ -98,7 +106,11 @@ public abstract class AsyncEventListener<T extends LensEvent> implements LensEve
       processor.execute(new Runnable() {
         @Override
         public void run() {
-          process(event);
+          try {
+            process(event);
+          } catch (Throwable e) {
+            log.error("{} Failed to process event {}", getName(), event, e);
+          }
         }
       });
     } catch (RejectedExecutionException rejected) {

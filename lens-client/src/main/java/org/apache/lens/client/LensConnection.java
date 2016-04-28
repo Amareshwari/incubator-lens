@@ -19,7 +19,10 @@
 package org.apache.lens.client;
 
 import java.net.ConnectException;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.ws.rs.ProcessingException;
@@ -33,25 +36,23 @@ import javax.ws.rs.core.Response;
 import org.apache.lens.api.APIResult;
 import org.apache.lens.api.LensSessionHandle;
 import org.apache.lens.api.StringList;
+import org.apache.lens.api.util.MoxyJsonConfigurationContextResolver;
 import org.apache.lens.client.exceptions.LensClientServerConnectionException;
-
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 
 import org.glassfish.jersey.media.multipart.FormDataBodyPart;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
 import org.glassfish.jersey.media.multipart.FormDataMultiPart;
 import org.glassfish.jersey.media.multipart.MultiPartFeature;
+import org.glassfish.jersey.moxy.json.MoxyJsonFeature;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Top level client connection class which is used to connect to a lens server.
  */
+@Slf4j
 public class LensConnection {
-
-  /** The Constant LOG. */
-  private static final Log LOG = LogFactory.getLog(LensConnection.class);
 
   /** The params. */
   private final LensConnectionParams params;
@@ -112,14 +113,31 @@ public class LensConnection {
     return client.target(params.getBaseConnectionUrl()).path(params.getMetastoreResourcePath());
   }
 
+  public Client buildClient() {
+    ClientBuilder cb = ClientBuilder.newBuilder().register(MultiPartFeature.class).register(MoxyJsonFeature.class)
+      .register(MoxyJsonConfigurationContextResolver.class);
+    Iterator<Class<?>> itr = params.getRequestFilters().iterator();
+    while (itr.hasNext()) {
+      cb.register(itr.next());
+    }
+    return cb.build();
+  }
+
   private WebTarget getSessionWebTarget() {
-    Client client = ClientBuilder.newBuilder().register(MultiPartFeature.class).build();
-    return getSessionWebTarget(client);
+    return getSessionWebTarget(buildClient());
   }
 
   private WebTarget getMetastoreWebTarget() {
-    Client client = ClientBuilder.newBuilder().register(MultiPartFeature.class).build();
-    return getMetastoreWebTarget(client);
+    return getMetastoreWebTarget(buildClient());
+  }
+
+  public WebTarget getLogWebTarget() {
+    Client client = buildClient();
+    return getLogWebTarget(client);
+  }
+
+  public WebTarget getLogWebTarget(Client client) {
+    return client.target(params.getBaseConnectionUrl()).path(params.getLogResourcePath());
   }
 
   /**
@@ -148,7 +166,7 @@ public class LensConnection {
       final LensSessionHandle handle = response.readEntity(LensSessionHandle.class);
       if (handle != null) {
         sessionHandle = handle;
-        LOG.debug("Created a new session " + sessionHandle.getPublicId());
+        log.debug("Created a new session {}", sessionHandle.getPublicId());
       } else {
         throw new IllegalStateException("Unable to connect to lens " + "server with following paramters" + params);
       }
@@ -158,7 +176,7 @@ public class LensConnection {
       }
     }
 
-    LOG.debug("Successfully switched to database " + params.getDbName());
+    log.debug("Successfully switched to database {}", params.getDbName());
     open.set(true);
 
     return sessionHandle;
@@ -189,7 +207,7 @@ public class LensConnection {
     if (result.getStatus() != APIResult.Status.SUCCEEDED) {
       throw new IllegalStateException("Unable to close lens connection " + "with params " + params);
     }
-    LOG.debug("Lens connection closed.");
+    log.debug("Lens connection closed.");
     return result;
   }
 
@@ -245,6 +263,17 @@ public class LensConnection {
   }
 
   /**
+   * get the logs for a given log file
+   *
+   * @param logFile log segregation
+   */
+  public Response getLogs(String logFile) {
+    WebTarget target = getLogWebTarget();
+    Response result = target.path(logFile).request(MediaType.APPLICATION_OCTET_STREAM).get();
+    return result;
+  }
+
+  /**
    * Sets the connection params.
    *
    * @param key   the key
@@ -258,7 +287,7 @@ public class LensConnection {
       MediaType.APPLICATION_XML_TYPE));
     mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("key").build(), key));
     mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("value").build(), value));
-    LOG.debug("Setting connection params " + key + "=" + value);
+    log.debug("Setting connection params {}={}", key, value);
     APIResult result = target.path("params").request()
       .put(Entity.entity(mp, MediaType.MULTIPART_FORM_DATA_TYPE), APIResult.class);
     return result;
@@ -284,7 +313,20 @@ public class LensConnection {
     return value.getElements();
   }
 
-  LensConnectionParams getLensConnectionParams() {
+  public Map<String, String> getConnectionParamsAsMap() {
+    List<String> params = getConnectionParams();
+    Map<String, String> paramsMap = new HashMap<String, String>(params.size());
+    String[] paramKeyAndValue;
+    for (String param : params) {
+      paramKeyAndValue = param.split("=");
+      if (paramKeyAndValue.length == 2) {
+        paramsMap.put(paramKeyAndValue[0], paramKeyAndValue[1]);
+      }
+    }
+    return paramsMap;
+  }
+
+  public LensConnectionParams getLensConnectionParams() {
     return this.params;
   }
 

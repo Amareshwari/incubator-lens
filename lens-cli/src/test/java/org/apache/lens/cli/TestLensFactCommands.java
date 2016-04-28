@@ -31,6 +31,7 @@ import org.apache.lens.cli.commands.LensCubeCommands;
 import org.apache.lens.cli.commands.LensFactCommands;
 import org.apache.lens.client.LensClient;
 
+import org.testng.annotations.AfterTest;
 import org.testng.annotations.Test;
 
 import lombok.extern.slf4j.Slf4j;
@@ -68,7 +69,7 @@ public class TestLensFactCommands extends LensCliApplicationTest {
     URL cubeSpec = TestLensCubeCommands.class.getClassLoader().getResource("sample-cube.xml");
     String cubeList = getCubeCommand().showCubes();
     assertFalse(cubeList.contains("sample_cube"), cubeList);
-    getCubeCommand().createCube(new File(cubeSpec.toURI()).getAbsolutePath());
+    getCubeCommand().createCube(new File(cubeSpec.toURI()));
     cubeList = getCubeCommand().showCubes();
     assertTrue(cubeList.contains("sample_cube"), cubeList);
   }
@@ -95,6 +96,16 @@ public class TestLensFactCommands extends LensCliApplicationTest {
     return cubeCommands;
   }
 
+  @AfterTest
+  public void cleanUp() {
+    if (command != null) {
+      command.getClient().closeConnection();
+    }
+    if (cubeCommands != null) {
+      cubeCommands.getClient().closeConnection();
+    }
+  }
+
   /**
    * Adds the fact1 table.
    *
@@ -109,7 +120,7 @@ public class TestLensFactCommands extends LensCliApplicationTest {
     TestLensStorageCommands.addLocalStorage(FACT_LOCAL);
     URL factSpec = TestLensFactCommands.class.getClassLoader().getResource("fact1.xml");
     try {
-      command.createFact(new File(factSpec.toURI()).getAbsolutePath());
+      command.createFact(new File(factSpec.toURI()));
     } catch (Exception e) {
       fail("Unable to create fact table" + e.getMessage());
     }
@@ -148,22 +159,22 @@ public class TestLensFactCommands extends LensCliApplicationTest {
 
       String xmlContent = sb.toString();
 
-      xmlContent = xmlContent.replace("<property name=\"fact1.prop\" value=\"f1\" />\n",
+      xmlContent = xmlContent.replace("<property name=\"fact1.prop\" value=\"f1\"/>\n",
         "<property name=\"fact1.prop\" value=\"f1\"/>" + "\n<property name=\"fact1.prop1\" value=\"f2\"/>\n");
 
-      File newFile = new File("/tmp/local-fact1.xml");
+      File newFile = new File("target/local-fact1.xml");
       Writer writer = new OutputStreamWriter(new FileOutputStream(newFile));
       writer.write(xmlContent);
       writer.close();
 
       String desc = command.describeFactTable("fact1");
       log.debug(desc);
-      String propString = "name : fact1.prop  value : f1";
-      String propString1 = "name : fact1.prop1  value : f2";
+      String propString = "fact1.prop: f1";
+      String propString1 = "fact1.prop1: f2";
 
       assertTrue(desc.contains(propString));
 
-      command.updateFactTable("fact1", "/tmp/local-fact1.xml");
+      command.updateFactTable("fact1", new File("target/local-fact1.xml"));
       desc = command.describeFactTable("fact1");
       log.debug(desc);
       assertTrue(desc.contains(propString), "The sample property value is not set");
@@ -205,7 +216,7 @@ public class TestLensFactCommands extends LensCliApplicationTest {
     String result;
     URL resource = TestLensFactCommands.class.getClassLoader().getResource("fact-local-storage-element.xml");
     try {
-      command.addNewFactStorage("fact1", new File(resource.toURI()).getAbsolutePath());
+      command.addNewFactStorage("fact1", new File(resource.toURI()));
     } catch (Throwable t) {
       log.error("Unable to locate the storage part file for adding new storage to fact table fact1", t);
       fail("Unable to locate the storage part file for adding new storage to fact table fact1");
@@ -222,40 +233,44 @@ public class TestLensFactCommands extends LensCliApplicationTest {
   /**
    * Test fact partition actions.
    */
-  private void testFactPartitionActions() {
+  private void testFactPartitionActions() throws URISyntaxException {
     LensFactCommands command = getCommand();
-    String result;
     verifyEmptyTimelines();
-    result = command.getAllPartitionsOfFact("fact1", FACT_LOCAL, null);
-    assertTrue(result.trim().isEmpty());
-    try {
-      command.addPartitionToFact("fact1", FACT_LOCAL, new File(
-        TestLensFactCommands.class.getClassLoader().getResource("fact1-local-part.xml").toURI()).getAbsolutePath());
-    } catch (Throwable t) {
-      log.error("Unable to locate the storage part file for adding new storage to fact table fact1", t);
-      fail("Unable to locate the storage part file for adding new storage to fact table fact1");
-    }
+    assertTrue(command.getAllPartitionsOfFact("fact1", FACT_LOCAL, null).trim().isEmpty());
+    String singlePartPath = new File(
+      TestLensFactCommands.class.getClassLoader().getResource("fact1-local-part.xml").toURI()).getAbsolutePath();
+    String multiplePartsPath = new File(
+      TestLensFactCommands.class.getClassLoader().getResource("fact1-local-parts.xml").toURI()).getAbsolutePath();
+    assertEquals(command.addPartitionToFact("fact1", FACT_LOCAL, new File(singlePartPath)), SUCCESS_MESSAGE);
+    assertEquals(command.updatePartitionOfFact("fact1", FACT_LOCAL, new File(singlePartPath)), SUCCESS_MESSAGE);
     verifyAndDeletePartitions();
-    try {
-      command.addPartitionsToFact("fact1", FACT_LOCAL, new File(
-          TestLensFactCommands.class.getClassLoader().getResource("fact1-local-parts.xml").toURI()).getAbsolutePath());
-    } catch (Throwable t) {
-      log.error("Unable to locate the storage part file for adding new storage to fact table fact1", t);
-      fail("Unable to locate the storage part file for adding new storage to fact table fact1");
-    }
+    assertEquals(command.addPartitionsToFact("fact1", FACT_LOCAL, new File(multiplePartsPath)), SUCCESS_MESSAGE);
+    assertEquals(command.updatePartitionsOfFact("fact1", FACT_LOCAL, multiplePartsPath), SUCCESS_MESSAGE);
     verifyAndDeletePartitions();
 
     // Wrong files:
     try {
-      command.addPartitionToFact("fact1", FACT_LOCAL, new File(
-        TestLensFactCommands.class.getClassLoader().getResource("fact1-local-parts.xml").toURI()).getAbsolutePath());
+      command.addPartitionToFact("fact1", FACT_LOCAL, new File(multiplePartsPath));
       fail("Should fail");
     } catch (Throwable t) {
       // pass
     }
     try {
-      command.addPartitionsToFact("fact1", FACT_LOCAL, new File(
-        TestLensFactCommands.class.getClassLoader().getResource("fact1-local-part.xml").toURI()).getAbsolutePath());
+      command.updatePartitionOfFact("fact1", FACT_LOCAL, new File(multiplePartsPath));
+      fail("Should fail");
+    } catch (Throwable t) {
+      // pass
+    }
+
+    try {
+      command.addPartitionsToFact("fact1", FACT_LOCAL, new File(singlePartPath));
+      fail("Should fail");
+    } catch (Throwable t) {
+      // pass
+    }
+
+    try {
+      command.updatePartitionsOfFact("fact1", FACT_LOCAL, singlePartPath);
       fail("Should fail");
     } catch (Throwable t) {
       // pass

@@ -28,6 +28,7 @@ import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 
 import org.apache.lens.api.LensConf;
+import org.apache.lens.api.ToYAMLString;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -50,8 +51,8 @@ import lombok.NoArgsConstructor;
  *          the prepared time
  * @param preparedUser
  *          the prepared user
- * @param selectedDriverClassName
- *          the selected driver class name
+ * @param selectedDriverName
+ *          the selected driver's fully qualified name
  * @param driverQuery
  *          the driver query
  * @param conf
@@ -62,7 +63,7 @@ import lombok.NoArgsConstructor;
  * Instantiates a new lens prepared query.
  */
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class LensPreparedQuery {
+public class LensPreparedQuery extends ToYAMLString {
 
   /**
    * The prepare handle.
@@ -93,11 +94,11 @@ public class LensPreparedQuery {
   private String preparedUser;
 
   /**
-   * The selected driver class name.
+   * The selected driver's fully qualified name.
    */
   @XmlElement
   @Getter
-  private String selectedDriverClassName;
+  private String selectedDriverName;
 
   /**
    * The driver query.
@@ -112,4 +113,5 @@ public class LensPreparedQuery {
   @XmlElement
   @Getter
   private LensConf conf;
+
 }

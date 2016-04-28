@@ -19,33 +19,31 @@
 package org.apache.lens.server.session;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.nio.charset.Charset;
 import java.util.*;
 
 import org.apache.lens.server.LensServices;
 import org.apache.lens.server.api.LensConfConstants;
 import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.metrics.MetricsService;
+import org.apache.lens.server.util.ScannedPaths;
 
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hive.service.AbstractService;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * Service to maintain DB specific static jars. This service is managed by HiveSessionService.
  */
+@Slf4j
 public class DatabaseResourceService extends AbstractService {
-  public static final Log LOG = LogFactory.getLog(DatabaseResourceService.class);
   public static final String NAME = "database-resources";
   private Map<String, ClassLoader> classLoaderCache;
   private Map<String, List<LensSessionImpl.ResourceEntry>> dbResEntryMap;
@@ -69,16 +67,6 @@ public class DatabaseResourceService extends AbstractService {
     getMetrics().incrCounter(DatabaseResourceService.class, counter);
   }
 
-  /**
-   * Gets counter value.
-   *
-   * @param counter the counter
-   */
-  private long getCounter(String counter) {
-    return getMetrics().getCounter(DatabaseResourceService.class, counter);
-  }
-
-
 
   public DatabaseResourceService(String name) {
     super(name);
@@ -87,8 +75,8 @@ public class DatabaseResourceService extends AbstractService {
   @Override
   public synchronized void init(HiveConf hiveConf) {
     super.init(hiveConf);
-    classLoaderCache = new HashMap<String, ClassLoader>();
-    dbResEntryMap = new HashMap<String, List<LensSessionImpl.ResourceEntry>>();
+    classLoaderCache = new HashMap<>();
+    dbResEntryMap = new HashMap<>();
   }
 
   @Override
@@ -96,12 +84,12 @@ public class DatabaseResourceService extends AbstractService {
     super.start();
 
     try {
-      LOG.info("Starting loading DB specific resources");
+      log.info("Starting loading DB specific resources");
       loadDbResourceEntries();
       loadResources();
     } catch (LensException e) {
       incrCounter(LOAD_RESOURCES_ERRORS);
-      LOG.warn("Failed to load DB resource mapping, resources must be added explicitly to session.");
+      log.warn("Failed to load DB resource mapping, resources must be added explicitly to session.");
     }
   }
 
@@ -120,13 +108,13 @@ public class DatabaseResourceService extends AbstractService {
     try {
       String resTopDir =
         getHiveConf().get(LensConfConstants.DATABASE_RESOURCE_DIR, LensConfConstants.DEFAULT_DATABASE_RESOURCE_DIR);
-      LOG.info("Database specific resources at " + resTopDir);
+      log.info("Database specific resources at {}", resTopDir);
 
       Path resTopDirPath = new Path(resTopDir);
       serverFs = FileSystem.newInstance(resTopDirPath.toUri(), getHiveConf());
       if (!serverFs.exists(resTopDirPath)) {
         incrCounter(LOAD_RESOURCES_ERRORS);
-        LOG.warn("Database resource location does not exist - " + resTopDir + ". Database jars will not be available");
+        log.warn("Database resource location does not exist - {}. Database jars will not be available", resTopDir);
         return;
       }
 
@@ -138,23 +126,20 @@ public class DatabaseResourceService extends AbstractService {
           // Get all resources for that db
           findResourcesInDir(serverFs, dbName, dbDirPath);
         } else {
-          LOG.warn("DB resource DIR is not a directory: " + dbDirPath);
+          log.warn("DB resource DIR is not a directory: {}", dbDirPath);
         }
       }
 
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("Found resources " + dbResEntryMap);
-      }
-
+      log.debug("Found resources {}", dbResEntryMap);
     } catch (IOException io) {
-      LOG.error("Error getting list of dbs to load resources from", io);
+      log.error("Error getting list of dbs to load resources from", io);
       throw new LensException(io);
     } finally {
       if (serverFs != null) {
         try {
           serverFs.close();
         } catch (IOException e) {
-          LOG.error("Error closing file system instance", e);
+          log.error("Error closing file system instance", e);
         }
       }
     }
@@ -162,22 +147,9 @@ public class DatabaseResourceService extends AbstractService {
 
   private void findResourcesInDir(FileSystem serverFs, String database, Path dbDirPath) throws IOException {
     // Check if order file is present in the directory
-    List<String> jars = null;
-    Path jarOrderFile = new Path(dbDirPath, "jar_order");
-    if (serverFs.exists(jarOrderFile)) {
-      InputStream jarOrderInputStream = null;
-      try {
-        jarOrderInputStream = serverFs.open(jarOrderFile);
-        jars = IOUtils.readLines(jarOrderInputStream, Charset.forName("UTF-8"));
-      } catch (IOException ioexc) {
-        LOG.error("Unable to load jar order file for " + dbDirPath, ioexc);
-      } finally {
-        IOUtils.closeQuietly(jarOrderInputStream);
-      }
-    }
-
+    List<String> jars = new ScannedPaths(dbDirPath, "jar").getFinalPaths();
     if (jars != null && !jars.isEmpty()) {
-      LOG.info(database + " picking jar in jar_order: " + jars);
+      log.info("{} picking jar in jar_order: {}", database, jars);
       for (String jar : jars) {
         if (StringUtils.isBlank(jar)) {
           // skipping empty lines. usually the last line could be empty
@@ -185,13 +157,13 @@ public class DatabaseResourceService extends AbstractService {
         }
         Path jarFilePath = new Path(dbDirPath, jar);
         if (!jar.endsWith(".jar") || !serverFs.exists(jarFilePath)) {
-          LOG.info("Resource skipped " + jarFilePath + " for db " + database);
+          log.info("Resource skipped {} for db {}", jarFilePath, database);
           continue;
         }
         addResourceEntry(new LensSessionImpl.ResourceEntry("jar", jarFilePath.toUri().toString()), database);
       }
     } else {
-      LOG.info(database + " picking jars in file list order");
+      log.info("{} picking jars in file list order", database);
       for (FileStatus dbResFile : serverFs.listStatus(dbDirPath)) {
         // Skip subdirectories
         if (serverFs.isDirectory(dbResFile.getPath())) {
@@ -204,18 +176,18 @@ public class DatabaseResourceService extends AbstractService {
         if (dbResName.endsWith(".jar")) {
           addResourceEntry(new LensSessionImpl.ResourceEntry("jar", dbResUri), database);
         } else {
-          LOG.info("Resource skipped " + dbResFile.getPath() + " for db " + database);
+          log.info("Resource skipped {} for db {}", dbResFile.getPath(), database);
         }
       }
     }
   }
 
   private void addResourceEntry(LensSessionImpl.ResourceEntry entry, String dbName) {
-    LOG.info("Adding resource entry " + entry.getLocation() + " for " + dbName);
+    log.info("Adding resource entry {} for {}", entry.getLocation(), dbName);
     synchronized (dbResEntryMap) {
       List<LensSessionImpl.ResourceEntry> dbEntryList = dbResEntryMap.get(dbName);
       if (dbEntryList == null) {
-        dbEntryList = new ArrayList<LensSessionImpl.ResourceEntry>();
+        dbEntryList = new ArrayList<>();
         dbResEntryMap.put(dbName, dbEntryList);
       }
       dbEntryList.add(entry);
@@ -230,10 +202,10 @@ public class DatabaseResourceService extends AbstractService {
       try {
         createClassLoader(db);
         loadDBJars(db, dbResEntryMap.get(db), true);
-        LOG.info("Loaded resources for db " + db + " resources: " + dbResEntryMap.get(db));
+        log.info("Loaded resources for db {} resources: {}", db, dbResEntryMap.get(db));
       } catch (LensException exc) {
         incrCounter(LOAD_RESOURCES_ERRORS);
-        LOG.warn("Failed to load resources for db " + db, exc);
+        log.warn("Failed to load resources for db {}", db, exc);
         classLoaderCache.remove(db);
       }
     }
@@ -269,18 +241,16 @@ public class DatabaseResourceService extends AbstractService {
       URL[] preUrls = urlLoader.getURLs();
 
       // Add to set to remove duplicate additions
-      Set<URL> newUrls = new LinkedHashSet<URL>();
+      Set<URL> newUrls = new LinkedHashSet<>();
       // New class loader = URLs of DB jars + argument jars
-      for (URL url : preUrls) {
-        newUrls.add(url);
-      }
+      Collections.addAll(newUrls, preUrls);
 
       for (LensSessionImpl.ResourceEntry res : resources) {
         try {
           newUrls.add(new URL(res.getLocation()));
         } catch (MalformedURLException e) {
           incrCounter(LOAD_RESOURCES_ERRORS);
-          LOG.error("Invalid URL " + res.getLocation() + " adding to db " + database, e);
+          log.error("Invalid URL {} adding to db {}", res.getLocation(), database, e);
         }
       }
 
@@ -292,7 +262,7 @@ public class DatabaseResourceService extends AbstractService {
 
       return newClassLoader;
     } else {
-      LOG.warn("Only URL class loader supported");
+      log.warn("Only URL class loader supported");
       return Thread.currentThread().getContextClassLoader();
     }
   }
@@ -311,8 +281,8 @@ public class DatabaseResourceService extends AbstractService {
 
   /**
    * Get class loader of a database added with database specific jars
-   * @param database
-   * @return
+   * @param database database
+   * @return class loader from cache of classloaders for each db
    * @throws LensException
    */
   protected ClassLoader getClassLoader(String database) throws LensException {
@@ -321,7 +291,7 @@ public class DatabaseResourceService extends AbstractService {
 
   /**
    * Get resources added statically to the database
-   * @param database
+   * @param database db
    * @return resources added to the database, or null if no resources are noted for this database
    */
   public Collection<LensSessionImpl.ResourceEntry> getResourcesForDatabase(String database) {
@@ -330,7 +300,7 @@ public class DatabaseResourceService extends AbstractService {
 
   private MetricsService getMetrics() {
     if (metricsService == null) {
-      metricsService = (MetricsService) LensServices.get().getService(MetricsService.NAME);
+      metricsService = LensServices.get().getService(MetricsService.NAME);
       if (metricsService == null) {
         throw new NullPointerException("Could not get metrics service");
       }

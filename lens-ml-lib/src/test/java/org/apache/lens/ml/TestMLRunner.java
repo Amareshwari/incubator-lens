@@ -35,23 +35,20 @@ import org.apache.lens.server.metastore.MetastoreResource;
 import org.apache.lens.server.query.QueryServiceResource;
 import org.apache.lens.server.session.SessionResource;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 
-import org.glassfish.jersey.client.ClientConfig;
-import org.glassfish.jersey.media.multipart.MultiPartFeature;
 import org.testng.Assert;
 import org.testng.annotations.AfterTest;
 import org.testng.annotations.BeforeTest;
 import org.testng.annotations.Test;
 
+import lombok.extern.slf4j.Slf4j;
 
 @Test
+@Slf4j
 public class TestMLRunner extends LensJerseyTest {
-  private static final Log LOG = LogFactory.getLog(TestMLRunner.class);
   private static final String TEST_DB = TestMLRunner.class.getSimpleName();
 
   private LensMLClient mlClient;
@@ -69,11 +66,6 @@ public class TestMLRunner extends LensJerseyTest {
   @Override
   protected URI getBaseUri() {
     return UriBuilder.fromUri("http://localhost/").port(getTestPort()).path("/lensapi").build();
-  }
-
-  @Override
-  protected void configureClient(ClientConfig config) {
-    config.register(MultiPartFeature.class);
   }
 
   @BeforeTest
@@ -101,7 +93,7 @@ public class TestMLRunner extends LensJerseyTest {
 
   @Test
   public void trainAndEval() throws Exception {
-    LOG.info("Starting train & eval");
+    log.info("Starting train & eval");
     String algoName = "spark_naive_bayes";
     String database = "default";
     String trainTable = "naivebayes_training_table";
@@ -125,7 +117,7 @@ public class TestMLRunner extends LensJerseyTest {
 
   @Test
   public void trainAndEvalFromDir() throws Exception {
-    LOG.info("Starting train & eval from Dir");
+    log.info("Starting train & eval from Dir");
     MLRunner runner = new MLRunner();
     runner.init(mlClient, "data/naive_bayes");
     MLTask task = runner.train();

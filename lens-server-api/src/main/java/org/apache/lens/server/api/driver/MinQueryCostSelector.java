@@ -18,17 +18,19 @@
  */
 package org.apache.lens.server.api.driver;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 
-import org.apache.lens.api.query.QueryCost;
 import org.apache.lens.server.api.query.AbstractQueryContext;
+import org.apache.lens.server.api.query.cost.QueryCost;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.log4j.Logger;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class MinQueryCostSelector implements DriverSelector {
-  public static final Logger LOG = Logger.getLogger(MinQueryCostSelector.class);
 
   /**
    * Returns the driver that has the minimum query cost.
@@ -38,25 +40,20 @@ public class MinQueryCostSelector implements DriverSelector {
    * @return the lens driver
    */
   @Override
-  public LensDriver select(final AbstractQueryContext ctx,
-    final Configuration conf) {
-    return Collections.min(ctx.getDriverContext().getDrivers(), new Comparator<LensDriver>() {
+  public LensDriver select(final AbstractQueryContext ctx, final Configuration conf) {
+
+    final Collection<LensDriver> drivers = ctx.getDriverContext().getDriversWithValidQueryCost();
+    log.info("Candidate drivers: {}", drivers);
+    for (LensDriver driver : drivers) {
+      log.debug("Cost on driver {}: {}", driver, ctx.getDriverQueryCost(driver));
+    }
+    return Collections.min(drivers, new Comparator<LensDriver>() {
       @Override
       public int compare(LensDriver d1, LensDriver d2) {
-        return compareCosts(ctx.getDriverContext().getDriverQueryCost(d1), ctx
-          .getDriverContext().getDriverQueryCost(d2));
+        final QueryCost c1 = ctx.getDriverQueryCost(d1);
+        final QueryCost c2 = ctx.getDriverQueryCost(d2);
+        return c1.compareTo(c2);
       }
     });
-  }
-
-  int compareCosts(QueryCost c1, QueryCost c2) {
-    if (c1 == null && c2 == null) {
-      return 0;
-    } else if (c1 == null && c2 != null) {
-      return 1;
-    } else if (c1 != null && c2 == null) {
-      return -1;
-    }
-    return c1.compareTo(c2);
   }
 }

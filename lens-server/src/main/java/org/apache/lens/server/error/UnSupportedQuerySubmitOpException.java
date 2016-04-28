@@ -22,24 +22,24 @@ import static org.apache.lens.server.error.LensServerErrorCode.UNSUPPORTED_QUERY
 
 import org.apache.lens.api.error.ErrorCollection;
 import org.apache.lens.api.error.LensError;
-import org.apache.lens.api.response.LensErrorTO;
+import org.apache.lens.api.query.SupportedQuerySubmitOperations;
+import org.apache.lens.api.result.LensErrorTO;
 import org.apache.lens.server.api.error.LensException;
-import org.apache.lens.server.query.SupportedQuerySubmitOperations;
 
 public class UnSupportedQuerySubmitOpException extends LensException {
 
   private final SupportedQuerySubmitOperations supportedOps = new SupportedQuerySubmitOperations();
 
   public UnSupportedQuerySubmitOpException() {
-    super(UNSUPPORTED_QUERY_SUBMIT_OPERATION.getValue());
+    super(UNSUPPORTED_QUERY_SUBMIT_OPERATION.getLensErrorInfo());
   }
 
   public UnSupportedQuerySubmitOpException(final Throwable cause) {
-    super(UNSUPPORTED_QUERY_SUBMIT_OPERATION.getValue(), cause);
+    super(UNSUPPORTED_QUERY_SUBMIT_OPERATION.getLensErrorInfo(), cause);
   }
 
   @Override
-  protected String getFormattedErrorMsg(LensError lensError) {
+  public String getFormattedErrorMsg(LensError lensError) {
 
     final String supportedOpsStr = supportedOps.getSupportedOperationsAsString();
     return lensError.getFormattedErrorMsg(supportedOpsStr);

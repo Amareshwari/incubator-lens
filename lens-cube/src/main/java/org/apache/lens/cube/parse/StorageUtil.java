@@ -23,15 +23,12 @@ import java.util.*;
 import org.apache.lens.cube.metadata.FactPartition;
 import org.apache.lens.cube.metadata.StorageConstants;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.apache.commons.lang.StringUtils;
 
 public final class StorageUtil {
   private StorageUtil() {
 
   }
-
-  private static final Log LOG = LogFactory.getLog(StorageUtil.class.getName());
 
   public static String getWherePartClause(String timeDimName, String tableName, Collection<String> parts) {
     if (parts.size() == 0) {
@@ -158,6 +155,10 @@ public final class StorageUtil {
   }
 
   public static String getWhereClause(CandidateDim dim, String alias) {
-    return getWhereClause(dim.getWhereClause(), alias);
+    if (!dim.isWhereClauseAdded(alias) && !StringUtils.isBlank(dim.getWhereClause())) {
+      return getWhereClause(dim.getWhereClause(), alias);
+    } else {
+      return null;
+    }
   }
 }

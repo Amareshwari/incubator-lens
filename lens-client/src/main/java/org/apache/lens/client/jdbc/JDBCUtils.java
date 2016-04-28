@@ -32,6 +32,9 @@ import java.util.jar.Manifest;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.ws.rs.core.UriBuilder;
+
+import org.apache.lens.client.LensClientConfig;
 import org.apache.lens.client.LensConnectionParams;
 
 /**
@@ -63,7 +66,7 @@ public final class JDBCUtils {
 
   /**
    * Parses the JDBC Connection URL.
-   * <p/>
+   * <p></p>
    * The URL format is specified as following :
    * <ul>
    * <li>hostname which contains hosts on which lens server is hosted parsed from authority section</li>
@@ -76,10 +79,10 @@ public final class JDBCUtils {
    * <p>
    * Examples :-
    * </p>
-   * <code>
+   * &lt;code&gt;
    * jdbc:lens://hostname:port/dbname;[optional key value pair of session settings]?
    * [optional configuration settings for connection]#[optional variables to be used in query]
-   * </code>
+   * &lt;/code&gt;
    *
    * @param uri to be used to connect to lens server
    * @return final list of connection parameters
@@ -97,11 +100,6 @@ public final class JDBCUtils {
     }
 
     URI jdbcUri = URI.create(uri.substring(URI_JDBC_PREFIX.length()));
-
-    /*
-     * if (jdbcUri.getHost() != null) { params.setHost(jdbcUri.getHost()); } if (jdbcUri.getPort() > 0) {
-     * params.setPort(jdbcUri.getPort()); }
-     */
     Pattern pattern = Pattern.compile(KEY_VALUE_REGEX);
     // dbname and session settings
     String sessVars = jdbcUri.getPath();
@@ -145,6 +143,14 @@ public final class JDBCUtils {
         params.getLensVars().put(varMatcher.group(1), varMatcher.group(2));
       }
     }
+    UriBuilder baseUriBuilder = UriBuilder.fromUri(LensClientConfig.DEFAULT_SERVER_BASE_URL);
+    if (jdbcUri.getHost() != null) {
+      baseUriBuilder.host(jdbcUri.getHost());
+    }
+    if (jdbcUri.getPort() != -1) {
+      baseUriBuilder.port(jdbcUri.getPort());
+    }
+    params.setBaseUrl(baseUriBuilder.build().toString());
     return params;
   }
 

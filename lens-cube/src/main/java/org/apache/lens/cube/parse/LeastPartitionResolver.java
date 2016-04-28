@@ -21,23 +21,22 @@ package org.apache.lens.cube.parse;
 import java.util.*;
 
 import org.apache.lens.cube.parse.CandidateTablePruneCause.CandidateTablePruneCode;
+import org.apache.lens.server.api.error.LensException;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hive.ql.parse.SemanticException;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Prune candidate fact sets which require more partitions than minimum parts.
  */
+@Slf4j
 class LeastPartitionResolver implements ContextRewriter {
-  public static final Log LOG = LogFactory.getLog(LeastPartitionResolver.class.getName());
-
   public LeastPartitionResolver(Configuration conf) {
   }
 
   @Override
-  public void rewriteContext(CubeQueryContext cubeql) throws SemanticException {
+  public void rewriteContext(CubeQueryContext cubeql) throws LensException {
     if (cubeql.getCube() != null && !cubeql.getCandidateFactSets().isEmpty()) {
       Map<Set<CandidateFact>, Integer> factPartCount = new HashMap<Set<CandidateFact>, Integer>();
 
@@ -54,8 +53,8 @@ class LeastPartitionResolver implements ContextRewriter {
       for (Iterator<Set<CandidateFact>> i = cubeql.getCandidateFactSets().iterator(); i.hasNext();) {
         Set<CandidateFact> facts = i.next();
         if (factPartCount.get(facts) > minPartitions) {
-          LOG.info("Not considering facts:" + facts + " from candidate fact tables as it requires more partitions to"
-            + " be queried:" + factPartCount.get(facts) + " minimum:" + minPartitions);
+          log.info("Not considering facts:{} from candidate fact tables as it requires more partitions to be"
+            + " queried:{} minimum:{}", facts, factPartCount.get(facts), minPartitions);
           i.remove();
         }
       }

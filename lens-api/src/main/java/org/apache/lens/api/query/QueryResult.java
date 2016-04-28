@@ -24,6 +24,9 @@ package org.apache.lens.api.query;
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.XmlSeeAlso;
 
+import org.apache.lens.api.ToYAMLString;
+import org.apache.lens.api.result.PrettyPrintable;
+
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
@@ -36,5 +39,5 @@ import lombok.NoArgsConstructor;
  * Instantiates a new query result.
  */
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class QueryResult {
+public abstract class QueryResult extends ToYAMLString implements PrettyPrintable {
 }

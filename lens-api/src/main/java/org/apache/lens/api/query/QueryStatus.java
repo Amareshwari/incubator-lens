@@ -11,7 +11,7 @@
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * "AS IS"  BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
  * KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations
  * under the License.
@@ -24,7 +24,12 @@ package org.apache.lens.api.query;
 import java.io.Serializable;
 
 import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlEnum;
 import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlType;
+
+import org.apache.lens.api.ToYAMLString;
+import org.apache.lens.api.result.LensErrorTO;
 
 import lombok.*;
 
@@ -37,6 +42,8 @@ import lombok.*;
  *
  * @param progress
  *          the progress
+ * @param queueNumber
+ *          the queue number
  * @param status
  *          the status
  * @param statusMessage
@@ -53,7 +60,7 @@ import lombok.*;
  * Instantiates a new query status.
  */
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class QueryStatus implements Serializable {
+public class QueryStatus extends ToYAMLString implements Serializable {
 
   /**
    * The Constant serialVersionUID.
@@ -63,6 +70,8 @@ public class QueryStatus implements Serializable {
   /**
    * The Enum Status.
    */
+  @XmlType
+  @XmlEnum
   public enum Status {
 
     /**
@@ -72,26 +81,33 @@ public class QueryStatus implements Serializable {
 
     /**
      * The queued.
+     * At this point the query is queued by the server and it waiting to be launched. The launch may be controlled by
+     * multiple factors like query throttling, quota, etc
      */
     QUEUED,
 
     /**
      * The launched.
+     * At this point the query is launched for execution.
      */
     LAUNCHED,
 
     /**
      * The running.
+     * At this point the query starts running on chosen driver
      */
     RUNNING,
 
     /**
      * The executed.
+     * At this point execution is finished by driver, but server may still have some more operations pending
+     * like result persistence, if enabled.
      */
     EXECUTED,
 
     /**
      * The successful.
+     * At this point all operations related to the query are finished successfully by driver and server.
      */
     SUCCESSFUL,
 
@@ -107,6 +123,7 @@ public class QueryStatus implements Serializable {
 
     /**
      * The closed.
+     * At this point the query is purged by the server. Persistent result will still be available to the user
      */
     CLOSED
   }
@@ -117,6 +134,13 @@ public class QueryStatus implements Serializable {
   @XmlElement
   @Getter
   private double progress;
+
+  /**
+   * Queue number of a query when it is in waiting state.
+   */
+  @Getter
+  @Setter
+  private Integer queueNumber;
 
   /**
    * The status.
@@ -153,33 +177,34 @@ public class QueryStatus implements Serializable {
   @Setter
   private String errorMessage;
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.lang.Object#toString()
-   */
-  @Override
-  public String toString() {
-    StringBuilder str = new StringBuilder(status.toString()).append(':').append(statusMessage);
-    if (status.equals(Status.RUNNING)) {
-      str.append(" - Progress:").append(progress).append(":").append(progressMessage);
-    }
-    if (status.equals(Status.SUCCESSFUL)) {
-      if (isResultSetAvailable) {
-        str.append(" - Result Available");
-      } else {
-        str.append(" - Result Not Available");
-      }
-    }
-    if (status.equals(Status.FAILED)) {
-      str.append(" - Cause:").append(errorMessage);
-    }
-    return str.toString();
-  }
+  @XmlElement
+  private LensErrorTO lensErrorTO;
 
   public boolean finished() {
     return status.equals(Status.SUCCESSFUL) || status.equals(Status.FAILED) || status.equals(Status.CANCELED);
   }
+
+  public boolean successful() {
+    return status.equals(Status.SUCCESSFUL);
+  }
+
+
+  public boolean launched() {
+    return status.equals(Status.LAUNCHED);
+  }
+
+  public boolean running() {
+    return status.equals(Status.RUNNING);
+  }
+
+  public boolean queued() {
+    return status.equals(Status.QUEUED);
+  }
+
+  public boolean failed() {
+    return status.equals(Status.FAILED);
+  }
+
 
   /**
    * Checks if is valid transition.
@@ -225,6 +250,7 @@ public class QueryStatus implements Serializable {
       break;
     case EXECUTED:
       switch (newState) {
+      case EXECUTED:
       case SUCCESSFUL:
       case FAILED:
       case CANCELED:
@@ -249,8 +275,15 @@ public class QueryStatus implements Serializable {
    * @param newState the new state
    * @return true, if is validate transition
    */
-  public boolean isValidateTransition(Status newState) {
+  public boolean isValidTransition(final Status newState) {
     return isValidTransition(this.status, newState);
   }
 
+  public Integer getErrorCode() {
+    return (this.lensErrorTO != null) ? this.lensErrorTO.getCode() : null;
+  }
+
+  public String getLensErrorTOErrorMsg() {
+    return (this.lensErrorTO != null) ? this.lensErrorTO.getMessage() : null;
+  }
 }

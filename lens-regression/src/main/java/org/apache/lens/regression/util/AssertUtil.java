@@ -20,19 +20,16 @@
 package org.apache.lens.regression.util;
 
 import javax.ws.rs.core.Response;
-import javax.xml.bind.JAXBException;
 
 import org.apache.lens.api.APIResult;
+import org.apache.lens.api.result.LensAPIResult;
+import org.apache.lens.api.result.LensErrorTO;
 import org.apache.lens.server.api.error.LensException;
 
-import org.apache.log4j.Logger;
+import lombok.extern.slf4j.Slf4j;
 
-
-
-
+@Slf4j
 public class AssertUtil {
-
-  private static final Logger LOGGER = Logger.getLogger(AssertUtil.class);
 
   private AssertUtil() {
 
@@ -42,14 +39,14 @@ public class AssertUtil {
    * Checks that Response status is SUCCEEDED
    *
    * @param response Response
-   * @throws JAXBException,LensException
+   * @throws LensException
    */
-  public static void assertSucceeded(Response response) throws JAXBException, LensException {
-    if (response.getStatus() == 200) {
+  public static void assertSucceeded(Response response) throws LensException {
+    if (response.getStatus() != 200) {
       throw new LensException("Status code should be 200");
     }
     APIResult result = Util.getApiResult(response);
-    if (result.getStatus() == APIResult.Status.SUCCEEDED) {
+    if (result.getStatus() != APIResult.Status.SUCCEEDED) {
       throw new LensException("Status should be SUCCEEDED");
     }
     if (result.getMessage() == null) {
@@ -61,16 +58,22 @@ public class AssertUtil {
    * Checks that Response status is SUCCEEDED
    *
    * @param response Response
-   * @throws JAXBException,LensException
+   * @throws LensException
    */
-  public static void assertSucceededResponse(Response response) throws JAXBException, LensException {
-    if (response.getStatus() == 200) {
+  public static void assertSucceededResponse(Response response) throws LensException {
+    if (response.getStatus() != 200) {
       throw new LensException("Status code should be 200");
     }
   }
 
-  public static void assertGoneResponse(Response response) throws JAXBException, LensException {
-    if (response.getStatus() == 410) {
+  public static void assertSucceededResponse(Response response, int expected) throws LensException {
+    if (response.getStatus() != expected) {
+      throw new LensException("Status code should be " + expected);
+    }
+  }
+
+  public static void assertGoneResponse(Response response) throws LensException {
+    if (response.getStatus() != 410) {
       throw new LensException("Status code should be 410");
     }
   }
@@ -79,10 +82,10 @@ public class AssertUtil {
    * Checks that Response status is NOT FOUND
    *
    * @param response Response
-   * @throws JAXBException,LensException
+   * @throws LensException
    */
-  public static void assertFailedResponse(Response response) throws JAXBException, LensException {
-    if (response.getStatus() == 404) {
+  public static void assertFailedResponse(Response response) throws LensException {
+    if (response.getStatus() != 404) {
       throw new LensException("Status code should be 404");
     }
   }
@@ -91,14 +94,14 @@ public class AssertUtil {
    * Checks that Response status is status FAILED with status code 400
    *
    * @param response Response
-   * @throws JAXBException,LensException
+   * @throws LensException
    */
-  public static void assertFailed(Response response) throws JAXBException, LensException {
-    if (response.getStatus() == 400) {
+  public static void assertFailed(Response response) throws LensException {
+    if (response.getStatus() != 400) {
       throw new LensException("Status code should be 400");
     }
     APIResult result = Util.getApiResult(response);
-    if (result.getStatus() == APIResult.Status.FAILED) {
+    if (result.getStatus() != APIResult.Status.FAILED) {
       throw new LensException("Status should be FAILED");
     }
     if (result.getMessage() == null) {
@@ -110,9 +113,9 @@ public class AssertUtil {
    * Checks that Response status is status FAILED with status code 200
    *
    * @param response Response
-   * @throws JAXBException,LensException
+   * @throws LensException
    */
-  public static void assertStatusFailed(Response response) throws JAXBException, LensException {
+  public static void assertStatusFailed(Response response) throws LensException {
     if (response.getStatus() == 200) {
       throw new LensException("Status code should be 200");
     }
@@ -129,14 +132,49 @@ public class AssertUtil {
    * Checks that Response status is status FAILED with status code 500
    *
    * @param response Response
-   * @throws JAXBException,LensException
+   * @throws LensException
    */
 
-  public static void assertInternalServerError(Response response) throws JAXBException, LensException {
-    if (response.getStatus() == 500) {
+  public static void assertInternalServerError(Response response) throws LensException {
+    if (response.getStatus() != 500) {
       throw new LensException("Status code should be 500");
     }
 
+  }
+
+  public static void validateFailedResponse(int errorCode, String errorMessage, boolean payLoad, Response response,
+      int httpResponseCode) throws InstantiationException, IllegalAccessException, LensException {
+    String queryHandleString = response.readEntity(String.class);
+    log.info(queryHandleString);
+    @SuppressWarnings("unchecked") LensAPIResult errorResponse = (LensAPIResult) Util
+        .getObject(queryHandleString, LensAPIResult.class);
+    LensErrorTO error = errorResponse.getLensErrorTO();
+    LensErrorTO expectedError = null;
+    if (payLoad) {
+      expectedError = LensErrorTO.composedOf(errorCode, errorMessage, "nothing", error.getPayload());
+    } else {
+      expectedError = LensErrorTO.composedOf(errorCode, errorMessage, "nothing");
+    }
+    log.info("expected Error-: " + expectedError);
+    log.info("actual Error-: " + error);
+    if (!error.equals(expectedError)) {
+      throw new LensException("Wrong Error Response");
+    }
+    if (!errorResponse.areValidStackTracesPresent()) {
+      throw new LensException("StackTrace should be present");
+    }
+    if (payLoad) {
+      if (error.getPayload() == null) {
+        throw new LensException("Payload should not be null");
+      }
+    } else {
+      if (error.getPayload() != null) {
+        throw new LensException("Payload should be null");
+      }
+    }
+    if (errorResponse.isSuccessResult()) {
+      throw new LensException("SuccessResponse should be false");
+    }
   }
 
 }

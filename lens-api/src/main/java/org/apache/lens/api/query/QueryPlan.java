@@ -29,6 +29,8 @@ import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlElementWrapper;
 import javax.xml.bind.annotation.XmlRootElement;
 
+import org.apache.lens.api.result.QueryCostTO;
+
 import lombok.*;
 
 /**
@@ -110,34 +112,10 @@ public class QueryPlan extends QuerySubmitResult {
    */
   @XmlElement
   @Getter
-  private QueryCost queryCost;
-
-  /**
-   * The error.
-   */
-  @XmlElement
-  @Getter
-  private boolean error = false;
-
-  /**
-   * The error msg.
-   */
-  @XmlElement
-  @Getter
-  private String errorMsg;
+  private QueryCostTO queryCost;
 
   public String getPlanString() throws UnsupportedEncodingException {
     return URLDecoder.decode(planString, "UTF-8");
   }
 
-  /**
-   * Instantiates a new query plan.
-   *
-   * @param hasError the has error
-   * @param errorMsg the error msg
-   */
-  public QueryPlan(boolean hasError, String errorMsg) {
-    this.error = hasError;
-    this.errorMsg = errorMsg;
-  }
 }

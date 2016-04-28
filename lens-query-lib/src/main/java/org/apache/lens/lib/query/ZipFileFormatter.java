@@ -27,9 +27,11 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
+import com.google.common.base.Strings;
+
 /**
  * Zip file formatter.
- * <p/>
+ * <p></p>
  * Creates a zip on hadoop compatible file system, with ability to split output across multiple part files and provide a
  * final zip output file.
  */
@@ -93,12 +95,16 @@ public class ZipFileFormatter extends AbstractFileFormatter {
   public void setupOutputs() throws IOException {
     resultFileExtn = ctx.getOuptutFileExtn();
     maxSplitRows = ctx.getMaxResultSplitRows();
+    numRows = 0;
 
     String pathStr = ctx.getResultSetParentDir();
     if (StringUtils.isBlank(pathStr)) {
       throw new IllegalArgumentException("No output path specified");
     }
-    finalPath = new Path(pathStr, ctx.getQueryHandle().toString() + ".zip");
+
+    String finalPathStr = Strings.isNullOrEmpty(ctx.getQueryName()) ? ""
+      : LensFileOutputFormat.getValidOutputFileName(ctx.getQueryName()) + "-";
+    finalPath = new Path(pathStr, finalPathStr + ctx.getQueryHandle().toString() + ".zip");
     tmpPath = new Path(pathStr, ctx.getQueryHandle().toString() + ".tmp.zip");
 
     fs = finalPath.getFileSystem(ctx.getConf());
@@ -118,7 +124,9 @@ public class ZipFileFormatter extends AbstractFileFormatter {
   }
 
   private String getQueryResultFileName() {
-    return ctx.getQueryHandle().toString() + PART_SUFFIX + currentPart + resultFileExtn;
+    String pathStr = Strings.isNullOrEmpty(ctx.getQueryName()) ? ""
+      : LensFileOutputFormat.getValidOutputFileName(ctx.getQueryName()) + "-";
+    return pathStr + ctx.getQueryHandle().toString() + PART_SUFFIX + currentPart + resultFileExtn;
   }
 
   /*
@@ -131,6 +139,7 @@ public class ZipFileFormatter extends AbstractFileFormatter {
     close();
     fs.rename(tmpPath, finalPath);
     finalPath = finalPath.makeQualified(fs);
+    fileSize = fs.getFileStatus(finalPath).getLen();
     ctx.setResultSetPath(getFinalOutputPath());
   }
 

@@ -18,6 +18,9 @@
  */
 package org.apache.lens.server.util;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Map;
@@ -26,10 +29,12 @@ import javax.sql.DataSource;
 
 import org.apache.lens.server.api.LensConfConstants;
 
-import org.apache.commons.dbcp.BasicDataSource;
+import org.apache.commons.dbcp.*;
 import org.apache.commons.dbutils.QueryRunner;
 import org.apache.commons.dbutils.ResultSetHandler;
+import org.apache.commons.pool.impl.GenericObjectPool;
 import org.apache.hadoop.conf.Configuration;
+
 
 /**
  * The Class UtilityMethods.
@@ -133,7 +138,24 @@ public final class UtilityMethods {
     tmp.setPassword(conf.get(LensConfConstants.SERVER_DB_JDBC_PASS, LensConfConstants.DEFAULT_SERVER_DB_PASS));
     tmp.setValidationQuery(conf.get(LensConfConstants.SERVER_DB_VALIDATION_QUERY,
       LensConfConstants.DEFAULT_SERVER_DB_VALIDATION_QUERY));
+    tmp.setDefaultAutoCommit(false);
     return tmp;
+  }
+
+  public static DataSource getPoolingDataSourceFromConf(Configuration conf) {
+    final ConnectionFactory cf = new DriverManagerConnectionFactory(
+      conf.get(LensConfConstants.SERVER_DB_JDBC_URL, LensConfConstants.DEFAULT_SERVER_DB_JDBC_URL),
+      conf.get(LensConfConstants.SERVER_DB_JDBC_USER, LensConfConstants.DEFAULT_SERVER_DB_USER),
+      conf.get(LensConfConstants.SERVER_DB_JDBC_PASS, LensConfConstants.DEFAULT_SERVER_DB_PASS));
+    final GenericObjectPool connectionPool = new GenericObjectPool();
+    connectionPool.setTestOnBorrow(false);
+    connectionPool.setTestOnReturn(false);
+    connectionPool.setTestWhileIdle(true);
+    new PoolableConnectionFactory(cf, connectionPool, null
+      , conf.get(LensConfConstants.SERVER_DB_VALIDATION_QUERY,
+        LensConfConstants.DEFAULT_SERVER_DB_VALIDATION_QUERY), false, false)
+      .setDefaultAutoCommit(true);
+    return new PoolingDataSource(connectionPool);
   }
 
   /**
@@ -148,5 +170,21 @@ public final class UtilityMethods {
       sb.append(entry.getKey()).append(":").append(entry.getValue()).append("\n");
     }
     return sb.toString();
+  }
+
+  /**
+   * Pipe input stream to output stream
+   *
+   * @param is the is
+   * @param os the os
+   * @throws IOException Signals that an I/O exception has occurred.
+   */
+  public static void pipe(InputStream is, OutputStream os) throws IOException {
+    int n;
+    byte[] buffer = new byte[4096];
+    while ((n = is.read(buffer)) > -1) {
+      os.write(buffer, 0, n);
+      os.flush();
+    }
   }
 }

@@ -18,10 +18,10 @@
  */
 package org.apache.lens.cube.parse;
 
+import static org.apache.lens.cube.error.LensCubeErrorCode.COULD_NOT_PARSE_EXPRESSION;
 import static org.apache.lens.cube.error.LensCubeErrorCode.SYNTAX_ERROR;
 
 import static org.apache.hadoop.hive.ql.parse.HiveParser.*;
-import static org.apache.hadoop.hive.ql.parse.HiveParser.Number;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -30,16 +30,19 @@ import java.util.regex.Pattern;
 
 import org.apache.lens.server.api.error.LensException;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.ql.Context;
 import org.apache.hadoop.hive.ql.exec.FunctionRegistry;
 import org.apache.hadoop.hive.ql.lib.Node;
 import org.apache.hadoop.hive.ql.parse.*;
 
+import org.antlr.runtime.CommonToken;
 import org.antlr.runtime.tree.Tree;
 
 import com.google.common.base.Optional;
-
+import com.google.common.collect.Sets;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
 
@@ -49,10 +52,36 @@ public final class HQLParser {
   private HQLParser() {
 
   }
+
   public static final Pattern P_WSPACE = Pattern.compile("\\s+");
 
+  public static boolean isTableColumnAST(ASTNode astNode) {
+    return !(astNode == null || astNode.getChildren() == null || astNode.getChildCount() != 2) && astNode.getChild(0)
+      .getType() == HiveParser.TOK_TABLE_OR_COL && astNode.getChild(1).getType() == HiveParser.Identifier;
+  }
+
+  public static boolean isPrimitiveBooleanExpression(ASTNode ast) {
+    return HQLParser.FILTER_OPERATORS.contains(ast.getType());
+  }
+
+  public static boolean isPrimitiveBooleanFunction(ASTNode ast) {
+    if (ast.getType() == TOK_FUNCTION) {
+      if (ast.getChild(0).getText().equals("in")) {
+        return true;
+      }
+    }
+    return false;
+  }
+  public static ASTNode getDotAST(String tableAlias, String fieldAlias) {
+    ASTNode child = new ASTNode(new CommonToken(DOT, "."));
+    child.addChild(new ASTNode(new CommonToken(TOK_TABLE_OR_COL, "TOK_TABLE_OR_COL")));
+    child.getChild(0).addChild(new ASTNode(new CommonToken(Identifier, tableAlias)));
+    child.addChild(new ASTNode(new CommonToken(Identifier, fieldAlias)));
+    return child;
+  }
+
   public interface ASTNodeVisitor {
-    void visit(TreeNode node) throws SemanticException;
+    void visit(TreeNode node) throws LensException;
   }
 
   public static class TreeNode {
@@ -74,12 +103,14 @@ public final class HQLParser {
   }
 
   public static final Set<Integer> BINARY_OPERATORS;
+  public static final Set<Integer> N_ARY_OPERATORS;
+  public static final Set<Integer> FILTER_OPERATORS;
   public static final Set<Integer> ARITHMETIC_OPERATORS;
   public static final Set<Integer> UNARY_OPERATORS;
   public static final Set<Integer> PRIMITIVE_TYPES;
 
   static {
-    HashSet<Integer> ops = new HashSet<Integer>();
+    HashSet<Integer> ops = new HashSet<>();
     ops.add(DOT);
     ops.add(KW_AND);
     ops.add(KW_OR);
@@ -103,20 +134,22 @@ public final class HQLParser {
     ops.add(BITWISEXOR);
 
     BINARY_OPERATORS = Collections.unmodifiableSet(ops);
+    N_ARY_OPERATORS = Collections.unmodifiableSet(Sets.newHashSet(KW_AND, KW_OR, PLUS, STAR,
+      AMPERSAND, BITWISEOR, BITWISEXOR));
 
-    ARITHMETIC_OPERATORS = new HashSet<Integer>();
+    ARITHMETIC_OPERATORS = new HashSet<>();
     ARITHMETIC_OPERATORS.add(PLUS);
     ARITHMETIC_OPERATORS.add(MINUS);
     ARITHMETIC_OPERATORS.add(STAR);
     ARITHMETIC_OPERATORS.add(DIVIDE);
     ARITHMETIC_OPERATORS.add(MOD);
 
-    HashSet<Integer> unaryOps = new HashSet<Integer>();
+    HashSet<Integer> unaryOps = new HashSet<>();
     unaryOps.add(KW_NOT);
     unaryOps.add(TILDE);
     UNARY_OPERATORS = Collections.unmodifiableSet(unaryOps);
 
-    HashSet<Integer> primitiveTypes = new HashSet<Integer>();
+    HashSet<Integer> primitiveTypes = new HashSet<>();
     primitiveTypes.add(TOK_TINYINT);
     primitiveTypes.add(TOK_SMALLINT);
     primitiveTypes.add(TOK_INT);
@@ -133,10 +166,9 @@ public final class HQLParser {
     primitiveTypes.add(TOK_VARCHAR);
     primitiveTypes.add(TOK_CHAR);
     PRIMITIVE_TYPES = Collections.unmodifiableSet(primitiveTypes);
-  }
 
-  public static boolean isArithmeticOp(int tokenType) {
-    return ARITHMETIC_OPERATORS.contains(tokenType);
+    FILTER_OPERATORS = Sets.newHashSet(GREATERTHAN, GREATERTHANOREQUALTO, LESSTHAN, LESSTHANOREQUALTO, EQUAL,
+      EQUAL_NS, NOTEQUAL);
   }
 
   public static ASTNode parseHQL(String query, HiveConf conf) throws LensException {
@@ -148,7 +180,7 @@ public final class HQLParser {
       tree = driver.parse(query, ctx);
       tree = ParseUtils.findRootNonNullToken(tree);
     } catch (ParseException e) {
-      throw new LensException(SYNTAX_ERROR.getValue(), e, e.getMessage());
+      throw new LensException(SYNTAX_ERROR.getLensErrorInfo(), e, e.getMessage());
     } catch (IOException e) {
       throw new RuntimeException(e);
     } finally {
@@ -163,9 +195,14 @@ public final class HQLParser {
     return tree;
   }
 
-  public static ASTNode parseExpr(String expr) throws ParseException {
+  public static ASTNode parseExpr(String expr) throws LensException {
     ParseDriver driver = new ParseDriver();
-    ASTNode tree = driver.parseExpression(expr);
+    ASTNode tree;
+    try {
+      tree = driver.parseExpression(expr);
+    } catch (ParseException e) {
+      throw new LensException(COULD_NOT_PARSE_EXPRESSION.getLensErrorInfo(), e, e.getMessage());
+    }
     return ParseUtils.findRootNonNullToken(tree);
   }
 
@@ -181,8 +218,10 @@ public final class HQLParser {
   /**
    * Debug function for printing query AST to stdout
    *
-   * @param node
-   * @param level
+   * @param tokenMapping token mapping
+   * @param node         node
+   * @param level        level
+   * @param child        child
    */
   public static void printAST(Map<Integer, String> tokenMapping, ASTNode node, int level, int child) {
     if (node == null || node.isNil()) {
@@ -193,8 +232,8 @@ public final class HQLParser {
       System.out.print("  ");
     }
 
-    System.out.print(node.getText() + " [" + tokenMapping.get(node.getToken().getType()) + "]");
-    System.out.print(" (l" + level + "c" + child + ")");
+    System.out.print(node.getText() + " [" + tokenMapping.get(node.getType()) + "]");
+    System.out.print(" (l" + level + "c" + child + "p" + node.getCharPositionInLine() + ")");
 
     if (node.getChildCount() > 0) {
       System.out.println(" {");
@@ -221,7 +260,7 @@ public final class HQLParser {
   }
 
   public static Map<Integer, String> getHiveTokenMapping() throws Exception {
-    Map<Integer, String> mapping = new HashMap<Integer, String>();
+    Map<Integer, String> mapping = new HashMap<>();
 
     for (Field f : HiveParser.class.getFields()) {
       if (f.getType() == int.class) {
@@ -238,9 +277,9 @@ public final class HQLParser {
    * Find a node in the tree rooted at root, given the path of type of tokens from the root's children to the desired
    * node
    *
-   * @param root
+   * @param root node from which searching is to be started
    * @param path starts at the level of root's children
-   * @return
+   * @return Node if found, else null
    */
   public static ASTNode findNodeByPath(ASTNode root, int... path) {
     for (int i = 0; i < path.length; i++) {
@@ -249,7 +288,7 @@ public final class HQLParser {
 
       for (int j = 0; j < root.getChildCount(); j++) {
         ASTNode node = (ASTNode) root.getChild(j);
-        if (node.getToken().getType() == type) {
+        if (node.getType() == type) {
           hasChildWithType = true;
           root = node;
           // If this is the last type in path, return this node
@@ -259,9 +298,6 @@ public final class HQLParser {
             // Go to next level
             break;
           }
-        } else {
-          // Go to next sibling.
-          continue;
         }
       }
 
@@ -281,7 +317,6 @@ public final class HQLParser {
     if (original.getChildren() != null) {
       for (Object o : original.getChildren()) {
         ASTNode childCopy = copyAST((ASTNode) o);
-        childCopy.setParent(copy);
         copy.addChild(childCopy);
       }
     }
@@ -291,11 +326,11 @@ public final class HQLParser {
   /**
    * Breadth first traversal of AST
    *
-   * @param root
-   * @param visitor
-   * @throws SemanticException
+   * @param root      node from where to start bft
+   * @param visitor   action to take on each visit
+   * @throws LensException
    */
-  public static void bft(ASTNode root, ASTNodeVisitor visitor) throws SemanticException {
+  public static void bft(ASTNode root, ASTNodeVisitor visitor) throws LensException {
     if (root == null) {
       throw new NullPointerException("Root cannot be null");
     }
@@ -303,7 +338,7 @@ public final class HQLParser {
     if (visitor == null) {
       throw new NullPointerException("Visitor cannot be null");
     }
-    Queue<TreeNode> queue = new LinkedList<TreeNode>();
+    Queue<TreeNode> queue = new LinkedList<>();
     queue.add(new TreeNode(null, root));
 
     while (!queue.isEmpty()) {
@@ -317,23 +352,20 @@ public final class HQLParser {
   }
 
   static boolean hasSpaces(String text) {
-    if (P_WSPACE.matcher(text).find()) {
-      return true;
-    }
-    return false;
+    return P_WSPACE.matcher(text).find();
   }
 
   /**
    * Recursively reconstruct query string given a query AST
    *
-   * @param root
+   * @param root root node
    * @param buf  preallocated builder where the reconstructed string will be written
    */
   public static void toInfixString(ASTNode root, StringBuilder buf) {
     if (root == null) {
       return;
     }
-    int rootType = root.getToken().getType();
+    int rootType = root.getType();
     String rootText = root.getText();
     // Operand, print contents
     if (Identifier == rootType || Number == rootType || StringLiteral == rootType || KW_TRUE == rootType
@@ -345,11 +377,11 @@ public final class HQLParser {
         buf.append(" true ");
       } else if (KW_FALSE == rootType) {
         buf.append(" false ");
-      } else if (Identifier == rootType && TOK_SELEXPR == ((ASTNode) root.getParent()).getToken().getType()
-        && hasSpaces(rootText)) {
-        // If column alias contains spaces, enclose in back quotes
+      } else if (Identifier == rootType && TOK_SELEXPR == root.getParent().getType()) {
+        // back quote column alias in all cases. This is required since some alias values can match DB keywords
+        // (example : year as alias) and in such case queries can fail on certain DBs if the alias in not back quoted
         buf.append(" as `").append(rootText).append("` ");
-      } else if (Identifier == rootType && TOK_FUNCTIONSTAR == ((ASTNode) root.getParent()).getToken().getType()) {
+      } else if (Identifier == rootType && TOK_FUNCTIONSTAR == root.getParent().getType()) {
         // count(*) or count(someTab.*): Don't append space after the identifier
         buf.append(" ").append(rootText == null ? "" : rootText.toLowerCase());
       } else {
@@ -371,10 +403,10 @@ public final class HQLParser {
         }
       }
       buf.append("(*) ");
-    } else if (UNARY_OPERATORS.contains(Integer.valueOf(rootType))) {
+    } else if (UNARY_OPERATORS.contains(rootType)) {
       if (KW_NOT == rootType) {
         // Check if this is actually NOT IN
-        if (!(findNodeByPath(root, TOK_FUNCTION, KW_IN) != null)) {
+        if (findNodeByPath(root, TOK_FUNCTION, KW_IN) == null) {
           buf.append(" not ");
         }
       } else if (TILDE == rootType) {
@@ -385,8 +417,15 @@ public final class HQLParser {
         toInfixString((ASTNode) root.getChild(i), buf);
       }
 
-    } else if (BINARY_OPERATORS.contains(Integer.valueOf(root.getToken().getType()))) {
-      buf.append("(");
+    } else if (BINARY_OPERATORS.contains(rootType)) {
+      boolean surround = true;
+      if (N_ARY_OPERATORS.contains(rootType)
+        && (root.getParent() == null || rootType == root.getParent().getType())) {
+        surround = false;
+      }
+      if (surround) {
+        buf.append("(");
+      }
       if (MINUS == rootType && root.getChildCount() == 1) {
         // If minus has only one child, then it's a unary operator.
         // Add Operator name first
@@ -397,7 +436,7 @@ public final class HQLParser {
         // Left operand
         toInfixString((ASTNode) root.getChild(0), buf);
         // Operator name
-        if (root.getToken().getType() != DOT) {
+        if (rootType != DOT) {
           buf.append(' ').append(rootText.toLowerCase()).append(' ');
         } else {
           buf.append(rootText.toLowerCase());
@@ -405,7 +444,9 @@ public final class HQLParser {
         // Right operand
         toInfixString((ASTNode) root.getChild(1), buf);
       }
-      buf.append(")");
+      if (surround) {
+        buf.append(")");
+      }
     } else if (LSQUARE == rootType) {
       // square brackets for array and map types
       toInfixString((ASTNode) root.getChild(0), buf);
@@ -459,13 +500,13 @@ public final class HQLParser {
       } else {
         buf.append(rootText);
       }
-    } else if (TOK_FUNCTION == root.getToken().getType()) {
+    } else if (TOK_FUNCTION == root.getType()) {
       // Handle UDFs, conditional operators.
       functionString(root, buf);
 
     } else if (TOK_FUNCTIONDI == rootType) {
       // Distinct is a different case.
-      String fname = ((ASTNode) root.getChild(0)).getText();
+      String fname = root.getChild(0).getText();
 
       buf.append(fname.toLowerCase()).append("( distinct ");
 
@@ -479,7 +520,6 @@ public final class HQLParser {
       buf.append(")");
 
     } else if (TOK_TABSORTCOLNAMEDESC == rootType || TOK_TABSORTCOLNAMEASC == rootType) {
-      // buf.append("(");
       for (int i = 0; i < root.getChildCount(); i++) {
         StringBuilder orderByCol = new StringBuilder();
         toInfixString((ASTNode) root.getChild(i), orderByCol);
@@ -490,12 +530,7 @@ public final class HQLParser {
         buf.append(colStr);
         buf.append(" ");
       }
-      if (TOK_TABSORTCOLNAMEDESC == rootType) {
-        buf.append(" desc ");
-      } else if (TOK_TABSORTCOLNAMEASC == rootType) {
-        buf.append(" asc ");
-      }
-      // buf.append(")");
+      buf.append(" ").append(rootType == TOK_TABSORTCOLNAMEDESC ? "desc" : "asc").append(" ");
     } else if (TOK_SELECT == rootType || TOK_ORDERBY == rootType || TOK_GROUPBY == rootType) {
       for (int i = 0; i < root.getChildCount(); i++) {
         toInfixString((ASTNode) root.getChild(i), buf);
@@ -605,7 +640,7 @@ public final class HQLParser {
       toInfixString((ASTNode) root.getChild(1), buf);
       buf.append(" is not null ");
 
-    } else if (((ASTNode) root.getChild(0)).getToken().getType() == Identifier
+    } else if (root.getChild(0).getType() == Identifier
       && ((ASTNode) root.getChild(0)).getToken().getText().equalsIgnoreCase("between")) {
       // Handle between and not in between
       ASTNode tokTrue = findNodeByPath(root, KW_TRUE);
@@ -633,7 +668,7 @@ public final class HQLParser {
 
       // check if this is NOT In
       ASTNode rootParent = (ASTNode) root.getParent();
-      if (rootParent != null && rootParent.getToken().getType() == KW_NOT) {
+      if (rootParent != null && rootParent.getType() == KW_NOT) {
         buf.append(" not ");
       }
 
@@ -653,7 +688,7 @@ public final class HQLParser {
       buf.append(" as ");
       toInfixString((ASTNode) root.getChild(0), buf);
     } else {
-      int rootType = ((ASTNode) root.getChild(0)).getToken().getType();
+      int rootType = root.getChild(0).getType();
       if (PRIMITIVE_TYPES.contains(rootType)) {
         // cast expression maps to the following ast
         // KW_CAST LPAREN expression KW_AS primitiveType RPAREN -> ^(TOK_FUNCTION primitiveType expression)
@@ -664,7 +699,7 @@ public final class HQLParser {
         buf.append(")");
       } else {
         // Normal UDF
-        String fname = ((ASTNode) root.getChild(0)).getText();
+        String fname = root.getChild(0).getText();
         // Function name
         buf.append(fname.toLowerCase()).append("(");
         // Arguments separated by comma
@@ -688,14 +723,14 @@ public final class HQLParser {
   public static String getString(ASTNode tree) {
     StringBuilder buf = new StringBuilder();
     toInfixString(tree, buf);
-    return buf.toString();
+    return buf.toString().trim().replaceAll("\\s+", " ");
   }
 
   public static String getColName(ASTNode node) {
-    String colname = null;
-    int nodeType = node.getToken().getType();
+    String colname;
+    int nodeType = node.getType();
     if (nodeType == HiveParser.TOK_TABLE_OR_COL) {
-      colname = ((ASTNode) node.getChild(0)).getText();
+      colname = node.getChild(0).getText();
     } else {
       // node in 'alias.column' format
       ASTNode colIdent = (ASTNode) node.getChild(1);
@@ -705,8 +740,31 @@ public final class HQLParser {
     return colname;
   }
 
+  public static Set<String> getColsInExpr(final String tableAlias, ASTNode expr) throws LensException {
+    final Set<String> colsInExpr = new HashSet<>();
+    HQLParser.bft(expr, new ASTNodeVisitor() {
+      @Override
+      public void visit(TreeNode visited) {
+        ASTNode node = visited.getNode();
+        ASTNode parent = null;
+        if (visited.getParent() != null) {
+          parent = visited.getParent().getNode();
+        }
+        if (node.getToken().getType() == DOT) {
+          String alias = HQLParser.findNodeByPath(node, TOK_TABLE_OR_COL, Identifier).getText().toLowerCase();
+          ASTNode colIdent = (ASTNode) node.getChild(1);
+          String column = colIdent.getText().toLowerCase();
+          if (tableAlias.equalsIgnoreCase(alias)) {
+            colsInExpr.add(column);
+          }
+        }
+      }
+    });
+    return colsInExpr;
+  }
+
   public static boolean isAggregateAST(ASTNode node) {
-    int exprTokenType = node.getToken().getType();
+    int exprTokenType = node.getType();
     if (exprTokenType == HiveParser.TOK_FUNCTION || exprTokenType == HiveParser.TOK_FUNCTIONDI
       || exprTokenType == HiveParser.TOK_FUNCTIONSTAR) {
       assert (node.getChildCount() != 0);
@@ -721,6 +779,21 @@ public final class HQLParser {
     return false;
   }
 
+  public static boolean isNonAggregateFunctionAST(ASTNode node) {
+    int exprTokenType = node.getType();
+    if (exprTokenType == HiveParser.TOK_FUNCTION || exprTokenType == HiveParser.TOK_FUNCTIONDI
+      || exprTokenType == HiveParser.TOK_FUNCTIONSTAR) {
+      assert (node.getChildCount() != 0);
+      if (node.getChild(0).getType() == HiveParser.Identifier) {
+        String functionName = BaseSemanticAnalyzer.unescapeIdentifier(node.getChild(0).getText());
+        if (FunctionRegistry.getGenericUDAFResolver(functionName) == null) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   /**
    * @param node an ASTNode
    * @return true when input node is a SELECT AST Node. Otherwise, false.
@@ -728,11 +801,8 @@ public final class HQLParser {
   public static boolean isSelectASTNode(final ASTNode node) {
 
     Optional<Integer> astNodeType = getASTNodeType(node);
-    if (astNodeType.isPresent()) {
-      return astNodeType.get() == HiveParser.TOK_SELECT;
-    }
+    return astNodeType.isPresent() && astNodeType.get() == HiveParser.TOK_SELECT;
 
-    return false;
   }
 
   /**
@@ -744,14 +814,14 @@ public final class HQLParser {
 
     Optional<Integer> astNodeType = Optional.absent();
     if (node != null && node.getToken() != null) {
-      astNodeType = Optional.of(node.getToken().getType());
+      astNodeType = Optional.of(node.getType());
     }
 
     return astNodeType;
   }
 
   public static boolean hasAggregate(ASTNode node) {
-    int nodeType = node.getToken().getType();
+    int nodeType = node.getType();
     if (nodeType == HiveParser.TOK_TABLE_OR_COL || nodeType == HiveParser.DOT) {
       return false;
     } else {
@@ -781,13 +851,16 @@ public final class HQLParser {
       return true;
     }
 
-    if (n1.getToken().getType() != n2.getToken().getType()) {
+    if (n1.getType() != n2.getType()) {
       return false;
     }
 
     // Compare text. For literals, comparison is case sensitive
-    if ((n1.getToken().getType() == StringLiteral && !n1.getText().equals(n2.getText()))
-      || !n1.getText().equalsIgnoreCase(n2.getText())) {
+    if ((n1.getType() == StringLiteral && !StringUtils.equals(n1.getText(), n2.getText()))) {
+      return false;
+    }
+
+    if (!StringUtils.equalsIgnoreCase(n1.getText(), n2.getText())) {
       return false;
     }
 
@@ -804,4 +877,46 @@ public final class HQLParser {
 
     return true;
   }
+
+  public static ASTNode leftMostChild(ASTNode node) {
+    while (node.getChildren() != null) {
+      node = (ASTNode) node.getChild(0);
+    }
+    return node;
+  }
+  @Data
+  public static class HashableASTNode {
+    private ASTNode ast;
+    private int hashCode = -1;
+    private boolean hashCodeComputed = false;
+
+    public HashableASTNode(ASTNode ast) {
+      this.ast = ast;
+    }
+
+    public void setAST(ASTNode ast) {
+      this.ast = ast;
+      hashCodeComputed = false;
+    }
+
+    public ASTNode getAST() {
+      return ast;
+    }
+
+    @Override
+    public int hashCode() {
+      if (!hashCodeComputed) {
+        hashCode = getString(ast).hashCode();
+        hashCodeComputed = true;
+      }
+      return hashCode;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof HashableASTNode && this.hashCode() == o.hashCode() && getString(this.getAST())
+        .trim().equalsIgnoreCase(getString(((HashableASTNode) o).getAST()).trim());
+    }
+  }
+
 }

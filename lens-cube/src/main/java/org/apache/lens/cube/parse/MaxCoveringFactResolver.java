@@ -28,18 +28,17 @@ import org.apache.lens.cube.metadata.UpdatePeriod;
 import org.apache.lens.cube.metadata.timeline.RangesPartitionTimeline;
 import org.apache.lens.server.api.error.LensException;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hive.ql.parse.SemanticException;
 
 import com.google.common.collect.Maps;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Prune candidate fact sets so that the facts except the ones that are covering maximum of range are pruned
  */
+@Slf4j
 class MaxCoveringFactResolver implements ContextRewriter {
-  public static final Log LOG = LogFactory.getLog(MaxCoveringFactResolver.class.getName());
   private final boolean failOnPartialData;
 
   public MaxCoveringFactResolver(Configuration conf) {
@@ -47,7 +46,7 @@ class MaxCoveringFactResolver implements ContextRewriter {
   }
 
   @Override
-  public void rewriteContext(CubeQueryContext cubeql) throws SemanticException {
+  public void rewriteContext(CubeQueryContext cubeql) {
     if (failOnPartialData) {
       // if fail on partial data is true, by the time this resolver starts,
       // all candidate fact sets are covering full time range. We can avoid
@@ -82,9 +81,8 @@ class MaxCoveringFactResolver implements ContextRewriter {
             timeCoveredLong = 0L;
           }
           if (timeCoveredLong < maxTimeCovered) {
-            LOG.info(
-              "Not considering facts:" + facts + " from candidate fact tables as it covers less time than the max"
-                + " for partition column: " + partColQueried + " which is: " + timeCovered);
+            log.info("Not considering facts:{} from candidate fact tables as it covers less time than the max"
+              + " for partition column: {} which is: {}", facts, partColQueried, timeCovered);
             iter.remove();
           }
         }
@@ -115,7 +113,7 @@ class MaxCoveringFactResolver implements ContextRewriter {
           try {
             partitionRangesForPartitionColumns.add(part);
           } catch (LensException e) {
-            LOG.error("invalid partition: " + e);
+            log.error("invalid partition: ", e);
           }
         }
       }

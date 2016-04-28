@@ -33,21 +33,18 @@ import org.apache.lens.server.LensServices;
 import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.session.SessionService;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import org.glassfish.jersey.media.multipart.FormDataParam;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Session resource api
- * <p/>
+ * <p></p>
  * This provides api for all things in session.
  */
 @Path("/uisession")
+@Slf4j
 public class SessionUIResource {
-
-  /** The Constant LOG. */
-  public static final Log LOG = LogFactory.getLog(SessionUIResource.class);
 
   /** The open sessions. */
   private static HashMap<UUID, LensSessionHandle> openSessions
@@ -82,7 +79,7 @@ public class SessionUIResource {
    * @throws LensException the lens exception
    */
   public SessionUIResource() throws LensException {
-    sessionService = (SessionService) LensServices.get().getService("session");
+    sessionService = LensServices.get().getService(SessionService.NAME);
   }
 
   /**
@@ -107,7 +104,7 @@ public class SessionUIResource {
    */
   @POST
   @Consumes({MediaType.MULTIPART_FORM_DATA})
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public LensSessionHandle openSession(@FormDataParam("username") String username,
     @FormDataParam("password") String password,
     @FormDataParam("database") @DefaultValue("") String database,
@@ -135,9 +132,9 @@ public class SessionUIResource {
    */
   @DELETE
   @Path("{publicId}")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
+  @Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
   public APIResult closeSession(@PathParam("publicId") UUID publicId) {
-    LOG.info("Closing session with id: " + publicId);
+    log.info("Closing session with id: {}", publicId);
     LensSessionHandle sessionHandle = getOpenSession(publicId);
     checkSessionHandle(sessionHandle);
     openSessions.remove(publicId);

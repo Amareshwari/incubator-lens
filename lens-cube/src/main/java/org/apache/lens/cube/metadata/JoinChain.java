@@ -20,8 +20,8 @@ package org.apache.lens.cube.metadata;
 
 import java.util.*;
 
-import org.apache.lens.cube.metadata.SchemaGraph.JoinPath;
-import org.apache.lens.cube.metadata.SchemaGraph.TableRelationship;
+import org.apache.lens.cube.metadata.join.JoinPath;
+import org.apache.lens.cube.metadata.join.TableRelationship;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
@@ -105,7 +105,7 @@ public class JoinChain implements Named {
    * @param table
    * @param name
    */
-  public JoinChain(AbstractCubeTable table, String name) {
+  public JoinChain(AbstractBaseTable table, String name) {
     boolean isCube = (table instanceof Cube);
     this.name = name;
     this.paths = new ArrayList<Path>();
@@ -178,7 +178,8 @@ public class JoinChain implements Named {
         relationShip = new TableRelationship(from.getDestColumn(),
           client.getDimension(from.getDestTable()),
           to.getDestColumn(),
-          client.getDimension(to.getDestTable()));
+          client.getDimension(to.getDestTable()),
+          to.isMapsToMany());
       }
       return relationShip;
     }
@@ -203,7 +204,8 @@ public class JoinChain implements Named {
           relationShip = new TableRelationship(from.getDestColumn(),
             fromTable,
             to.getDestColumn(),
-            client.getDimension(to.getDestTable()));
+            client.getDimension(to.getDestTable()),
+            to.isMapsToMany());
         }
       }
       return relationShip;
@@ -311,14 +313,14 @@ public class JoinChain implements Named {
   }
 
   /**
-   * Convert join paths to schemaGraph's JoinPath
+   * Convert join chain paths to JoinPath objects
    *
    * @param client
-   * @return List<SchemaGraph.JoinPath>
+   * @return List&lt;JoinPath&gt;
    * @throws HiveException
    */
-  public List<SchemaGraph.JoinPath> getRelationEdges(CubeMetastoreClient client) throws HiveException {
-    List<SchemaGraph.JoinPath> schemaGraphPaths = new ArrayList<SchemaGraph.JoinPath>();
+  public List<JoinPath> getRelationEdges(CubeMetastoreClient client) throws HiveException {
+    List<JoinPath> joinPaths = new ArrayList<>();
     for (Path path : paths) {
       JoinPath jp = new JoinPath();
       // Add edges from dimension to cube
@@ -326,8 +328,8 @@ public class JoinChain implements Named {
         jp.addEdge(path.links.get(i).toDimToDimRelationship(client));
       }
       jp.addEdge(path.links.get(0).toCubeOrDimRelationship(client));
-      schemaGraphPaths.add(jp);
+      joinPaths.add(jp);
     }
-    return schemaGraphPaths;
+    return joinPaths;
   }
 }

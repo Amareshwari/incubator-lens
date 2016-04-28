@@ -18,46 +18,47 @@
  */
 package org.apache.lens.server.query;
 
+import static org.apache.lens.server.api.LensServerAPITestUtil.getLensConf;
+import static org.apache.lens.server.common.RestAPITestUtil.*;
+
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.ws.rs.client.Entity;
-import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.Application;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 
 import org.apache.lens.api.LensConf;
 import org.apache.lens.api.LensSessionHandle;
-import org.apache.lens.api.query.LensQuery;
 import org.apache.lens.api.query.QueryHandle;
-import org.apache.lens.api.query.QueryStatus;
+import org.apache.lens.api.query.QueryResult;
 import org.apache.lens.api.query.QueryStatus.Status;
-import org.apache.lens.api.response.LensResponse;
-import org.apache.lens.api.response.NoErrorPayload;
+import org.apache.lens.api.result.LensAPIResult;
 import org.apache.lens.server.LensJerseyTest;
+import org.apache.lens.server.LensServerConf;
+import org.apache.lens.server.LensServerTestUtil;
 import org.apache.lens.server.LensServices;
-import org.apache.lens.server.LensTestUtil;
 import org.apache.lens.server.api.LensConfConstants;
+import org.apache.lens.server.api.driver.InMemoryResultSet;
+import org.apache.lens.server.api.error.LensException;
+import org.apache.lens.server.api.query.QueryContext;
+import org.apache.lens.server.api.query.QueryExecutionService;
 import org.apache.lens.server.common.TestResourceFile;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
 
-import org.glassfish.jersey.client.ClientConfig;
-import org.glassfish.jersey.media.multipart.FormDataBodyPart;
-import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
-import org.glassfish.jersey.media.multipart.FormDataMultiPart;
-import org.glassfish.jersey.media.multipart.MultiPartFeature;
+import org.glassfish.jersey.test.TestProperties;
 import org.subethamail.wiser.Wiser;
 import org.subethamail.wiser.WiserMessage;
-import org.testng.Assert;
-import org.testng.annotations.AfterTest;
-import org.testng.annotations.BeforeTest;
-import org.testng.annotations.Test;
+import org.testng.annotations.*;
+
+import com.google.common.base.Optional;
 
 /**
  * The query completion email notifier
@@ -65,9 +66,8 @@ import org.testng.annotations.Test;
 @Test(groups = "unit-test")
 public class TestQueryEndEmailNotifier extends LensJerseyTest {
 
-  /** The Constant LOG. */
-  public static final Log LOG = LogFactory.getLog(TestQueryEndEmailNotifier.class);
   private static final int NUM_ITERS = 30;
+
   /** The query service. */
   QueryExecutionServiceImpl queryService;
 
@@ -88,8 +88,8 @@ public class TestQueryEndEmailNotifier extends LensJerseyTest {
     wiser = new Wiser();
     wiser.setHostname("localhost");
     wiser.setPort(25000);
-    queryService = (QueryExecutionServiceImpl) LensServices.get().getService("query");
-    Map<String, String> sessionconf = new HashMap<String, String>();
+    queryService = LensServices.get().getService(QueryExecutionService.NAME);
+    Map<String, String> sessionconf = new HashMap<>();
     sessionconf.put("test.session.key", "svalue");
     sessionconf.put(LensConfConstants.QUERY_MAIL_NOTIFY, "true");
     sessionconf.put(LensConfConstants.QUERY_RESULT_EMAIL_CC, "foo1@localhost,foo2@localhost,foo3@localhost");
@@ -97,6 +97,12 @@ public class TestQueryEndEmailNotifier extends LensJerseyTest {
     // automatically
     createTable(TEST_TABLE);
     loadData(TEST_TABLE, TestResourceFile.TEST_DATA2_FILE.getValue());
+    wiser.start();
+  }
+
+  @BeforeMethod
+  public void clearWiserMessages() {
+    wiser.getMessages().clear();
   }
 
   /*
@@ -106,6 +112,7 @@ public class TestQueryEndEmailNotifier extends LensJerseyTest {
    */
   @AfterTest
   public void tearDown() throws Exception {
+    wiser.stop();
     dropTable(TEST_TABLE);
     queryService.closeSession(lensSessionId);
     super.tearDown();
@@ -118,17 +125,9 @@ public class TestQueryEndEmailNotifier extends LensJerseyTest {
    */
   @Override
   protected Application configure() {
+    enable(TestProperties.LOG_TRAFFIC);
+    enable(TestProperties.DUMP_ENTITY);
     return new QueryApp();
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see org.glassfish.jersey.test.JerseyTest#configureClient(org.glassfish.jersey.client.ClientConfig)
-   */
-  @Override
-  protected void configureClient(ClientConfig config) {
-    config.register(MultiPartFeature.class);
   }
 
   /** The test table. */
@@ -141,7 +140,7 @@ public class TestQueryEndEmailNotifier extends LensJerseyTest {
    * @throws InterruptedException the interrupted exception
    */
   private void createTable(String tblName) throws InterruptedException {
-    LensTestUtil.createTable(tblName, target(), lensSessionId);
+    LensServerTestUtil.createTable(tblName, target(), lensSessionId, defaultMT);
   }
 
   /**
@@ -152,7 +151,7 @@ public class TestQueryEndEmailNotifier extends LensJerseyTest {
    * @throws InterruptedException the interrupted exception
    */
   private void loadData(String tblName, final String testDataFile) throws InterruptedException {
-    LensTestUtil.loadDataFromClasspath(tblName, testDataFile, target(), lensSessionId);
+    LensServerTestUtil.loadDataFromClasspath(tblName, testDataFile, target(), lensSessionId, defaultMT);
   }
 
   /**
@@ -162,33 +161,34 @@ public class TestQueryEndEmailNotifier extends LensJerseyTest {
    * @throws InterruptedException the interrupted exception
    */
   private void dropTable(String tblName) throws InterruptedException {
-    LensTestUtil.dropTable(tblName, target(), lensSessionId);
+    LensServerTestUtil.dropTable(tblName, target(), lensSessionId, defaultMT);
   }
 
-  private QueryHandle launchAndWaitForQuery(LensConf conf, String query, Status expectedStatus)
+  private QueryHandle launchAndWaitForQuery(LensConf conf, String query, Status expectedStatus, MediaType mt)
     throws InterruptedException {
-    final WebTarget target = target().path("queryapi/queries");
-    final FormDataMultiPart mp = new FormDataMultiPart();
-    mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("sessionid").build(), lensSessionId,
-      MediaType.APPLICATION_XML_TYPE));
-    mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("query").build(), query));
-    mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("operation").build(), "execute"));
-    mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("conf").fileName("conf").build(), conf,
-      MediaType.APPLICATION_XML_TYPE));
-    final QueryHandle handle = target.request().post(Entity.entity(mp, MediaType.MULTIPART_FORM_DATA_TYPE),
-      new GenericType<LensResponse<QueryHandle, NoErrorPayload>>(){}).getData();
+    return executeAndWaitForQueryToFinish(target(), lensSessionId, query, Optional.of(conf),
+      Optional.of(expectedStatus), mt).getQueryHandle();
+  }
 
-    Assert.assertNotNull(handle);
-    LensQuery ctx = target.path(handle.toString()).queryParam("sessionid", lensSessionId).request()
-      .get(LensQuery.class);
-    QueryStatus stat = ctx.getStatus();
-    while (!stat.finished()) {
-      ctx = target.path(handle.toString()).queryParam("sessionid", lensSessionId).request().get(LensQuery.class);
-      stat = ctx.getStatus();
-      Thread.sleep(1000);
+  private WiserMessage getMessage() throws InterruptedException {
+    List<WiserMessage> messages = new ArrayList<>();
+    for (int i = 0; i < NUM_ITERS; i++) {
+      messages = wiser.getMessages();
+      if (messages.size() >= 4) {
+        break;
+      }
+      Thread.sleep(2000);
     }
-    Assert.assertEquals(ctx.getStatus().getStatus(), expectedStatus);
-    return handle;
+    assertEquals(messages.size(), 4);
+    return messages.get(0);
+  }
+
+  private void assertKeywordsContains(Object o, Object... keywords) {
+    String string = o.toString();
+    for (Object keyword : keywords) {
+      // Mail message converts \n to \r\n
+      assertTrue(string.contains(keyword.toString().replaceAll("\\n", "\r\n")), o + " doesn't contain " + keyword);
+    }
   }
 
   /**
@@ -196,101 +196,85 @@ public class TestQueryEndEmailNotifier extends LensJerseyTest {
    *
    * @throws InterruptedException the interrupted exception
    */
-  @Test
-  public void testEmailNotification() throws InterruptedException {
-    wiser.start();
-    LensConf conf = new LensConf();
+  @Test(dataProvider = "mediaTypeData")
+  public void testLaunchFailure(MediaType mt) throws InterruptedException {
     // launch failure
-    QueryHandle handle = launchAndWaitForQuery(conf, "select ID from non_exist_table", QueryStatus.Status.FAILED);
-    List<WiserMessage> messages = new ArrayList<WiserMessage>();
-    for (int i = 0; i < NUM_ITERS; i++) {
-      messages = wiser.getMessages();
-      if (messages.size() >= 4) {
-        break;
-      }
-      Thread.sleep(10000);
-    }
+    final Response response = execute(target(), Optional.of(lensSessionId), Optional.of("select fail from non_exist"),
+      mt);
+    assertEquals(response.getStatus(), Response.Status.OK.getStatusCode());
+    QueryHandle handle = response.readEntity(new GenericType<LensAPIResult<QueryHandle>>() {}).getData();
+    assertKeywordsContains(getMessage(), handle, "Launching query failed", "Reason");
+  }
 
-    Assert.assertEquals(messages.size(), 4);
-    Assert.assertTrue(messages.get(0).toString().contains(handle.toString()));
-    Assert.assertTrue(messages.get(0).toString().contains("Launching query failed"));
-    Assert.assertTrue(messages.get(0).toString().contains("Reason"));
-
-    // rewriter failure
-    handle = launchAndWaitForQuery(conf, "cube select ID from nonexist", QueryStatus.Status.FAILED);
-    messages = new ArrayList<WiserMessage>();
-    for (int i = 0; i < NUM_ITERS; i++) {
-      messages = wiser.getMessages();
-      if (messages.size() >= 8) {
-        break;
-      }
-      Thread.sleep(10000);
-    }
-
-    Assert.assertEquals(messages.size(), 8);
-    Assert.assertTrue(messages.get(4).toString().contains(handle.toString()));
-    Assert.assertTrue(messages.get(4).toString().contains("Launching query failed"));
-    Assert.assertTrue(messages.get(4).toString().contains("Reason"));
-
+  @Test(dataProvider = "mediaTypeData")
+  public void testFormattingFailure(MediaType mt) throws InterruptedException {
     // formatting failure
-    conf = new LensConf();
-    conf.addProperty(LensConfConstants.QUERY_PERSISTENT_RESULT_SET, "true");
-    conf.addProperty(LensConfConstants.QUERY_PERSISTENT_RESULT_INDRIVER, "false");
-    conf.addProperty(LensConfConstants.QUERY_OUTPUT_SERDE, "NonexistentSerde.class");
-    handle = launchAndWaitForQuery(conf, "select ID, IDSTR from " + TEST_TABLE,
-      QueryStatus.Status.FAILED);
-    messages = new ArrayList<WiserMessage>();
-    for (int i = 0; i < NUM_ITERS; i++) {
-      messages = wiser.getMessages();
-      if (messages.size() >= 12) {
-        break;
-      }
-      Thread.sleep(10000);
-    }
+    LensConf conf = getLensConf(
+      LensConfConstants.QUERY_PERSISTENT_RESULT_SET, "true",
+      LensConfConstants.QUERY_PERSISTENT_RESULT_INDRIVER, "false",
+      LensConfConstants.QUERY_OUTPUT_SERDE, "NonexistentSerde.class");
+    QueryHandle handle = launchAndWaitForQuery(conf, "select ID, IDSTR from " + TEST_TABLE, Status.FAILED, mt);
+    assertKeywordsContains(getMessage(), handle, "Result formatting failed!", "Reason");
+  }
 
-    Assert.assertEquals(messages.size(), 12);
-    Assert.assertTrue(messages.get(8).toString().contains(handle.toString()));
-    Assert.assertTrue(messages.get(8).toString().contains("Result formatting failed!"));
-    Assert.assertTrue(messages.get(8).toString().contains("Reason"));
-
+  @Test(dataProvider = "mediaTypeData")
+  public void testExecutionFailure(MediaType mt) throws InterruptedException {
     // execution failure
-    conf = new LensConf();
-    conf.addProperty(LensConfConstants.QUERY_PERSISTENT_RESULT_INDRIVER, "true");
-    conf.addProperty(HiveConf.ConfVars.COMPRESSRESULT.name(), "true");
-    conf.addProperty("mapred.compress.map.output", "true");
-    conf.addProperty("mapred.map.output.compression.codec", "nonexisting");
-    handle = launchAndWaitForQuery(conf, "select count(ID) from " + TEST_TABLE, QueryStatus.Status.FAILED);
-    messages = new ArrayList<WiserMessage>();
-    for (int i = 0; i < NUM_ITERS; i++) {
-      messages = wiser.getMessages();
-      if (messages.size() >= 16) {
-        break;
-      }
-      Thread.sleep(10000);
-    }
+    LensConf conf = getLensConf(
+      LensConfConstants.QUERY_PERSISTENT_RESULT_INDRIVER, "true",
+      HiveConf.ConfVars.COMPRESSRESULT.name(), "true",
+      "mapred.compress.map.output", "true",
+      "mapred.map.output.compression.codec", "nonexisting");
+    QueryHandle handle = launchAndWaitForQuery(conf, "select count(ID) from " + TEST_TABLE, Status.FAILED, mt);
+    assertKeywordsContains(getMessage(), handle, "Query execution failed!", "Reason");
+  }
 
-    Assert.assertEquals(messages.size(), 16);
-    Assert.assertTrue(messages.get(12).toString().contains(handle.toString()));
-    Assert.assertTrue(messages.get(12).toString().contains("Query execution failed!"));
-    Assert.assertTrue(messages.get(12).toString().contains("Reason"));
+  @DataProvider(name = "success-tests")
+  public Object[][] persistenceConfigDataProvider() {
+    return new Object[][]{
+      {false, false, MediaType.APPLICATION_XML_TYPE},
+      {true, false, MediaType.APPLICATION_XML_TYPE},
+      {false, true, MediaType.APPLICATION_XML_TYPE},
+      {true, true, MediaType.APPLICATION_XML_TYPE},
+      {false, false, MediaType.APPLICATION_JSON_TYPE},
+      {true, false, MediaType.APPLICATION_JSON_TYPE},
+      {false, true, MediaType.APPLICATION_JSON_TYPE},
+      {true, true, MediaType.APPLICATION_JSON_TYPE},
+    };
+  }
 
+  @Test(dataProvider = "success-tests")
+  public void testSuccessfulQuery(Boolean lensPersistence, Boolean driverPersistence, MediaType mt)
+    throws InterruptedException, LensException {
     // successful query
-    conf = new LensConf();
-    conf.addProperty(LensConfConstants.QUERY_PERSISTENT_RESULT_SET, "true");
-    conf.addProperty(LensConfConstants.QUERY_PERSISTENT_RESULT_INDRIVER, "true");
-    handle = launchAndWaitForQuery(conf, "select ID, IDSTR from " + TEST_TABLE, QueryStatus.Status.SUCCESSFUL);
-    messages = new ArrayList<WiserMessage>();
-    for (int i = 0; i < NUM_ITERS; i++) {
-      messages = wiser.getMessages();
-      if (messages.size() >= 20) {
-        break;
-      }
-      Thread.sleep(10000);
+    LensConf conf = getLensConf(
+      LensConfConstants.QUERY_PERSISTENT_RESULT_SET, lensPersistence,
+      LensConfConstants.QUERY_PERSISTENT_RESULT_INDRIVER, driverPersistence);
+    String expectedKeywords;
+    QueryHandle handle = launchAndWaitForQuery(conf, "select ID, IDSTR from " + TEST_TABLE, Status.SUCCESSFUL, mt);
+    if (lensPersistence || driverPersistence) {
+      QueryResult result = getLensQueryResult(target(), lensSessionId, handle, mt);
+      expectedKeywords = result.toPrettyString();
+    } else {
+      QueryContext context = queryService.getQueryContext(handle);
+      long creationTime = ((InMemoryResultSet) (context.getSelectedDriver().fetchResultSet(context))).getCreationTime();
+      long inMemoryResultsetTTLSecs =
+          LensServerConf.getHiveConf().getInt(LensConfConstants.INMEMORY_RESULT_SET_TTL_SECS,
+              LensConfConstants.DEFAULT_INMEMORY_RESULT_SET_TTL_SECS);
+      expectedKeywords =
+          QueryEndNotifier.RESULT_AVAILABLE_UNTIL_MSG
+              + QueryEndNotifier.MESSAGE_DATE_FORMATTER.print(creationTime + inMemoryResultsetTTLSecs);
+      getLensQueryResultAsString(target(), lensSessionId, handle, mt); //Reading it so that query can be purged
     }
-    Assert.assertEquals(messages.size(), 20);
-    Assert.assertTrue(messages.get(16).toString().contains(handle.toString()));
-    Assert.assertTrue(messages.get(16).toString().contains("Query  SUCCESSFUL"));
-    Assert.assertTrue(messages.get(16).toString().contains("Result available at"));
-    wiser.stop();
+    WiserMessage message = getMessage();
+    assertKeywordsContains(message, handle, "Query SUCCESSFUL", expectedKeywords);
+    if (lensPersistence) {
+      assertKeywordsContains(message, new String[]{"Downloadable from", "httpresultset"});
+      assertEquals(getLensQueryHttpResult(target(), lensSessionId, handle).getStatus(),
+        Response.Status.OK.getStatusCode());
+    } else {
+      assertEquals(getLensQueryHttpResult(target(), lensSessionId, handle).getStatus(),
+        Response.Status.NOT_FOUND.getStatusCode());
+    }
   }
 }
