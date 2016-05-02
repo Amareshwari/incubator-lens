@@ -37,8 +37,6 @@ import org.apache.hadoop.hive.ql.parse.HiveParser;
 
 import org.antlr.runtime.CommonToken;
 
-import lombok.extern.slf4j.Slf4j;
-
 /**
  * Finds queried column to table alias. Finds queried dim attributes and queried measures.
  * <p/>
@@ -46,7 +44,6 @@ import lombok.extern.slf4j.Slf4j;
  * <p/>
  * Replaces all the columns in all expressions with tablealias.column
  */
-@Slf4j
 class AliasReplacer implements ContextRewriter {
 
   public AliasReplacer(Configuration conf) {
@@ -167,9 +164,9 @@ class AliasReplacer implements ContextRewriter {
     }
   }
 
-  static void replaceAliases(ASTNode node, int nodePos, Map<String, String> colToTableAlias) {
+  static ASTNode replaceAliases(ASTNode node, int nodePos, Map<String, String> colToTableAlias) {
     if (node == null) {
-      return;
+      return node;
     }
 
     int nodeType = node.getToken().getType();
@@ -177,9 +174,8 @@ class AliasReplacer implements ContextRewriter {
       String colName = HQLParser.getColName(node);
       String newAlias = colToTableAlias.get(colName.toLowerCase());
 
-      log.info("colName:" + colName + " newAlias:" + newAlias); 
       if (StringUtils.isBlank(newAlias)) {
-        return;
+        return node;
       }
 
       if (nodeType == HiveParser.DOT) {
@@ -190,6 +186,7 @@ class AliasReplacer implements ContextRewriter {
       } else {
         // Just a column ref, we need to make it alias.col
         // '.' will become the parent node
+        ASTNode dot = new ASTNode(new CommonToken(HiveParser.DOT, "."));
         ASTNode aliasIdentNode = new ASTNode(new CommonToken(HiveParser.Identifier, newAlias));
         ASTNode tabRefNode = new ASTNode(new CommonToken(HiveParser.TOK_TABLE_OR_COL, "TOK_TABLE_OR_COL"));
 
@@ -197,19 +194,13 @@ class AliasReplacer implements ContextRewriter {
         dot.addChild(tabRefNode);
 
         ASTNode colIdentNode = new ASTNode(new CommonToken(HiveParser.Identifier, colName));
+        dot.addChild(colIdentNode);
+
         ASTNode parent = (ASTNode) node.getParent();
         if (parent != null) {
-          ASTNode dot = new ASTNode(new CommonToken(HiveParser.DOT, "."));
-          dot.addChild(tabRefNode);
-          tabRefNode.setParent(dot);
-          dot.addChild(colIdentNode);
           parent.setChild(nodePos, dot);
         } else {
-          node.getToken().setType(HiveParser.DOT);
-          node.getToken().setText(".");
-          node.setChild(0, tabRefNode);
-          tabRefNode.setParent(node);
-          node.addChild(colIdentNode);
+          return dot;
         }
       }
     } else {
@@ -219,6 +210,7 @@ class AliasReplacer implements ContextRewriter {
         replaceAliases(child, i, colToTableAlias);
       }
     }
+    return node;
   }
 
   static void updateAliasMap(ASTNode root, CubeQueryContext cubeql) {

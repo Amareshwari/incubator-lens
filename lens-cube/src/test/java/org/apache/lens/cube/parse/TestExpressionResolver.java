@@ -457,24 +457,36 @@ public class TestExpressionResolver extends TestQueryRewrite {
   @Test
   public void testSingleDimColExpression() throws Exception {
     Configuration tconf = new Configuration(conf);
-    tconf.set(CubeQueryConfUtil.DRIVER_SUPPORTED_STORAGES, "C2");
+    tconf.set(CubeQueryConfUtil.DRIVER_SUPPORTED_STORAGES, "C1");
     CubeQueryContext rewrittenQuery =
       rewriteCtx("cube select singlecoldim1expr from testCube where " + TWO_DAYS_RANGE, tconf);
     String expected =
       getExpectedQuery(cubeName, "select distinct testcube.dim1 FROM ", null, null,
-        getWhereForDailyAndHourly2days(cubeName, "C2_testfact"));
+        getWhereForDailyAndHourly2days(cubeName, "c1_summary1"));
+    TestCubeRewriter.compareQueries(rewrittenQuery.toHQL(), expected);
+  }
+
+  @Test
+  public void testSingleDimColExpressionWithAlias() throws Exception {
+    Configuration tconf = new Configuration(conf);
+    tconf.set(CubeQueryConfUtil.DRIVER_SUPPORTED_STORAGES, "C1");
+    CubeQueryContext rewrittenQuery =
+      rewriteCtx("cube select singlecoldim1expr as x from testCube where " + TWO_DAYS_RANGE, tconf);
+    String expected =
+      getExpectedQuery(cubeName, "select distinct testcube.dim1 as x FROM ", null, null,
+        getWhereForDailyAndHourly2days(cubeName, "C1_summary1"));
     TestCubeRewriter.compareQueries(rewrittenQuery.toHQL(), expected);
   }
 
   @Test
   public void testSingleDimColQualifiedExpression() throws Exception {
     Configuration tconf = new Configuration(conf);
-    tconf.set(CubeQueryConfUtil.DRIVER_SUPPORTED_STORAGES, "C2");
+    tconf.set(CubeQueryConfUtil.DRIVER_SUPPORTED_STORAGES, "C1");
     CubeQueryContext rewrittenQuery =
       rewriteCtx("cube select singlecoldim1qualifiedexpr from testCube where " + TWO_DAYS_RANGE, tconf);
     String expected =
       getExpectedQuery(cubeName, "select distinct testcube.dim1 FROM ", null, null,
-        getWhereForDailyAndHourly2days(cubeName, "C2_testfact"));
+        getWhereForDailyAndHourly2days(cubeName, "C1_summary1"));
     TestCubeRewriter.compareQueries(rewrittenQuery.toHQL(), expected);
   }
 
@@ -483,10 +495,12 @@ public class TestExpressionResolver extends TestQueryRewrite {
     Configuration tconf = new Configuration(conf);
     tconf.set(CubeQueryConfUtil.DRIVER_SUPPORTED_STORAGES, "C2");
     CubeQueryContext rewrittenQuery =
-      rewriteCtx("cube select singlecolchainid from testCube where " + TWO_DAYS_RANGE, tconf);
+      rewriteCtx("cube select singlecolchainid from testCube where " + TWO_DAYS_RANGE_IT, tconf);
     String expected =
-      getExpectedQuery(cubeName, "select distinct dim3chain.id FROM ", null, null,
-        getWhereForDailyAndHourly2days(cubeName, "C2_testfact"));
+      getExpectedQuery(cubeName, "select distinct dim3chain.id FROM ",
+        " join " + getDbName() + "c2_testdim3tbl dim3chain on testcube.testdim3id = dim3chain.id",
+        null, null, null,
+        getWhereForDailyAndHourly2daysWithTimeDim(cubeName, "it", "C2_summary1"));
     TestCubeRewriter.compareQueries(rewrittenQuery.toHQL(), expected);
   }
 
@@ -495,10 +509,10 @@ public class TestExpressionResolver extends TestQueryRewrite {
     Configuration tconf = new Configuration(conf);
     tconf.set(CubeQueryConfUtil.DRIVER_SUPPORTED_STORAGES, "C2");
     CubeQueryContext rewrittenQuery =
-      rewriteCtx("cube select singlecolchainrefexpr from testCube where " + TWO_DAYS_RANGE, tconf);
+      rewriteCtx("cube select singlecolchainrefexpr from testCube where " + TWO_DAYS_RANGE_IT, tconf);
     String expected =
-      getExpectedQuery(cubeName, "select distinct dim3chain.id FROM ", null, null,
-        getWhereForDailyAndHourly2days(cubeName, "C2_testfact"));
+      getExpectedQuery(cubeName, "select distinct testcube.testdim3id FROM ", null, null,
+        getWhereForDailyAndHourly2daysWithTimeDim(cubeName, "it", "C2_summary1"));
     TestCubeRewriter.compareQueries(rewrittenQuery.toHQL(), expected);
   }
 
@@ -509,8 +523,9 @@ public class TestExpressionResolver extends TestQueryRewrite {
     CubeQueryContext rewrittenQuery =
       rewriteCtx("cube select singlecolchainfield from testCube where " + TWO_DAYS_RANGE, tconf);
     String expected =
-      getExpectedQuery(cubeName, "select distinct cubecity.name FROM ", null, null,
-        getWhereForDailyAndHourly2days(cubeName, "C2_testfact"));
+      getExpectedQuery(cubeName, "select distinct cubecity.name FROM ",
+        " join " + getDbName() + "c2_citytable cubecity ON testcube.cityid = cubecity.id",
+        null, null, null, getWhereForDailyAndHourly2days(cubeName, "C2_testfact"));
     TestCubeRewriter.compareQueries(rewrittenQuery.toHQL(), expected);
   }
 
@@ -521,20 +536,9 @@ public class TestExpressionResolver extends TestQueryRewrite {
     CubeQueryContext rewrittenQuery =
       rewriteCtx("cube select singlecolchainfield as cityname from testCube where " + TWO_DAYS_RANGE, tconf);
     String expected =
-      getExpectedQuery(cubeName, "select distinct cubecity.name as cityname FROM ", null, null,
-        getWhereForDailyAndHourly2days(cubeName, "C2_testfact"));
-    TestCubeRewriter.compareQueries(rewrittenQuery.toHQL(), expected);
-  }
-
-  @Test
-  public void testSingleDimColExpressionWithAlias() throws Exception {
-    Configuration tconf = new Configuration(conf);
-    tconf.set(CubeQueryConfUtil.DRIVER_SUPPORTED_STORAGES, "C2");
-    CubeQueryContext rewrittenQuery =
-      rewriteCtx("cube select singlecoldim1expr as x from testCube where " + TWO_DAYS_RANGE, tconf);
-    String expected =
-      getExpectedQuery(cubeName, "select distinct testcube.dim1 as x FROM ", null, null,
-        getWhereForDailyAndHourly2days(cubeName, "C2_testfact"));
+      getExpectedQuery(cubeName, "select distinct cubecity.name as cityname FROM ",
+        " join " + getDbName() + "c2_citytable cubecity ON testcube.cityid = cubecity.id",
+        null, null, null, getWhereForDailyAndHourly2days(cubeName, "C2_testfact"));
     TestCubeRewriter.compareQueries(rewrittenQuery.toHQL(), expected);
   }
 
@@ -570,7 +574,7 @@ public class TestExpressionResolver extends TestQueryRewrite {
       rewriteCtx("cube select singlecolmsr2qualifiedexpr from testCube tc where " + TWO_DAYS_RANGE, tconf);
     String expected =
       getExpectedQuery("tc", "select sum(tc.msr2) FROM ", null, null,
-        getWhereForDailyAndHourly2days(cubeName, "C2_testfact"));
+        getWhereForDailyAndHourly2days("tc", "C2_testfact"));
     TestCubeRewriter.compareQueries(rewrittenQuery.toHQL(), expected);
   }
 

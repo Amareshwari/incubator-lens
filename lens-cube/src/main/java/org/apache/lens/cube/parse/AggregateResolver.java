@@ -124,7 +124,7 @@ class AggregateResolver implements ContextRewriter {
     return HQLParser.getString(clause);
   }
 
-  private ASTNode transform(CubeQueryContext cubeql, ASTNode parent, ASTNode node, int nodePos) throws SemanticException {
+  private ASTNode transform(CubeQueryContext cubeql, ASTNode parent, ASTNode node, int nodePos) throws LensException {
     if (node == null) {
       return node;
     }
@@ -179,32 +179,26 @@ class AggregateResolver implements ContextRewriter {
     }
 
     String msrname = StringUtils.isBlank(tabname) ? colname : tabname + "." + colname;
-    LOG.info("msrName:" + msrname);
 
     if (cubeql.isCubeMeasure(msrname)) {
       if (cubeql.getQueriedExprs().contains(colname)) {
-        LOG.info("msrName is expression:" + msrname);
         String alias = cubeql.getAliasForTableName(cubeql.getCube().getName());
         for (ExprSpecContext esc : cubeql.getExprCtx().getExpressionContext(colname, alias).getAllExprs()) {
           ASTNode transformedNode = transform(cubeql, null, esc.getFinalAST(), 0);
           esc.setFinalAST(transformedNode);
         }
-        LOG.info("all exprs after aggregate resolver :" + cubeql.getExprCtx().getExpressionContext(colname, alias).getAllExprs());
         return node;
       } else {
-        LOG.info("msrName is measure:" + msrname);
         CubeMeasure measure = cubeql.getCube().getMeasureByName(colname);
         String aggregateFn = measure.getAggregate();
 
         if (StringUtils.isBlank(aggregateFn)) {
           throw new LensException(LensCubeErrorCode.NO_DEFAULT_AGGREGATE.getLensErrorInfo(), colname);
         }
-
-        ASTNode fnroot = new ASTNode(new CommonToken(HiveParser.TOK_FUNCTION));
+        ASTNode fnroot = new ASTNode(new CommonToken(HiveParser.TOK_FUNCTION, "TOK_FUNCTION"));
         ASTNode fnIdentNode = new ASTNode(new CommonToken(HiveParser.Identifier, aggregateFn));
         fnroot.addChild(fnIdentNode);
         fnroot.addChild(node);
-        LOG.info("returning is fnroot:" + fnroot.dump());
         return fnroot;
       }
     } else {

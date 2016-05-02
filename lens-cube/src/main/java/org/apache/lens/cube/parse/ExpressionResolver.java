@@ -36,12 +36,7 @@ import org.apache.hadoop.hive.ql.parse.HiveParser;
 
 import org.antlr.runtime.CommonToken;
 
-import lombok.Setter;
-
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NonNull;
-import lombok.ToString;
+import lombok.*;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -81,7 +76,7 @@ class ExpressionResolver implements ContextRewriter {
         allExprs.add(new ExprSpecContext(es, cubeql));
       }
       resolveColumnsAndAlias(cubeql);
-      log.info("All exprs for {} are {}", exprCol.getName(), allExprs);
+      log.debug("All exprs for {} are {}", exprCol.getName(), allExprs);
     }
 
     private void resolveColumnsAndAlias(CubeQueryContext cubeql) throws LensException {
@@ -139,7 +134,7 @@ class ExpressionResolver implements ContextRewriter {
         Set<ExprSpecContext> replacedExpressions = new LinkedHashSet<ExprSpecContext>();
         for (ExprSpec es : baseTable.getExpressionByName(col).getExpressionSpecs()) {
           ASTNode finalAST = HQLParser.copyAST(baseEsc.getFinalAST());
-          replaceColumnInAST(finalAST, col, es.getASTNode());
+          replaceColumnInAST(finalAST, col, es.copyASTNode());
           ExprSpecContext replacedESC = new ExprSpecContext(baseEsc, es, finalAST, cubeql);
           nestedExpressions.add(replacedESC);
           replacedExpressions.add(replacedESC);
@@ -203,20 +198,19 @@ class ExpressionResolver implements ContextRewriter {
   }
 
   static class ExprSpecContext implements TrackQueriedColumns {
-    @Getter
-    private Set<ExprSpec> exprSpecs = new LinkedHashSet<ExprSpec>();
+    private Set<ExprSpec> exprSpecs = new LinkedHashSet<>();
     @Getter
     @Setter
     private ASTNode finalAST;
     @Getter
-    private Set<Dimension> exprDims = new HashSet<Dimension>();
+    private Set<Dimension> exprDims = new HashSet<>();
     // for each expression store alias to columns queried
     @Getter
-    private Map<String, Set<String>> tblAliasToColumns = new HashMap<String, Set<String>>();
+    private Map<String, Set<String>> tblAliasToColumns = new HashMap<>();
 
     ExprSpecContext(ExprSpec exprSpec, CubeQueryContext cubeql) throws LensException {
       // replaces table names in expression with aliases in the query
-      finalAST = replaceAlias(exprSpec.getASTNode(), cubeql);
+      finalAST = replaceAlias(exprSpec.copyASTNode(), cubeql);
       exprSpecs.add(exprSpec);
     }
     public ExprSpecContext(ExprSpecContext nested, ExprSpec current, ASTNode node,
@@ -228,7 +222,7 @@ class ExpressionResolver implements ContextRewriter {
     public void replaceAliasInAST(CubeQueryContext cubeql)
       throws LensException {
       AliasReplacer.extractTabAliasForCol(cubeql, this);
-      AliasReplacer.replaceAliases(finalAST, 0, cubeql.getColToTableAlias());
+      finalAST = AliasReplacer.replaceAliases(finalAST, 0, cubeql.getColToTableAlias());
     }
     public void addColumnsQueried(String alias, String column) {
       Set<String> cols = tblAliasToColumns.get(alias.toLowerCase());
@@ -245,7 +239,7 @@ class ExpressionResolver implements ContextRewriter {
     }
 
     Date getStartTime() {
-      Set<Date> startTimes = new HashSet<Date>();
+      Set<Date> startTimes = new HashSet<>();
       for (ExprSpec es : exprSpecs) {
         if (es.getStartTime() != null) {
           startTimes.add(es.getStartTime());
@@ -258,7 +252,7 @@ class ExpressionResolver implements ContextRewriter {
     }
 
     Date getEndTime() {
-      Set<Date> endTimes = new HashSet<Date>();
+      Set<Date> endTimes = new HashSet<>();
       for (ExprSpec es : exprSpecs) {
         if (es.getEndTime() != null) {
           endTimes.add(es.getEndTime());
@@ -365,9 +359,8 @@ class ExpressionResolver implements ContextRewriter {
         ec.addDirectlyAvailable(cTable);
       }
       for (ExprSpecContext esc : ec.allExprs) {
-        log.info("esc.getTblAliasToColumns() dump:" + esc.getTblAliasToColumns());
         if (esc.getTblAliasToColumns().get(alias) == null) {
-          log.info("{} = {} is evaluable in {}", expr, esc, cTable);
+          log.debug("{} = {} is evaluable in {}", expr, esc, cTable);
           ec.addEvaluable(cubeql, cTable, esc);
         } else {
           Set<String> columns = esc.getTblAliasToColumns().get(alias);
@@ -376,14 +369,14 @@ class ExpressionResolver implements ContextRewriter {
             if (!cTable.getColumns().contains(col.toLowerCase())) {
               if (!cubeql.getDeNormCtx().addRefUsage(cTable, col, cTable.getBaseTable().getName())) {
                 // check if it is available as reference, if not expression is not evaluable
-                log.info("{} = {} is not evaluable in {}", expr, esc, cTable);
+                log.debug("{} = {} is not evaluable in {}", expr, esc, cTable);
                 isEvaluable = false;
                 break;
               }
             }
           }
           if (isEvaluable) {
-            log.info("{} = {} is evaluable in {}", expr, esc, cTable);
+            log.debug("{} = {} is evaluable in {}", expr, esc, cTable);
             ec.addEvaluable(cubeql, cTable, esc);
           }
         }
@@ -735,7 +728,7 @@ class ExpressionResolver implements ContextRewriter {
           parent = visited.getParent().getNode();
         }
 
-        if (node.getToken().getType() == TOK_TABLE_OR_COL && (parent == null || parent.getToken().getType() == DOT)) {
+        if (node.getToken().getType() == TOK_TABLE_OR_COL && (parent != null && parent.getToken().getType() == DOT)) {
           ASTNode current = (ASTNode) node.getChild(0);
           if (current.getToken().getType() == Identifier) {
             String tableName = current.getToken().getText().toLowerCase();

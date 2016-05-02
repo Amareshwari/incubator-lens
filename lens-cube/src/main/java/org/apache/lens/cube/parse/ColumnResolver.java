@@ -33,9 +33,6 @@ import org.apache.hadoop.hive.ql.parse.ASTNode;
 
 import com.google.common.base.Optional;
 
-import lombok.extern.slf4j.Slf4j;
-
-@Slf4j
 class ColumnResolver implements ContextRewriter {
 
   public ColumnResolver(Configuration conf) {
@@ -86,7 +83,6 @@ class ColumnResolver implements ContextRewriter {
     if (tree == null) {
       return;
     }
-    log.info("getColsForTree tree dump:" + tree.dump());
     // Traverse the tree to get column names
     // We are doing a complete traversal so that expressions of columns
     // are also captured ex: f(cola + colb/tab1.colc)
@@ -98,7 +94,6 @@ class ColumnResolver implements ContextRewriter {
         if (visited.getParent() != null) {
           parent = visited.getParent().getNode();
         }
-        log.info("getColsForTree node dump:" + node.dump());
 
         if (node.getToken().getType() == TOK_TABLE_OR_COL && (parent == null || parent.getToken().getType() != DOT)) {
           // Take child ident.totext
@@ -108,7 +103,6 @@ class ColumnResolver implements ContextRewriter {
             // column is an existing alias
             return;
           }
-          log.info("getColsForTree adding columns queried to default: " + column);
           tqc.addColumnsQueried(CubeQueryContext.DEFAULT_TABLE, column);
         } else if (node.getToken().getType() == DOT) {
           // This is for the case where column name is prefixed by table name
