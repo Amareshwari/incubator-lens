@@ -22,8 +22,6 @@ package org.apache.lens.cube.parse;
 import static org.apache.lens.cube.metadata.DateFactory.*;
 import static org.apache.lens.cube.parse.CubeTestSetup.*;
 
-import static org.testng.Assert.assertNotNull;
-
 import org.apache.lens.cube.error.LensCubeErrorCode;
 import org.apache.lens.cube.parse.CandidateTablePruneCause.CandidateTablePruneCode;
 import org.apache.lens.server.api.error.LensException;
