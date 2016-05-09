@@ -578,7 +578,7 @@ public class MetastoreUtil {
     return ParseUtils.findRootNonNullToken(tree);
   }
 
-  static ASTNode copyAST(ASTNode original) {
+  public static ASTNode copyAST(ASTNode original) {
 
     ASTNode copy = new ASTNode(original); // Leverage constructor
 

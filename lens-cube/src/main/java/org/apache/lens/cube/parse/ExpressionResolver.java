@@ -133,7 +133,7 @@ class ExpressionResolver implements ContextRewriter {
       for (String col : exprCols) {
         Set<ExprSpecContext> replacedExpressions = new LinkedHashSet<ExprSpecContext>();
         for (ExprSpec es : baseTable.getExpressionByName(col).getExpressionSpecs()) {
-          ASTNode finalAST = HQLParser.copyAST(baseEsc.getFinalAST());
+          ASTNode finalAST = MetastoreUtil.copyAST(baseEsc.getFinalAST());
           replaceColumnInAST(finalAST, col, es.copyASTNode());
           ExprSpecContext replacedESC = new ExprSpecContext(baseEsc, es, finalAST, cubeql);
           nestedExpressions.add(replacedESC);
@@ -718,7 +718,7 @@ class ExpressionResolver implements ContextRewriter {
   }
 
   private static ASTNode replaceAlias(final ASTNode expr, final CubeQueryContext cubeql) throws LensException {
-    ASTNode finalAST = HQLParser.copyAST(expr);
+    ASTNode finalAST = MetastoreUtil.copyAST(expr);
     HQLParser.bft(finalAST, new ASTNodeVisitor() {
       @Override
       public void visit(TreeNode visited) {
@@ -761,7 +761,7 @@ class ExpressionResolver implements ContextRewriter {
             ASTNode ident = (ASTNode) current.getChild(0);
             String column = ident.getText().toLowerCase();
             if (toReplace.equals(column)) {
-              node.setChild(i, HQLParser.copyAST(columnAST));
+              node.setChild(i, MetastoreUtil.copyAST(columnAST));
             }
           } else if (current.getToken().getType() == DOT) {
             // This is for the case where column name is prefixed by table name
@@ -774,7 +774,7 @@ class ExpressionResolver implements ContextRewriter {
             String column = colIdent.getText().toLowerCase();
 
             if (toReplace.equals(column)) {
-              node.setChild(i, HQLParser.copyAST(columnAST));
+              node.setChild(i, MetastoreUtil.copyAST(columnAST));
             }
           }
         }
