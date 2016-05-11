@@ -24,14 +24,12 @@ import java.util.Map;
 
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
 
 import org.apache.lens.api.APIResult;
 import org.apache.lens.api.APIResult.Status;
 import org.apache.lens.api.LensConf;
 import org.apache.lens.api.LensSessionHandle;
 import org.apache.lens.api.StringList;
-import org.apache.lens.api.error.ErrorCollection;
 import org.apache.lens.server.BaseLensService;
 import org.apache.lens.server.LensServices;
 import org.apache.lens.server.api.error.LensException;
@@ -90,11 +88,11 @@ public class SessionResource {
     @FormDataParam("password") String password,
     @FormDataParam("database")  @DefaultValue("") String database,
     @FormDataParam("sessionconf") LensConf sessionconf) throws LensException {
-      Map<String, String> conf;
+    Map<String, String> conf;
     if (sessionconf != null) {
       conf = sessionconf.getProperties();
     } else {
-      conf = new HashMap<String, String>();
+      conf = new HashMap();
     }
     return sessionService.openSession(username, password, database,   conf);
   }

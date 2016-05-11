@@ -31,7 +31,6 @@ import org.apache.lens.api.APIResult;
 import org.apache.lens.api.APIResult.Status;
 import org.apache.lens.api.LensConf;
 import org.apache.lens.api.LensSessionHandle;
-import org.apache.lens.api.error.ErrorCollection;
 import org.apache.lens.api.query.*;
 import org.apache.lens.api.result.LensAPIResult;
 import org.apache.lens.server.LensServices;
@@ -217,20 +216,20 @@ public class QueryServiceResource {
 
     QuerySubmitResult result;
     switch (sop) {
-      case ESTIMATE:
-        result = new QueryCostTOBuilder(queryServer.estimate(requestId, sessionid, query, conf)).build();
-        break;
-      case EXECUTE:
-        result = queryServer.executeAsync(sessionid, query, conf, queryName);
-        break;
-      case EXPLAIN:
-        result = queryServer.explain(requestId, sessionid, query, conf);
-        break;
-      case EXECUTE_WITH_TIMEOUT:
-        result = queryServer.execute(sessionid, query, timeoutmillis, conf, queryName);
-        break;
-      default:
-        throw new UnSupportedQuerySubmitOpException();
+    case ESTIMATE:
+      result = new QueryCostTOBuilder(queryServer.estimate(requestId, sessionid, query, conf)).build();
+      break;
+    case EXECUTE:
+      result = queryServer.executeAsync(sessionid, query, conf, queryName);
+      break;
+    case EXPLAIN:
+      result = queryServer.explain(requestId, sessionid, query, conf);
+      break;
+    case EXECUTE_WITH_TIMEOUT:
+      result = queryServer.execute(sessionid, query, timeoutmillis, conf, queryName);
+      break;
+    default:
+      throw new UnSupportedQuerySubmitOpException();
     }
 
     return LensAPIResult.composedOf(null, requestId, result);
@@ -363,14 +362,14 @@ public class QueryServiceResource {
       throw new BadRequestException("Invalid operation type: " + operation + prepareClue);
     }
     switch (sop) {
-      case PREPARE:
-        result = queryServer.prepare(sessionid, query, conf, queryName);
-        break;
-      case EXPLAIN_AND_PREPARE:
-        result = queryServer.explainAndPrepare(sessionid, query, conf, queryName);
-        break;
-      default:
-        throw new BadRequestException("Invalid operation type: " + operation + prepareClue);
+    case PREPARE:
+      result = queryServer.prepare(sessionid, query, conf, queryName);
+      break;
+    case EXPLAIN_AND_PREPARE:
+      result = queryServer.explainAndPrepare(sessionid, query, conf, queryName);
+      break;
+    default:
+      throw new BadRequestException("Invalid operation type: " + operation + prepareClue);
     }
     return LensAPIResult.composedOf(null, requestId, result);
   }
