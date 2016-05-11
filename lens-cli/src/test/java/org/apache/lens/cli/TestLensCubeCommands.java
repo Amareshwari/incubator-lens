@@ -52,36 +52,40 @@ public class TestLensCubeCommands extends LensCliApplicationTest {
   @Test
   public void testCubeCommands() throws Exception {
     LensClient client = new LensClient();
-    LensDimensionCommands dimensionCommand = new LensDimensionCommands();
-    dimensionCommand.setClient(client);
-    dimensionCommand.createDimension(new File(
-      TestLensCubeCommands.class.getClassLoader().getResource("test-detail.xml").toURI()));
-    dimensionCommand.createDimension(new File(
-      TestLensCubeCommands.class.getClassLoader().getResource("test-dimension.xml").toURI()));
-    LensCubeCommands command = new LensCubeCommands();
-    command.setClient(client);
-    LOG.debug("Starting to test cube commands");
-    URL cubeSpec = TestLensCubeCommands.class.getClassLoader().getResource("sample-cube.xml");
-    String cubeList = command.showCubes();
-    assertFalse(cubeList.contains("sample_cube"));
-    command.createCube(new File(cubeSpec.toURI()));
-    cubeList = command.showCubes();
-    assertEquals(command.getLatest("sample_cube", "dt"), "No Data Available");
-    assertTrue(cubeList.contains("sample_cube"));
-    testJoinChains(command);
-    testFields(command);
-    testUpdateCommand(new File(cubeSpec.toURI()), command);
-    command.dropCube("sample_cube");
     try {
-      command.getLatest("sample_cube", "dt");
-      fail("should have failed as cube doesn't exist");
-    } catch (Exception e) {
-      //pass
+      LensDimensionCommands dimensionCommand = new LensDimensionCommands();
+      dimensionCommand.setClient(client);
+      dimensionCommand.createDimension(new File(
+          TestLensCubeCommands.class.getClassLoader().getResource("test-detail.xml").toURI()));
+      dimensionCommand.createDimension(new File(
+          TestLensCubeCommands.class.getClassLoader().getResource("test-dimension.xml").toURI()));
+      LensCubeCommands command = new LensCubeCommands();
+      command.setClient(client);
+      LOG.debug("Starting to test cube commands");
+      URL cubeSpec = TestLensCubeCommands.class.getClassLoader().getResource("sample-cube.xml");
+      String cubeList = command.showCubes();
+      assertFalse(cubeList.contains("sample_cube"));
+      command.createCube(new File(cubeSpec.toURI()));
+      cubeList = command.showCubes();
+      assertEquals(command.getLatest("sample_cube", "dt"), "No Data Available");
+      assertTrue(cubeList.contains("sample_cube"));
+      testJoinChains(command);
+      testFields(command);
+      testUpdateCommand(new File(cubeSpec.toURI()), command);
+      command.dropCube("sample_cube");
+      try {
+        command.getLatest("sample_cube", "dt");
+        fail("should have failed as cube doesn't exist");
+      } catch (Exception e) {
+        //pass
+      }
+      cubeList = command.showCubes();
+      assertFalse(cubeList.contains("sample_cube"));
+      dimensionCommand.dropDimension("test_detail");
+      dimensionCommand.dropDimension("test_dim");
+    } finally {
+      client.closeConnection();
     }
-    cubeList = command.showCubes();
-    assertFalse(cubeList.contains("sample_cube"));
-    dimensionCommand.dropDimension("test_detail");
-    dimensionCommand.dropDimension("test_dim");
   }
 
   private void testJoinChains(LensCubeCommands command) {
@@ -133,7 +137,8 @@ public class TestLensCubeCommands extends LensCliApplicationTest {
   private void testFields(LensCubeCommands command) {
     String fields = command.showQueryableFields("sample_cube", true);
     for (String field : Arrays
-      .asList("dim1", "dim2", "dim3", "dimdetail", "measure1", "measure2", "measure3", "measure4", "expr_msr5")) {
+      .asList("dim1", "dim2", "dim3", "dimdetail", "dim4", "measure1", "measure2", "measure3", "measure4",
+          "measure5", "measure6", "expr_msr5")) {
       assertTrue(fields.contains(field), fields + " do not contain " + field);
     }
     assertTrue(fields.contains("measure3 + measure4 + 0.01"));

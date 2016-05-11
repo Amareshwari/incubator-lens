@@ -27,6 +27,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.lens.api.LensConf;
+import org.apache.lens.api.Priority;
 import org.apache.lens.server.api.LensConfConstants;
 import org.apache.lens.server.api.driver.DriverQueryPlan;
 import org.apache.lens.server.api.driver.LensDriver;
@@ -128,6 +129,13 @@ public abstract class AbstractQueryContext implements Serializable {
 
   /** Lock used to synchronize HiveConf access */
   private transient Lock hiveConfLock = new ReentrantLock();
+
+  /**
+   * The priority.
+   */
+  @Getter
+  @Setter
+  private Priority priority;
 
   protected AbstractQueryContext(final String query, final String user, final LensConf qconf, final Configuration conf,
     final Collection<LensDriver> drivers, boolean mergeDriverConf) {
@@ -468,5 +476,17 @@ public abstract class AbstractQueryContext implements Serializable {
   public void clearTransientStateAfterCompleted() {
     driverContext.clearTransientStateAfterCompleted();
     hiveConf = null;
+  }
+
+  /**
+   * Update conf.
+   *
+   * @param confoverlay the conf to set
+   */
+  public void updateConf(Map<String, String> confoverlay) {
+    lensConf.getProperties().putAll(confoverlay);
+    for (Map.Entry<String, String> prop : confoverlay.entrySet()) {
+      this.conf.set(prop.getKey(), prop.getValue());
+    }
   }
 }

@@ -174,6 +174,10 @@ public class MetastoreUtil {
     return getColumnKeyPrefix(colName) + DISPLAY_SFX;
   }
 
+  public static String getCubeColTagKey(String colName) {
+    return getColumnKeyPrefix(colName) + TAGS_PFX;
+  }
+
   public static String getExprColumnKey(String colName) {
     return getColumnKeyPrefix(colName) + EXPR_SFX;
   }
@@ -356,6 +360,26 @@ public class MetastoreUtil {
 
   public static String getLatestPartTimestampKey(String partCol) {
     return STORAGE_PFX + partCol + LATEST_PART_TIMESTAMP_SFX;
+  }
+
+  // //////////////////////////
+  // Segmentation propertes ///
+  // /////////////////////////
+
+  public static String getSegmentationKeyPrefix(String segName) {
+    return SEGMENTATION_KEY_PFX + segName.toLowerCase();
+  }
+
+  public static String getSegmentationCubeNameKey(String name) {
+    return getSegmentationKeyPrefix(name) + CUBE_NAME_SFX;
+  }
+
+  public static String getSegmentsListKey(String name) {
+    return getSegmentationKeyPrefix(name) + SEGMENTATION_CUBE_SEGMENT_SFX;
+  }
+
+  public static String getSegmentPropertyKey(String segName) {
+    return getSegmentationKeyPrefix(segName) + SEGMENT_PROP_SFX;
   }
 
   // //////////////////////////

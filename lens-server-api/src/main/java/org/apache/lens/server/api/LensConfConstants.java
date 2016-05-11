@@ -89,6 +89,12 @@ public final class LensConfConstants {
    */
   public static final String WS_FEATURE_NAMES = SERVER_PFX + "ws.featurenames";
 
+  public static final String MAX_SESSIONS_PER_USER = SERVER_PFX + "max.sessions.per.user";
+
+  public static final String QUERY_COMPARATOR_CLASS = SERVER_PFX + "query.comparator.class";
+
+  public static final Integer DEFAULT_MAX_SESSIONS_PER_USER = 10;
+
   /**
    * The Constant SERVICE_IMPL_SFX.
    */
@@ -135,14 +141,14 @@ public final class LensConfConstants {
   public static final String DEFAULT_SERVER_BASE_URL = "http://0.0.0.0:9999/lensapi";
 
   /**
-   * The Constant SERVER_RESTART_ENABLED.
+   * The Constant SERVER_STATE_PERSISTENCE_ENABLED.
    */
-  public static final String SERVER_RESTART_ENABLED = SERVER_PFX + "restart.enabled";
+  public static final String SERVER_STATE_PERSISTENCE_ENABLED = SERVER_PFX + "state.persistence.enabled";
 
   /**
-   * The Constant DEFAULT_SERVER_RESTART_ENABLED.
+   * The Constant DEFAULT_SERVER_STATE_PERSISTENCE_ENABLED.
    */
-  public static final boolean DEFAULT_SERVER_RESTART_ENABLED = true;
+  public static final boolean DEFAULT_SERVER_STATE_PERSISTENCE_ENABLED = true;
 
   /**
    * The Constant SERVER_STATE_PERSIST_LOCATION.
@@ -153,16 +159,6 @@ public final class LensConfConstants {
    * The Constant DEFAULT_SERVER_STATE_PERSIST_LOCATION.
    */
   public static final String DEFAULT_SERVER_STATE_PERSIST_LOCATION = "file:///tmp/lensserver";
-
-  /**
-   * The Constant SERVER_RECOVER_ON_RESTART.
-   */
-  public static final String SERVER_RECOVER_ON_RESTART = SERVER_PFX + "recover.onrestart";
-
-  /**
-   * The Constant DEFAULT_SERVER_RECOVER_ON_RESTART.
-   */
-  public static final boolean DEFAULT_SERVER_RECOVER_ON_RESTART = true;
 
   /**
    * The Constant SESSION_TIMEOUT_SECONDS.
@@ -215,14 +211,15 @@ public final class LensConfConstants {
   public static final boolean DEFAULT_SERVER_UI_ENABLE_CACHING = true;
 
   /**
-   * The Constant SERVER_SNAPSHOT_INTERVAL.
+   * The Constant SERVER_STATE_PERSISTENCE_INTERVAL_MILLIS.
    */
-  public static final String SERVER_SNAPSHOT_INTERVAL = SERVER_PFX + "snapshot.interval";
+  public static final String SERVER_STATE_PERSISTENCE_INTERVAL_MILLIS =
+    SERVER_PFX + "state.persistence.interval.millis";
 
   /**
-   * The Constant DEFAULT_SERVER_SNAPSHOT_INTERVAL.
+   * The Constant DEFAULT_SERVER_STATE_PERSISTENCE_INTERVAL_MILLIS.
    */
-  public static final long DEFAULT_SERVER_SNAPSHOT_INTERVAL = 5 * 60 * 1000;
+  public static final long DEFAULT_SERVER_STATE_PERSISTENCE_INTERVAL_MILLIS = 5 * 60 * 1000;
 
   // Email related configurations
   /**
@@ -406,6 +403,11 @@ public final class LensConfConstants {
    * The property name for setting the column mapping, if column names in native table are different
    */
   public static final String NATIVE_TABLE_COLUMN_MAPPING = METASTORE_PFX + "native.table.column.mapping";
+
+  /**
+   * The property name for setting the column mapping, if column names in cubes are different
+   */
+  public static final String CUBE_COLUMN_MAPPING = METASTORE_PFX + "cube.column.mapping";
 
   /**
    * The Constant ES_INDEX_NAME.
@@ -1037,4 +1039,35 @@ public final class LensConfConstants {
    * Default value of  INMEMORY_RESULT_SET_TTL_SECS is 300 secs (5 minutes)
    */
   public static final int DEFAULT_INMEMORY_RESULT_SET_TTL_SECS = 300;
+
+  /**
+   * Number of retries status update will be retried, in case of transient failures
+   */
+  public static final String STATUS_UPDATE_EXPONENTIAL_RETRIES = SERVER_PFX + "status.update.num.retries";
+
+  /**
+   * Default value of STATUS_UPDATE_EXPONENTIAL_RETRIES is 10
+   */
+  public static final int DEFAULT_STATUS_UPDATE_EXPONENTIAL_RETRIES = 10;
+
+  /**
+   * Maximum delay a status update can wait for next update, in case of transient failures
+   */
+  public static final String MAXIMUM_STATUS_UPDATE_DELAY = SERVER_PFX + "status.update.maximum.delay.secs";
+
+  /**
+   * Default value of MAXIMUM_STATUS_UPDATE_DELAY is 1800 secs (30 minutes)
+   */
+  public static final long DEFAULT_MAXIMUM_STATUS_UPDATE_DELAY = 1800;
+
+  /**
+   * Number of seconds that would grow exponentially for next update, incase of transient failures.
+   */
+  public static final String STATUS_UPDATE_EXPONENTIAL_WAIT_FACTOR = SERVER_PFX
+    + "status.update.exponential.wait.millis";
+
+  /**
+   * Default value of DEFAULT_STATUS_UPDATE_EXPONENTIAL_WAIT_FACTOR is 30000 millis (30 seconds)
+   */
+  public static final long DEFAULT_STATUS_UPDATE_EXPONENTIAL_WAIT_FACTOR = 30000;
 }

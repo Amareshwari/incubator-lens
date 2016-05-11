@@ -18,9 +18,12 @@
  */
 package org.apache.lens.client;
 
+import java.io.InputStream;
+import java.nio.charset.Charset;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.ws.rs.core.Response;
 
@@ -31,9 +34,13 @@ import org.apache.lens.api.result.LensAPIResult;
 import org.apache.lens.api.util.PathValidator;
 import org.apache.lens.client.exceptions.LensAPIException;
 import org.apache.lens.client.exceptions.LensBriefErrorException;
+import org.apache.lens.client.exceptions.LensClientIOException;
 import org.apache.lens.client.model.BriefError;
 import org.apache.lens.client.model.IdBriefErrorTemplate;
 import org.apache.lens.client.model.IdBriefErrorTemplateKey;
+import org.apache.lens.client.resultset.CsvResultSet;
+import org.apache.lens.client.resultset.ResultSet;
+import org.apache.lens.client.resultset.ZippedCsvResultSet;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,7 +71,15 @@ public class LensClient {
   @Getter
   private PathValidator pathValidator;
 
-  public static Logger getCliLooger() {
+  public static final String QUERY_RESULT_SPLIT_INTO_MULTIPLE = "lens.query.result.split.multiple";
+
+  public static final String QUERY_OUTPUT_WRITE_HEADER_ENABLED = "lens.query.output.write.header";
+
+  public static final String QUERY_OUTPUT_ENCODING = "lens.query.output.charset.encoding";
+
+  public static final char DEFAULT_RESULTSET_DELIMITER = ',';
+
+  public static Logger getCliLogger() {
     return LoggerFactory.getLogger(CLILOGGER);
   }
 
@@ -100,13 +115,36 @@ public class LensClient {
     return mc;
   }
 
-  public LensAPIResult<QueryHandle> executeQueryAsynch(String sql, String queryName) throws LensAPIException {
+  public QueryHandle executeQueryAsynch(String sql, String queryName) throws LensAPIException {
     log.debug("Executing query {}", sql);
-    LensAPIResult<QueryHandle> lensAPIResult = statement.execute(sql, false, queryName);
-    LensQuery query = statement.getQuery();
-    log.debug("Adding query to statementMap {}", query.getQueryHandle());
-    statementMap.put(query.getQueryHandle(), statement);
-    return lensAPIResult;
+    QueryHandle handle = statement.executeQuery(sql, false, queryName);
+    statementMap.put(handle, statement);
+    return handle;
+  }
+
+  /**
+   * Execute query with timeout option.
+   * If the query does not finish within the timeout time, server returns the query handle which can be used to
+   * track further progress.
+   *
+   * @param sql : query/command to be executed
+   * @param queryName : optional query name
+   * @param timeOutMillis : timeout milliseconds for the query execution.
+   * @return
+   * @throws LensAPIException
+   */
+  public QueryHandleWithResultSet executeQueryWithTimeout(String sql, String queryName, long timeOutMillis)
+    throws LensAPIException {
+    log.info("Executing query {} with timeout of {} milliseconds", sql, timeOutMillis);
+    QueryHandleWithResultSet result = statement.executeQuery(sql, queryName, timeOutMillis);
+    statementMap.put(result.getQueryHandle(), statement);
+    if (result.getStatus().failed()) {
+      IdBriefErrorTemplate errorResult = new IdBriefErrorTemplate(IdBriefErrorTemplateKey.QUERY_ID,
+          result.getQueryHandle().getHandleIdString(), new BriefError(result.getStatus()
+              .getErrorCode(), result.getStatus().getErrorMessage()));
+      throw new LensBriefErrorException(errorResult);
+    }
+    return result;
   }
 
   public Date getLatestDateOfCube(String cubeName, String timePartition) {
@@ -139,7 +177,7 @@ public class LensClient {
 
   public LensClientResultSetWithStats getResults(String sql, String queryName) throws LensAPIException {
     log.debug("Executing query {}", sql);
-    statement.execute(sql, true, queryName);
+    statement.executeQuery(sql, true, queryName);
     return getResultsFromStatement(statement);
   }
 
@@ -187,6 +225,50 @@ public class LensClient {
 
   public Response getHttpResults(QueryHandle q) {
     return statement.getHttpResultSet(statement.getQuery(q));
+  }
+
+  /**
+   * Gets the ResultSet for the query represented by queryHandle.
+   *
+   * @param queryHandle : query hanlde
+   * @return
+   * @throws LensClientIOException
+   */
+  public ResultSet getHttpResultSet(QueryHandle queryHandle) throws LensClientIOException {
+    Map<String, String> paramsMap = this.connection.getConnectionParamsAsMap();
+    String isSplitFileEnabled = paramsMap.get(QUERY_RESULT_SPLIT_INTO_MULTIPLE);
+    String isHeaderEnabled = paramsMap.get(QUERY_OUTPUT_WRITE_HEADER_ENABLED);
+    String encoding = paramsMap.get(QUERY_OUTPUT_ENCODING);
+    return getHttpResultSet(queryHandle, Charset.forName(encoding), Boolean.parseBoolean(isHeaderEnabled),
+      DEFAULT_RESULTSET_DELIMITER, Boolean.parseBoolean(isSplitFileEnabled));
+  }
+
+  /**
+   * Gets the ResultSet for the query represented by queryHandle.
+   *
+   * @param queryHandle : query handle.
+   * @param encoding  : resultset encoding.
+   * @param isHeaderPresent : whether the resultset has header row included.
+   * @param delimiter : delimiter used to seperate columns of resultset.
+   * @param isResultZipped : whether the resultset is zipped.
+   * @return
+   * @throws LensClientIOException
+   */
+  public ResultSet getHttpResultSet(QueryHandle queryHandle, Charset encoding, boolean isHeaderPresent, char delimiter,
+    boolean isResultZipped) throws LensClientIOException {
+    InputStream resultStream = null;
+    try {
+      Response response = statement.getHttpResultSet(statement.getQuery(queryHandle));
+      resultStream = response.readEntity(InputStream.class);
+    } catch (Exception e) {
+      throw new LensClientIOException("Error while getting resultset", e);
+    }
+
+    if (isResultZipped) {
+      return new ZippedCsvResultSet(resultStream, encoding, isHeaderPresent, delimiter);
+    } else {
+      return new CsvResultSet(resultStream, encoding, isHeaderPresent, delimiter);
+    }
   }
 
   public LensStatement getLensStatement(QueryHandle query) {
@@ -612,4 +694,29 @@ public class LensClient {
   public Response getLogs(String logFile) {
     return this.connection.getLogs(logFile);
   }
+
+  public XCubeSegmentation getCubeSegmentation(String segName) {
+    return mc.getCubeSegmentation(segName);
+  }
+
+  public List<String> getAllCubeSegmentations() {
+    return mc.getAllCubeSegmentations();
+  }
+
+  public List<String> getAllCubeSegmentations(String filter) {
+    return mc.getAllCubeSegmentations(filter);
+  }
+
+  public APIResult createCubeSegmentation(String segSpec) {
+    return mc.createCubeSegmentation(segSpec);
+  }
+
+  public APIResult updateCubeSegmentation(String segName, String segSpec) {
+    return mc.updateCubeSegmentation(segName, segSpec);
+  }
+
+  public APIResult dropCubeSegmentation(String segName) {
+    return mc.dropCubeSegmentation(segName);
+  }
+
 }

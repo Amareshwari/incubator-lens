@@ -62,27 +62,22 @@ import lombok.extern.slf4j.Slf4j;
 public class Util {
 
   private static final String PROPERTY_FILE = "lens.properties";
-  private static Properties properties;
-  private static String localFilePath = "src/test/resources/";
+  private static String localFilePath = "lens-regression/target/";
   private static String localFile;
   private static String backupFile;
-  private static String remoteFile;
 
   private Util() {
 
   }
 
-  public static synchronized Properties getPropertiesObj(String filename) {
+  public static Properties getPropertiesObj(String filename) {
     try {
-      if (properties == null) {
-        properties = new Properties();
-        log.info("filename: {}", filename);
-        InputStream confStream = Util.class.getResourceAsStream("/" + filename);
-        properties.load(confStream);
-        confStream.close();
-      }
+      Properties properties = new Properties();
+      log.info("filename: {}", filename);
+      InputStream confStream = Util.class.getResourceAsStream("/" + filename);
+      properties.load(confStream);
+      confStream.close();
       return properties;
-
     } catch (IOException e) {
       log.info("Error in getProperies:", e);
     }
@@ -154,8 +149,7 @@ public class Util {
   }
 
   @SuppressWarnings("unchecked")
-  public static <T> Object extractObject(String queryString, Class<T> c)
-    throws InstantiationException, IllegalAccessException {
+  public static <T> Object extractObject(String queryString, Class<T> c) throws IllegalAccessException {
     JAXBContext jaxbContext = null;
     Unmarshaller unmarshaller = null;
     StringReader reader = new StringReader(queryString);
@@ -171,8 +165,7 @@ public class Util {
   }
 
   @SuppressWarnings("unchecked")
-  public static <T> Object getObject(String queryString, Class<T> c)
-    throws InstantiationException, IllegalAccessException {
+  public static <T> Object getObject(String queryString, Class<T> c) throws IllegalAccessException {
     JAXBContext jaxbContext = null;
     Unmarshaller unmarshaller = null;
     StringReader reader = new StringReader(queryString);
@@ -188,8 +181,8 @@ public class Util {
 
   @SuppressWarnings("unchecked")
   public static <T> String convertObjectToXml(T object, Class<T> clazz, String functionName)
-    throws SecurityException, NoSuchMethodException, IllegalArgumentException, IllegalAccessException,
-    InvocationTargetException {
+    throws SecurityException, NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+
     JAXBElement<T> root = null;
     StringWriter stringWriter = new StringWriter();
     ObjectFactory methodObject = new ObjectFactory();
@@ -238,22 +231,16 @@ public class Util {
   }
 
   public static void changeConfig(HashMap<String, String> map, String remotePath) throws Exception {
-    String fileName;
-    remoteFile = remotePath;
 
-    Path p = Paths.get(remoteFile);
-
-    fileName = p.getFileName().toString();
+    Path p = Paths.get(remotePath);
+    String fileName = p.getFileName().toString();
     backupFile = localFilePath + "backup-" + fileName;
     localFile = localFilePath + fileName;
-    log.info("Copying " + remoteFile + " to " + localFile);
-    remoteFile("get", remoteFile, localFile);
-    File locfile = new File(localFile);
-    File remfile = new File(backupFile);
-    Files.copy(locfile.toPath(), remfile.toPath(), REPLACE_EXISTING);
+    log.info("Copying " + remotePath + " to " + localFile);
+    remoteFile("get", remotePath, localFile);
+    Files.copy(new File(localFile).toPath(), new File(backupFile).toPath(), REPLACE_EXISTING);
 
-    DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
-    DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
+    DocumentBuilder docBuilder = DocumentBuilderFactory.newInstance().newDocumentBuilder();
     Document doc = docBuilder.parse(new FileInputStream(localFile));
     doc.normalize();
 
@@ -262,8 +249,7 @@ public class Util {
     Element rootElement = (Element) root;
     NodeList property = rootElement.getElementsByTagName("property");
 
-    for (int i = 0; i < property.getLength(); i++)   //Deleting redundant properties from the document
-    {
+    for (int i = 0; i < property.getLength(); i++) {  //Deleting redundant properties from the document
       Node prop = property.item(i);
       Element propElement = (Element) prop;
       Node propChild = propElement.getElementsByTagName("name").item(0);
@@ -273,7 +259,6 @@ public class Util {
         rootElement.removeChild(prop);
         i--;
       }
-
     }
 
     Iterator<Entry<String, String>> ab = map.entrySet().iterator();
@@ -295,7 +280,7 @@ public class Util {
       newNodeElement.appendChild(newValue);
     }
     prettyPrint(doc);
-    remoteFile("put", remoteFile, localFile);
+    remoteFile("put", remotePath, localFile);
   }
 
   /*
@@ -312,8 +297,9 @@ public class Util {
   /*
    * function to download or upload a file to a remote server
    */
-  public static void remoteFile(String function, String remotePath, String localPath)
-    throws JSchException, SftpException {
+  public static void remoteFile(String function, String remotePath, String localPath) throws JSchException,
+      SftpException {
+
     String serverUrl = getProperty("lens.remote.host");
     String serverUname = getProperty("lens.remote.username");
     String serverPass = getProperty("lens.remote.password");
@@ -345,22 +331,16 @@ public class Util {
   }
 
   public static void changeConfig(String remotePath) throws JSchException, SftpException {
-    String fileName;
-    remoteFile = remotePath;
-
-    Path p = Paths.get(remoteFile);
-
-    fileName = p.getFileName().toString();
+    String fileName = Paths.get(remotePath).getFileName().toString();
     backupFile = localFilePath + "backup-" + fileName;
-
-    log.info("Copying " + backupFile + " to " + remoteFile);
-    remoteFile("put", remoteFile, backupFile);
+    log.info("Copying " + backupFile + " to " + remotePath);
+    remoteFile("put", remotePath, backupFile);
   }
 
   public static Map<String, String> mapFromXProperties(XProperties xProperties) {
     Map<String, String> properties = new HashMap<String, String>();
     if (xProperties != null && xProperties.getProperty() != null
-      && !xProperties.getProperty().isEmpty()) {
+        && !xProperties.getProperty().isEmpty()) {
       for (XProperty xp : xProperties.getProperty()) {
         properties.put(xp.getName(), xp.getValue());
       }
@@ -412,5 +392,4 @@ public class Util {
       return null;
     }
   }
-
 }

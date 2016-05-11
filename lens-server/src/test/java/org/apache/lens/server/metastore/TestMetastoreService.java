@@ -61,6 +61,7 @@ import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.mapred.SequenceFileInputFormat;
 
 import org.glassfish.jersey.test.TestProperties;
+
 import org.testng.Assert;
 import org.testng.annotations.*;
 
@@ -924,6 +925,15 @@ public class TestMetastoreService extends LensJerseyTest {
 
   private XStorageTableDesc createStorageTableDesc(String name, final String[] timePartColNames) {
     XStorageTableDesc xs1 = cubeObjectFactory.createXStorageTableDesc();
+    XProperties props = cubeObjectFactory.createXProperties();
+    XProperty propStartTime = cubeObjectFactory.createXProperty();
+    propStartTime.setName(MetastoreUtil.getStoragetableStartTimesKey());
+    propStartTime.setValue("now -10 days");
+    XProperty propEndTime = cubeObjectFactory.createXProperty();
+    propEndTime.setName(MetastoreUtil.getStoragetableEndTimesKey());
+    propEndTime.setValue("now +5 days");
+    props.getProperty().add(propStartTime);
+    props.getProperty().add(propEndTime);
     xs1.setCollectionDelimiter(",");
     xs1.setEscapeChar("\\");
     xs1.setFieldDelimiter("\t");
@@ -932,7 +942,7 @@ public class TestMetastoreService extends LensJerseyTest {
     xs1.setTableLocation(new Path(new File("target").getAbsolutePath(), name).toString());
     xs1.setExternal(true);
     xs1.setPartCols(new XColumns());
-    xs1.setTableParameters(new XProperties());
+    xs1.setTableParameters(props);
     xs1.setSerdeParameters(new XProperties());
 
     for (String timePartColName : timePartColNames) {
@@ -1623,6 +1633,153 @@ public class TestMetastoreService extends LensJerseyTest {
     }
   }
 
+  private XCubeSegmentation createCubeSegmentation(String segName) {
+    return createCubeSegmentation(segName, "testCube");
+  }
+
+  private XCubeSegmentation createCubeSegmentation(String segName, String cubeName) {
+    XCubeSegmentation seg = cubeObjectFactory.createXCubeSegmentation();
+
+    //Create Xproperties
+    XProperties props1 = cubeObjectFactory.createXProperties();
+    XProperty prop1 = new XProperty();
+    prop1.setName("prop_key1");
+    prop1.setValue("prop_val1");
+    props1.getProperty().add(prop1);
+
+    XProperties props2 = cubeObjectFactory.createXProperties();
+    XProperty prop2 = new XProperty();
+    prop2.setName("prop_key2");
+    prop2.setValue("prop_val2");
+    props2.getProperty().add(prop2);
+
+    // Create XcubeSegments
+    XCubeSegments cubes =  new XCubeSegments();
+    XCubeSegment c1 = cubeObjectFactory.createXCubeSegment();
+    c1.setCubeName("cube1");
+    c1.setSegmentParameters(props1);
+
+    XCubeSegment c2 = cubeObjectFactory.createXCubeSegment();
+    c2.setCubeName("cube2");
+    c2.setSegmentParameters(props2);
+
+    cubes.getCubeSegment().add(c1);
+    cubes.getCubeSegment().add(c2);
+
+    seg.setProperties(new XProperties());
+    seg.setName(segName);
+    seg.setWeight(10.0);
+    seg.setCubeName(cubeName);
+    seg.setCubeSegements(cubes);
+    Map<String, String> properties = LensUtil.getHashMap("foo", "bar");
+    seg.getProperties().getProperty().addAll(JAXBUtils.xPropertiesFromMap(properties));
+
+    return seg;
+  }
+
+  @Test(dataProvider = "mediaTypeData")
+  public void testCreateAndAlterCubeSegmentation(MediaType mediaType) throws Exception {
+    final String segname = "testCreateCubeSegmentation";
+    final String DB = dbPFX + "testCreateCubeSegmentation_DB" + mediaType.getSubtype();
+    String prevDb = getCurrentDatabase(mediaType);
+    createDatabase(DB, mediaType);
+    setCurrentDatabase(DB, mediaType);
+
+    try {
+      XCubeSegmentation seg = createCubeSegmentation(segname);
+
+      APIResult result = target()
+              .path("metastore")
+              .path("cubesegmentations").queryParam("sessionid", lensSessionId)
+              .request(mediaType)
+              .post(Entity.entity(
+                              new GenericEntity<JAXBElement<XCubeSegmentation>>(
+                                      cubeObjectFactory.createXCubeSegmentation(seg)){}, mediaType),
+                      APIResult.class);
+      assertSuccess(result);
+
+      // Get all cube segmentations, this should contain the cube segmentation created earlier
+      StringList segNames = target().path("metastore/cubesegmentations")
+              .queryParam("sessionid", lensSessionId).request(mediaType).get(StringList.class);
+      assertTrue(segNames.getElements().contains(segname.toLowerCase()));
+
+      // Get the created cubesegmentation
+      JAXBElement<XCubeSegmentation> gotCubeSegmentation = target().path("metastore/cubesegmentations")
+              .path(segname)
+              .queryParam("sessionid", lensSessionId).request(mediaType)
+              .get(new GenericType<JAXBElement<XCubeSegmentation>>() {});
+      XCubeSegmentation gotSeg = gotCubeSegmentation.getValue();
+      assertTrue(gotSeg.getName().equalsIgnoreCase(segname));
+      assertEquals(gotSeg.getWeight(), 10.0);
+      CubeSegmentation cs = JAXBUtils.cubeSegmentationFromXCubeSegmentation(seg);
+
+      // Check for cube segemnts
+      boolean foundCube1 = false;
+      for (CubeSegment cube : cs.getCubeSegments()) {
+        if (cube.getName().equalsIgnoreCase("cube1")
+            && cube.getProperties().get("prop_key1").equals("prop_val1")) {
+          foundCube1 = true;
+          break;
+        }
+      }
+      assertTrue(foundCube1);
+      assertEquals(cs.getProperties().get("foo"), "bar");
+
+      // update cube segmentation
+      XCubeSegmentation update = JAXBUtils.xsegmentationFromCubeSegmentation(cs);
+      XCubeSegments cubes =  new XCubeSegments();
+      XCubeSegment c1 = cubeObjectFactory.createXCubeSegment();
+      c1.setCubeName("cube11");
+      XCubeSegment c2 = cubeObjectFactory.createXCubeSegment();
+      c2.setCubeName("cube22");
+      cubes.getCubeSegment().add(c1);
+      cubes.getCubeSegment().add(c2);
+
+      update.setWeight(20.0);
+      update.setCubeSegements(cubes);
+
+      result = target().path("metastore").path("cubesegmentations").path(segname)
+              .queryParam("sessionid", lensSessionId).request(mediaType)
+              .put(Entity.entity(new GenericEntity<JAXBElement<XCubeSegmentation>>(
+                cubeObjectFactory.createXCubeSegmentation(update)){}, mediaType),
+              APIResult.class);
+      assertSuccess(result);
+
+      // Get the updated table
+      JAXBElement<XCubeSegmentation>  gotUpdatedCubeSeg = target().path("metastore/cubesegmentations").path(segname)
+              .queryParam("sessionid", lensSessionId).request(mediaType)
+              .get(new GenericType<JAXBElement<XCubeSegmentation>>() {});
+      XCubeSegmentation gotUpSeg = gotUpdatedCubeSeg.getValue();
+      CubeSegmentation usg = JAXBUtils.cubeSegmentationFromXCubeSegmentation(gotUpSeg);
+
+      assertEquals(usg.getCubeSegments().size(), 2);
+      for (CubeSegment segmnt : usg.getCubeSegments()) {
+        assertTrue(segmnt.getName().equals("cube11") || segmnt.getName().equals("cube22"));
+      }
+
+      // Finally, drop the cube segmentation
+      result = target().path("metastore").path("cubesegmentations").path(segname)
+              .queryParam("sessionid", lensSessionId).request(mediaType)
+              .delete(APIResult.class);
+
+      assertSuccess(result);
+
+      // Drop again, this time it should give a 404
+      try {
+        target().path("metastore").path("cubesegmentations").path(segname)
+                .queryParam("cascade", "true")
+                .queryParam("sessionid", lensSessionId).request(mediaType)
+                .delete(APIResult.class);
+        fail("Expected 404");
+      } catch (NotFoundException nfe) {
+        // PASS
+      }
+    } finally {
+      setCurrentDatabase(prevDb, mediaType);
+      dropDatabase(DB, mediaType);
+    }
+  }
+
   private XFactTable createFactTable(String factName) {
     return createFactTable(factName, "testCube");
   }
@@ -1766,7 +1923,7 @@ public class TestMetastoreService extends LensJerseyTest {
 
       // Do some changes to test update
       cf.alterWeight(20.0);
-      cf.alterColumn(new FieldSchema("c2", "int", "changed to int"));
+      cf.alterColumn(new FieldSchema("c2", "double", "changed to double"));
 
       XFactTable update = JAXBUtils.factTableFromCubeFactTable(cf);
       XStorageTableElement s1Tbl = createStorageTblElement("S1", table, "HOURLY");
@@ -1796,7 +1953,7 @@ public class TestMetastoreService extends LensJerseyTest {
 
       boolean foundC2 = false;
       for (FieldSchema fs : cf.getColumns()) {
-        if (fs.getName().equalsIgnoreCase("c2") && fs.getType().equalsIgnoreCase("int")) {
+        if (fs.getName().equalsIgnoreCase("c2") && fs.getType().equalsIgnoreCase("double")) {
           foundC2 = true;
           break;
         }
@@ -2031,6 +2188,53 @@ public class TestMetastoreService extends LensJerseyTest {
       // Cleanup
       setCurrentDatabase(prevDb, mediaType);
       dropDatabase(dbName, mediaType);
+    }
+  }
+  @SuppressWarnings("deprecation")
+  @Test(dataProvider = "mediaTypeData")
+  public void testSkipFactStoragePartitions(MediaType mediaType) throws Exception {
+
+    final String table = "testSkipFactStoragePartitions";
+    final String DB = dbPFX + "testSkipFactStoragePartitions_DB" + mediaType.getSubtype();
+    String prevDb = getCurrentDatabase(mediaType);
+    createDatabase(DB, mediaType);
+    setCurrentDatabase(DB, mediaType);
+    createStorage("S1", mediaType);
+    createStorage("S2", mediaType);
+
+    try {
+      final Date partDate = new Date();
+      final XCube cube = createTestCube("testCube");
+      XFactTable f = createFactTable(table);
+      f.getStorageTables().getStorageTable().add(createStorageTblElement("S1", table, "HOURLY"));
+      f.getStorageTables().getStorageTable().add(createStorageTblElement("S2", table, "DAILY"));
+      f.getStorageTables().getStorageTable().add(createStorageTblElement("S2", table, "HOURLY"));
+
+      APIResult result = target()
+              .path("metastore")
+              .path("facts").queryParam("sessionid", lensSessionId)
+              .request(mediaType)
+              .post(Entity.entity(
+                   new GenericEntity<JAXBElement<XFactTable>>(cubeObjectFactory.createXFactTable(f)){}, mediaType),
+                      APIResult.class);
+      assertSuccess(result);
+
+      APIResult partAddResult;
+      // skip partitons if it starts before storage start date
+      // Add two partitions one before storage start time and other one after start time
+      // Add partition status will return partial
+      XPartitionList partList = new XPartitionList();
+      partList.getPartition().add(createPartition(table, DateUtils.addHours(partDate, 1)));
+      partList.getPartition().add(createPartition(table, DateUtils.addHours(partDate, -300)));
+      partAddResult = target().path("metastore/facts/").path(table).path("storages/S2/partitions")
+              .queryParam("sessionid", lensSessionId).request(mediaType)
+              .post(Entity.entity(new GenericEntity<JAXBElement<XPartitionList>>(
+                      cubeObjectFactory.createXPartitionList(partList)) {
+              }, mediaType), APIResult.class);
+      assertEquals(partAddResult.getStatus(), Status.PARTIAL);
+    } finally {
+      setCurrentDatabase(prevDb, mediaType);
+      dropDatabase(DB, mediaType);
     }
   }
 

@@ -18,7 +18,6 @@
  */
 package org.apache.lens.server.query.save;
 
-import static org.apache.lens.api.error.LensCommonErrorCode.INVALID_XML_ERROR;
 import static org.apache.lens.api.query.save.ResourceModifiedResponse.Action.CREATED;
 import static org.apache.lens.api.query.save.ResourceModifiedResponse.Action.DELETED;
 import static org.apache.lens.api.query.save.ResourceModifiedResponse.Action.UPDATED;
@@ -41,9 +40,7 @@ import org.apache.lens.api.query.save.ParameterParserResponse;
 import org.apache.lens.api.query.save.ResourceModifiedResponse;
 import org.apache.lens.api.query.save.SavedQuery;
 import org.apache.lens.api.result.LensAPIResult;
-import org.apache.lens.cube.parse.HQLParser;
 import org.apache.lens.server.LensServices;
-import org.apache.lens.server.api.LensErrorInfo;
 import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.query.QueryExecutionService;
 import org.apache.lens.server.api.query.save.*;
@@ -56,7 +53,6 @@ import org.apache.hadoop.hive.conf.HiveConf;
 import org.glassfish.grizzly.http.server.Response;
 import org.glassfish.jersey.media.multipart.FormDataParam;
 
-import lombok.NonNull;
 
 @Path("/queryapi")
 /**
@@ -64,6 +60,7 @@ import lombok.NonNull;
  * <p></p>
  * CRUD on saved query
  */
+@Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
 public class SavedQueryResource {
 
   final SavedQueryService savedQueryService;
@@ -107,7 +104,6 @@ public class SavedQueryResource {
   @GET
   @Path("/savedqueries")
   @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML})
   public ListResponse getList(
     @QueryParam("sessionid") LensSessionHandle sessionid,
     @Context UriInfo info,
@@ -115,7 +111,7 @@ public class SavedQueryResource {
     @QueryParam("count") String count) throws LensException {
     try {
       final int countVal = count == null? defaultCount: Integer.parseInt(count);
-      return savedQueryService.list(info.getQueryParameters(), start, countVal);
+      return savedQueryService.list(sessionid, info.getQueryParameters(), start, countVal);
     } catch (LensException e) {
       throw getWrapped(e);
     }
@@ -131,12 +127,11 @@ public class SavedQueryResource {
    */
   @GET
   @Path("/savedqueries/{id}")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML})
   public SavedQuery getByID(
     @QueryParam("sessionid") LensSessionHandle sessionid,
     @PathParam("id") long id) throws LensException {
     try {
-      return savedQueryService.get(id);
+      return savedQueryService.get(sessionid, id);
     } catch (LensException e) {
       throw getWrapped(e);
     }
@@ -152,12 +147,11 @@ public class SavedQueryResource {
    */
   @DELETE
   @Path("/savedqueries/{id}")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML})
   public ResourceModifiedResponse deleteById(
     @QueryParam("sessionid") LensSessionHandle sessionid,
     @PathParam("id") long id) throws LensException {
     try {
-      savedQueryService.delete(id);
+      savedQueryService.delete(sessionid, id);
       return new ResourceModifiedResponse(id, "saved_query", DELETED);
     } catch (LensException e) {
       throw getWrapped(e);
@@ -176,16 +170,14 @@ public class SavedQueryResource {
    */
   @POST
   @Path(("/savedqueries"))
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML})
-  @Consumes({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML})
+  @Consumes({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
   public ResourceModifiedResponse create(
     @QueryParam("sessionid") LensSessionHandle sessionid,
     SavedQuery savedQuery,
     @Context final Response response)
     throws LensException, IOException {
     try {
-      validateSampleResolved(savedQuery);
-      long id = savedQueryService.save(savedQuery);
+      long id = savedQueryService.save(sessionid, savedQuery);
       response.setStatus(HttpServletResponse.SC_CREATED);
       response.flush();
       return new ResourceModifiedResponse(id, "saved_query", CREATED);
@@ -206,16 +198,14 @@ public class SavedQueryResource {
    */
   @PUT
   @Path("/savedqueries/{id}")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML})
-  @Consumes({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML})
+  @Consumes({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
   public ResourceModifiedResponse update(
     @QueryParam("sessionid") LensSessionHandle sessionid,
     @PathParam("id") long id,
     SavedQuery savedQuery,
     @Context final Response response) throws LensException, IOException {
     try {
-      validateSampleResolved(savedQuery);
-      savedQueryService.update(id, savedQuery);
+      savedQueryService.update(sessionid, id, savedQuery);
       response.setStatus(HttpServletResponse.SC_CREATED);
       response.flush();
       return new ResourceModifiedResponse(id, "saved_query", UPDATED);
@@ -233,7 +223,6 @@ public class SavedQueryResource {
    */
   @POST
   @Path("/savedqueries/parameters")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML})
   public ParameterParserResponse getParameters(
     @QueryParam("sessionid") LensSessionHandle sessionid,
     @FormDataParam("query") String query) {
@@ -252,7 +241,6 @@ public class SavedQueryResource {
    */
   @POST
   @Path("/savedqueries/{id}")
-  @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.TEXT_PLAIN})
   public LensAPIResult<QueryHandle> run(
     @PathParam("id") long id,
     @Context UriInfo info,
@@ -260,7 +248,7 @@ public class SavedQueryResource {
     @FormDataParam("conf") LensConf conf) throws LensException {
     final String requestId = this.logSegregationContext.getLogSegragationId();
     try {
-      final SavedQuery savedQuery = savedQueryService.get(id);
+      final SavedQuery savedQuery = savedQueryService.get(sessionid, id);
       final String query = ParameterResolver.resolve(savedQuery, info.getQueryParameters());
       return LensAPIResult.composedOf(
         null,
@@ -284,24 +272,4 @@ public class SavedQueryResource {
     e.buildLensErrorResponse(errorCollection, null, logSegregationContext.getLogSegragationId());
     throw e;
   }
-
-  /**
-   * Validates the saved query and throws LensException with.
-   * BAD_SYNTAX code if wrong
-   *
-   * @param savedQuery Saved query object
-   * @throws LensException if invalid
-   */
-  private void validateSampleResolved(@NonNull SavedQuery savedQuery) throws LensException {
-    final String sampleResolved  = SavedQueryHelper.getSampleResolvedQuery(savedQuery);
-    try {
-      HQLParser.parseHQL(sampleResolved, new HiveConf());
-    } catch (Exception e) {
-      throw new LensException(
-        new LensErrorInfo(INVALID_XML_ERROR.getValue(), 0, INVALID_XML_ERROR.toString())
-        , e
-        , "Encountered while resolving with sample values { " + sampleResolved + " }");
-    }
-  }
-
 }

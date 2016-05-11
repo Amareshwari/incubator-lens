@@ -39,15 +39,17 @@ import javax.ws.rs.core.StreamingOutput;
 
 import org.apache.lens.api.LensConf;
 import org.apache.lens.api.LensSessionHandle;
+import org.apache.lens.api.Priority;
 import org.apache.lens.api.error.ErrorCollection;
 import org.apache.lens.api.query.*;
 import org.apache.lens.api.query.QueryStatus.Status;
-import org.apache.lens.api.result.LensErrorTO;
 import org.apache.lens.driver.hive.HiveDriver;
 import org.apache.lens.server.BaseLensService;
 import org.apache.lens.server.LensServerConf;
 import org.apache.lens.server.LensServices;
 import org.apache.lens.server.api.LensConfConstants;
+import org.apache.lens.server.api.common.BackOffRetryHandler;
+import org.apache.lens.server.api.common.OperationRetryHandlerFactory;
 import org.apache.lens.server.api.driver.*;
 import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.error.LensMultiCauseException;
@@ -60,6 +62,7 @@ import org.apache.lens.server.api.query.*;
 import org.apache.lens.server.api.query.collect.WaitingQueriesSelectionPolicy;
 import org.apache.lens.server.api.query.constraint.QueryLaunchingConstraint;
 import org.apache.lens.server.api.query.cost.QueryCost;
+import org.apache.lens.server.api.util.LensUtil;
 import org.apache.lens.server.model.LogSegregationContext;
 import org.apache.lens.server.model.MappedDiagnosticLogSegregationContext;
 import org.apache.lens.server.query.collect.*;
@@ -135,8 +138,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
   /**
    * The accepted queries.
    */
-  private FairPriorityBlockingQueue<QueryContext> queuedQueries
-    = new FairPriorityBlockingQueue<QueryContext>(new QueryContextPriorityComparator());
+  private FairPriorityBlockingQueue<QueryContext> queuedQueries;
 
   /**
    * The launched queries.
@@ -221,6 +223,10 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
   private DriverSelector driverSelector;
 
   /**
+   *  The query comparator
+   */
+  private QueryComparator queryComparator;
+  /**
    * The result sets.
    */
   private Map<QueryHandle, LensResultSet> resultSets = new HashMap<QueryHandle, LensResultSet>();
@@ -294,6 +300,8 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
   };
   private UserQueryToCubeQueryRewriter userQueryToCubeQueryRewriter;
 
+  // Exponential backoff retry handler for status updates
+  private BackOffRetryHandler statusUpdateRetryHandler;
 
   /**
    * Instantiates a new query execution service impl.
@@ -360,6 +368,18 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
       throw new LensException("Couldn't instantiate driver selector class. Class name: "
         + conf.get(DRIVER_SELECTOR_CLASS) + ". Please supply a valid value for "
         + DRIVER_SELECTOR_CLASS);
+    }
+  }
+  private void loadQueryComparator() throws LensException {
+    try {
+      Class<? extends QueryComparator> queryComparatorClass = conf.getClass(QUERY_COMPARATOR_CLASS,
+          QueryPriorityComparator.class, QueryComparator.class);
+      log.info("Using query comparator class: {}", queryComparatorClass.getCanonicalName());
+      queryComparator = queryComparatorClass.newInstance();
+    } catch (Exception e) {
+      throw new LensException("Couldn't instantiate query comparator class. Class name: "
+          + conf.get(QUERY_COMPARATOR_CLASS) + ". Please supply a valid value for "
+          + QUERY_COMPARATOR_CLASS);
     }
   }
 
@@ -538,9 +558,9 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
       if (ctx.isResultAvailableInDriver()) {
         try {
           driverRS = ctx.getSelectedDriver().fetchResultSet(getCtx());
-        } catch (LensException e) {
+        } catch (Exception e) {
           log.error(
-              "Error while getting result ser form driver {}. Driver result set based purging logic will be ignored",
+              "Error while getting result set form driver {}. Driver result set based purging logic will be ignored",
               ctx.getSelectedDriver(), e);
         }
       }
@@ -638,8 +658,12 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     @Override
     public void run() {
       log.info("Starting QuerySubmitter thread");
-      while (!pausedForTest && !stopped && !querySubmitter.isInterrupted()) {
+      while (!stopped && !querySubmitter.isInterrupted()) {
         try {
+          if (pausedForTest) {
+            Thread.sleep(100);
+            continue;
+          }
           QueryContext query = queuedQueries.take();
           synchronized (query) {
 
@@ -683,17 +707,9 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
                   removalFromLaunchedQueriesLock.unlock();
                 }
               }
-            } catch (LensException e) {
-
-              log.error("Error launching query: {}", query.getQueryHandle(), e);
-              String reason = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
-              setFailedStatus(query, "Launching query failed", reason, e.buildLensErrorTO(this.errorCollection));
-              continue;
-
             } catch (Exception e) {
               log.error("Error launching query: {}", query.getQueryHandle(), e);
-              String reason = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
-              setFailedStatus(query, "Launching query failed", reason, null);
+              setFailedStatus(query, "Launching query failed", e);
               continue;
             } finally {
               release(query.getLensSessionIdentifier());
@@ -713,6 +729,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     private void launchQuery(final QueryContext query) throws LensException {
 
       checkEstimatedQueriesState(query);
+      query.getSelectedDriver().getQueryHook().preLaunch(query);
       QueryStatus oldStatus = query.getStatus();
       QueryStatus newStatus = new QueryStatus(query.getStatus().getProgress(), null,
         QueryStatus.Status.LAUNCHED, "Query is launched on driver", false, null, null, null);
@@ -745,13 +762,13 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     }
   }
 
-  // used in tests
 
   /**
    * Pause query submitter.
+   * note : used in tests only
    */
-  public void pauseQuerySubmitter() {
-    querySubmitterRunnable.pausedForTest = true;
+  public void pauseQuerySubmitter(boolean pause) {
+    querySubmitterRunnable.pausedForTest = pause;
   }
 
   /**
@@ -809,18 +826,17 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
    *
    * @param ctx       the ctx
    * @param statusMsg the status msg
-   * @param reason    the reason
+   * @param e    the LensException
    * @throws LensException the lens exception
    */
-  void setFailedStatus(QueryContext ctx, String statusMsg, String reason, final LensErrorTO lensErrorTO)
-    throws LensException {
+  void setFailedStatus(QueryContext ctx, String statusMsg, Exception e) throws LensException {
 
     QueryStatus before = ctx.getStatus();
-    ctx.setStatus(new QueryStatus(0.0f, null, FAILED, statusMsg, false, null, reason, lensErrorTO));
+    ctx.setStatus(new QueryStatus(0.0f, null, FAILED, statusMsg, false, null, LensUtil.getCauseMessage(e),
+      e instanceof LensException ? ((LensException)e).buildLensErrorTO(this.errorCollection) : null));
     updateFinishedQuery(ctx, before);
     fireStatusChangeEvent(ctx, ctx.getStatus(), before);
   }
-
   /**
    * Sets the cancelled status.
    *
@@ -879,19 +895,20 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
   private void updateStatus(final QueryHandle handle) throws LensException {
     QueryContext ctx = allQueries.get(handle);
     if (ctx != null) {
+      logSegregationContext.setLogSegragationAndQueryId(ctx.getLogHandle());
       synchronized (ctx) {
         QueryStatus before = ctx.getStatus();
         if (!ctx.queued() && !ctx.finished() && !ctx.getDriverStatus().isFinished()) {
           log.debug("Updating status for {}", ctx.getQueryHandle());
           try {
-            ctx.getSelectedDriver().updateStatus(ctx);
-            ctx.setStatus(ctx.getDriverStatus().toQueryStatus());
+            ctx.updateDriverStatus(statusUpdateRetryHandler);
           } catch (LensException exc) {
-            // Driver gave exception while updating status
-            setFailedStatus(ctx, "Status update failed", exc.getMessage(), exc.buildLensErrorTO(this.errorCollection));
+            // Status update from driver failed
+            setFailedStatus(ctx, "Status update failed", exc);
             log.error("Status update failed for {}", handle, exc);
             return;
           }
+          ctx.setStatus(ctx.getDriverStatus().toQueryStatus());
           // query is successfully executed by driver and
           // if query result need not be persisted or there is no result available in driver, move the query to
           // succeeded state immediately, otherwise result formatter will format the result and move it to succeeded
@@ -1110,10 +1127,20 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     super.init(hiveConf);
     this.conf = hiveConf;
 
+    try {
+      loadQueryComparator();
+    } catch (LensException e) {
+      log.error("Error while loading query comparator class", e);
+      throw new IllegalStateException("Could not load query comparator class", e);
+    }
+
     this.launchedQueries
       = new ThreadSafeEstimatedQueryCollection(new DefaultEstimatedQueryCollection(new DefaultQueryCollection()));
+    this.queuedQueries
+      = new FairPriorityBlockingQueue<QueryContext>(queryComparator);
+
     this.waitingQueries = new ThreadSafeEstimatedQueryCollection(new DefaultEstimatedQueryCollection(
-      new DefaultQueryCollection(new TreeSet<QueryContext>(new QueryContextPriorityComparator()))));
+      new DefaultQueryCollection(new TreeSet<QueryContext>(queryComparator))));
 
     ImmutableSet<QueryLaunchingConstraint> queryConstraints = getImplementations(
       QUERY_LAUNCHING_CONSTRAINT_FACTORIES_KEY, hiveConf);
@@ -1152,6 +1179,16 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     inMemoryResultsetTTLMillis = conf.getInt(
         LensConfConstants.INMEMORY_RESULT_SET_TTL_SECS, LensConfConstants.DEFAULT_INMEMORY_RESULT_SET_TTL_SECS) * 1000;
 
+    int statusUpdateRetries = conf.getInt(LensConfConstants.STATUS_UPDATE_EXPONENTIAL_RETRIES,
+      LensConfConstants.DEFAULT_STATUS_UPDATE_EXPONENTIAL_RETRIES);
+    //  Maximum delay a status update can wait for next update, in case of transient failures.
+    long statusUpdateRetryMaxDelay = conf.getLong(LensConfConstants.MAXIMUM_STATUS_UPDATE_DELAY,
+      LensConfConstants.DEFAULT_MAXIMUM_STATUS_UPDATE_DELAY) * 1000;
+    // The wait time for next status update which can grow exponentially, in case of transient failures.
+    long statusUpdateExponentialWaiFactor = conf.getLong(LensConfConstants.STATUS_UPDATE_EXPONENTIAL_WAIT_FACTOR,
+      LensConfConstants.DEFAULT_STATUS_UPDATE_EXPONENTIAL_WAIT_FACTOR);
+    statusUpdateRetryHandler = OperationRetryHandlerFactory.createExponentialBackOffHandler(statusUpdateRetries,
+      statusUpdateRetryMaxDelay, statusUpdateExponentialWaiFactor);
     log.info("Query execution service initialized");
   }
 
@@ -1274,8 +1311,9 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     };
 
     log.debug("starting estimate pool");
+
     ThreadPoolExecutor estimatePool = new ThreadPoolExecutor(minPoolSize, maxPoolSize, keepAlive, TimeUnit.MILLISECONDS,
-      new LinkedBlockingQueue<Runnable>(), threadFactory);
+      new SynchronousQueue<Runnable>(), threadFactory);
     estimatePool.allowCoreThreadTimeOut(true);
     estimatePool.prestartCoreThread();
     this.estimatePool = estimatePool;
@@ -1293,7 +1331,8 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
    * @param ctx query context
    * @throws LensException the lens exception
    */
-  private void rewriteAndSelect(final AbstractQueryContext ctx) throws LensException {
+  void rewriteAndSelect(final AbstractQueryContext ctx) throws LensException {
+    logSegregationContext.setLogSegragationAndQueryId(ctx.getLogHandle());
     MethodMetricsContext parallelCallGauge = MethodMetricsFactory.createMethodGauge(ctx.getConf(), false,
       PARALLEL_CALL_GAUGE);
     try {
@@ -1387,6 +1426,9 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
       ctx.setSelectedDriver(driver);
       QueryCost selectedDriverQueryCost = ctx.getDriverContext().getDriverQueryCost(driver);
       ctx.setSelectedDriverQueryCost(selectedDriverQueryCost);
+      Priority priority = driver.decidePriority(ctx);
+      ctx.setPriority(priority == null ? Priority.NORMAL : priority);
+      driver.getQueryHook().postDriverSelection(ctx);
       selectGauge.markSuccess();
     } finally {
       parallelCallGauge.markSuccess();
@@ -1782,7 +1824,6 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
 
     ctx.setLensSessionIdentifier(sessionHandle.getPublicId().toString());
     rewriteAndSelect(ctx);
-    ctx.getSelectedDriver().decidePriority(ctx);
     return submitQuery(ctx);
   }
 
@@ -1893,11 +1934,11 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
 
   /**
    * Gets the query context.
-   *
+   * note: this method is made public to expose it to test cases
    * @param queryHandle the query handle
    * @return the query context
    */
-  QueryContext getQueryContext(QueryHandle queryHandle) {
+  public QueryContext getQueryContext(QueryHandle queryHandle) {
     return allQueries.get(queryHandle);
   }
 
@@ -2000,7 +2041,6 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
       result.setStatus(queryCtx.getStatus());
       return result;
     }
-
     QueryCompletionListenerImpl listener = new QueryCompletionListenerImpl(handle);
     synchronized (queryCtx) {
       if (!queryCtx.getStatus().finished()) {

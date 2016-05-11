@@ -209,19 +209,18 @@
   </property>
 
   <property>
-    <name>lens.server.restart.enabled</name>
+    <name>lens.server.state.persistence.enabled</name>
     <value>true</value>
-    <description>If flag is enabled, all the services will be persisted to persistent
-      location passed.
+    <description>If flag is enabled, state of all the services will be persisted periodically to a location
+      specified by lens.server.persist.location and on server restart all the services will be started
+      from last saved state.
     </description>
   </property>
 
   <property>
-    <name>lens.server.recover.onrestart</name>
-    <value>true</value>
-    <description>If the flag is enabled, all the services will be started from last
-      saved state, if disabled all the services will start afresh
-    </description>
+    <name>lens.server.state.persistence.interval.millis</name>
+    <value>300000</value>
+    <description>Lens server state persistence time interval in milliseconds</description>
   </property>
 
   <property>
@@ -358,11 +357,6 @@
       {{{http://commons.apache.org/proper/commons-dbcp/configuration.html}dbcp configuration}} \
       {{{http://stackoverflow.com/questions/10684244/dbcp-validationquery-for-different-databases}validationquery for different databases}} \
     </description>
-  </property>
-  <property>
-    <name>lens.server.snapshot.interval</name>
-    <value>300000</value>
-    <description>Snapshot interval time in miliseconds for saving lens server state.</description>
   </property>
 
   <property>
@@ -826,5 +820,32 @@
     <value>20</value>
     <description>Key denoting the default fetch value of saved query list api.</description>
   </property>
-
+  <property>
+    <name>lens.server.max.sessions.per.user</name>
+    <value>10</value>
+    <description>Number of sessions can be allowed for each user.
+      User has to close one of the active sessions to open a new session once limit is reached. Otherwise Server throws
+      an exception by saying that opened session limit has been already reached for user.
+    </description>
+  </property>
+  <property>
+    <name>lens.server.status.update.num.retries</name>
+    <value>10</value>
+    <description>The number of retries a status update will tried with exponentital back off, in case of transient
+      issues, upon which query will be marked FAILED.
+    </description>
+  </property>
+  <property>
+    <name>lens.server.status.update.maximum.delay.secs</name>
+    <value>1800</value>
+    <description>The maximum delay in seconds for next status update to happen after any transient failure. This will
+      be used a maximum delay sothat exponential wait times not to grow to bigger value.
+    </description>
+  </property>
+  <property>
+  <name>lens.server.status.update.exponential.wait.millis</name>
+  <value>30000</value>
+  <description>Number of millis that would grow exponentially for next update, incase of transient failures.
+  </description>
+</property>
 </configuration>

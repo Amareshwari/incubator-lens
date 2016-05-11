@@ -18,9 +18,13 @@
  */
 package org.apache.lens.client;
 
+import static org.apache.lens.client.LensClientConfig.*;
+
 import java.net.ConnectException;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.ws.rs.ProcessingException;
@@ -37,6 +41,7 @@ import org.apache.lens.api.StringList;
 import org.apache.lens.api.util.MoxyJsonConfigurationContextResolver;
 import org.apache.lens.client.exceptions.LensClientServerConnectionException;
 
+import org.glassfish.jersey.client.ClientProperties;
 import org.glassfish.jersey.media.multipart.FormDataBodyPart;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
 import org.glassfish.jersey.media.multipart.FormDataMultiPart;
@@ -118,7 +123,15 @@ public class LensConnection {
     while (itr.hasNext()) {
       cb.register(itr.next());
     }
-    return cb.build();
+    Client client = cb.build();
+
+    //Set Timeouts
+    LensClientConfig config = params.getConf();
+    client.property(ClientProperties.CONNECT_TIMEOUT, config.getInt(CONNECTION_TIMEOUT_MILLIS,
+      DEFAULT_CONNECTION_TIMEOUT_MILLIS));
+    client.property(ClientProperties.READ_TIMEOUT, config.getInt(READ_TIMEOUT_MILLIS, DEFAULT_READ_TIMEOUT_MILLIS));
+
+    return client;
   }
 
   private WebTarget getSessionWebTarget() {
@@ -311,7 +324,20 @@ public class LensConnection {
     return value.getElements();
   }
 
-  LensConnectionParams getLensConnectionParams() {
+  public Map<String, String> getConnectionParamsAsMap() {
+    List<String> params = getConnectionParams();
+    Map<String, String> paramsMap = new HashMap<String, String>(params.size());
+    String[] paramKeyAndValue;
+    for (String param : params) {
+      paramKeyAndValue = param.split("=");
+      if (paramKeyAndValue.length == 2) {
+        paramsMap.put(paramKeyAndValue[0], paramKeyAndValue[1]);
+      }
+    }
+    return paramsMap;
+  }
+
+  public LensConnectionParams getLensConnectionParams() {
     return this.params;
   }
 
