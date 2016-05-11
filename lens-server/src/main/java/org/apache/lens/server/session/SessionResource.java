@@ -54,8 +54,6 @@ public class SessionResource {
   /** The session service. */
   private SessionService sessionService;
 
-  private final ErrorCollection errorCollection;
-
   /**
    * API to know if session service is up and running
    *
@@ -74,7 +72,6 @@ public class SessionResource {
    */
   public SessionResource() throws LensException {
     sessionService = LensServices.get().getService(SessionService.NAME);
-    errorCollection = LensServices.get().getErrorCollection();
   }
 
   /**
@@ -93,20 +90,13 @@ public class SessionResource {
     @FormDataParam("password") String password,
     @FormDataParam("database")  @DefaultValue("") String database,
     @FormDataParam("sessionconf") LensConf sessionconf) throws LensException {
-    try {
       Map<String, String> conf;
-      if (sessionconf != null) {
-        conf = sessionconf.getProperties();
-      } else {
-        conf = new HashMap<String, String>();
-      }
-      return sessionService.openSession(username, password, database,   conf);
-    } catch (LensException e) {
-      e.buildLensErrorResponse(errorCollection, null,
-          LensServices.get().getLogSegregationContext().getLogSegragationId());
-      Response response = Response.status(e.getLensAPIResult().getHttpStatusCode()).build();
-      throw new WebApplicationException(response);
+    if (sessionconf != null) {
+      conf = sessionconf.getProperties();
+    } else {
+      conf = new HashMap<String, String>();
     }
+    return sessionService.openSession(username, password, database,   conf);
   }
 
   /**

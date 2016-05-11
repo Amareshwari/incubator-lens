@@ -48,8 +48,7 @@ import org.apache.lens.cube.error.ColUnAvailableInTimeRange;
 import org.apache.lens.server.LensJerseyTest;
 import org.apache.lens.server.LensRequestContextInitFilter;
 import org.apache.lens.server.common.ErrorResponseExpectedData;
-import org.apache.lens.server.error.GenericErrorMapper;
-import org.apache.lens.server.error.LensExceptionMapper;
+import org.apache.lens.server.error.GenericExceptionMapper;
 import org.apache.lens.server.error.LensJAXBValidationExceptionMapper;
 import org.apache.lens.server.metastore.MetastoreResource;
 import org.apache.lens.server.session.SessionResource;
@@ -92,7 +91,7 @@ public class QueryAPIErrorResponseTest extends LensJerseyTest {
     enable(TestProperties.DUMP_ENTITY);
 
     return new ResourceConfig(LensRequestContextInitFilter.class, SessionResource.class, MetastoreResource.class,
-      QueryServiceResource.class, MultiPartFeature.class, GenericErrorMapper.class, LensExceptionMapper.class,
+      QueryServiceResource.class, MultiPartFeature.class, GenericExceptionMapper.class,
       LensJAXBContextResolver.class,
       LensRequestContextInitFilter.class, LensJAXBValidationExceptionMapper.class,
       MoxyJsonConfigurationContextResolver.class, MoxyJsonFeature.class);
