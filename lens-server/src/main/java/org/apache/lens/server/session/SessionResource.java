@@ -156,7 +156,7 @@ public class SessionResource {
       if (matchedPath.startsWith("file:") && !matchedPath.startsWith("file://")) {
         matchedPath = "file://" + matchedPath.substring("file:".length());
       }
-      numAdded += sessionService.addResourceToAllServices(sessionid, type, matchedPath);
+      sessionService.addResource(sessionid, type, matchedPath);
       matchedPathsCount++;
     }
 

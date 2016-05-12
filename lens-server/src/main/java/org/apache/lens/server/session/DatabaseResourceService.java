@@ -222,7 +222,7 @@ public class DatabaseResourceService extends AbstractService {
    * @param addToCache if set to true, update class loader of the database in the class loader cache
    * @return class loader updated as a result of adding any JARs
    */
-  protected synchronized ClassLoader loadDBJars(String database, Collection<LensSessionImpl.ResourceEntry> resources,
+  private synchronized ClassLoader loadDBJars(String database, Collection<LensSessionImpl.ResourceEntry> resources,
                                              boolean addToCache) {
     ClassLoader classLoader = classLoaderCache.get(database);
     if (classLoader == null) {

@@ -91,29 +91,6 @@ public class HiveSessionService extends BaseLensService implements SessionServic
     super(NAME, cliService);
   }
 
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public int addResourceToAllServices(LensSessionHandle sessionid, String type, String path) {
-    int numAdded = 0;
-    boolean error = false;
-    for (BaseLensService service : LensServices.get().getLensServices()) {
-      try {
-        service.addResource(sessionid, type, path);
-        numAdded++;
-      } catch (LensException e) {
-        log.error("Failed to add resource type:" + type + " path:" + path + " in service:" + service, e);
-        error = true;
-        break;
-      }
-    }
-    if (!error) {
-      getSession(sessionid).addResource(type, path);
-    }
-    return numAdded;
-  }
-
   @Override
   public List<String> listAllResources(LensSessionHandle sessionHandle, String type) {
     if (!isValidResouceType(type)) {
@@ -142,7 +119,9 @@ public class HiveSessionService extends BaseLensService implements SessionServic
     try {
       acquire(sessionid);
       closeCliServiceOp(getCliService().executeStatement(getHiveSessionHandle(sessionid), command, null));
+      getSession(sessionid).addResource(type, path);
     } catch (HiveSQLException e) {
+      log.error("Failed to add resource type:" + type + " path:" + path + " in session", e);
       throw new WebApplicationException(e);
     } finally {
       release(sessionid);
@@ -241,7 +220,7 @@ public class HiveSessionService extends BaseLensService implements SessionServic
     if (auxJars != null) {
       for (String jar : auxJars) {
         log.info("Adding aux jar:" + jar);
-        addResourceToAllServices(sessionid, "jar", jar);
+        addResource(sessionid, "jar", jar);
       }
     }
     return sessionid;
