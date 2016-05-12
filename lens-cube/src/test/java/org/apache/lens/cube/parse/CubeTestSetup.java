@@ -584,6 +584,18 @@ public class CubeTestSetup {
 
     exprs = new HashSet<ExprColumn>();
     exprs.add(new ExprColumn(new FieldSchema("avgmsr", "double", "avg measure"), "Avg Msr", "avg(msr1 + msr2)"));
+    exprs.add(new ExprColumn(new FieldSchema("singlecolmsr2expr", "double", "measure2"), "Msr2", "msr2)"));
+    exprs.add(new ExprColumn(new FieldSchema("singlecolmsr2qualifiedexpr", "double", "testcube.measure2"),
+      "Msr2", "testcube.msr2"));
+    exprs.add(new ExprColumn(new FieldSchema("singlecoldim1expr", "string", "dim1"), "dim1", "dim1)"));
+    exprs.add(new ExprColumn(new FieldSchema("singlecoldim1qualifiedexpr", "string", "testcube.dim1"),
+      "dim1", "testcube.dim1"));
+    exprs.add(new ExprColumn(new FieldSchema("singlecolchainid", "string", "dim3chain.id"),
+      "dim3chainid", "dim3chain.id)"));
+    exprs.add(new ExprColumn(new FieldSchema("singlecolchainrefexpr", "string", "testcube.testDim3id"),
+      "dim3chainid", "testcube.testDim3id"));
+    exprs.add(new ExprColumn(new FieldSchema("singlecolchainfield", "string", "cubecity.name"),
+      "cubecityname", "cubecity.name"));
     exprs.add(new ExprColumn(new FieldSchema("summsrs", "double", "sum measures"), "Sum Msrs",
       "(1000 + sum(msr1) + sum(msr2))/100"));
     exprs.add(new ExprColumn(new FieldSchema("msr5", "double", "materialized in some facts"), "Fifth Msr",
@@ -971,6 +983,11 @@ public class CubeTestSetup {
       "state country", "cubestatecountry", "name", null, null, null));
     cubeDimensions2.add(new ReferencedDimAttribute(new FieldSchema("citycountry", "string", ""),
       "city country", "cubecitystatecountry", "name", null, null, null));
+    List<ChainRefCol> refCols = new ArrayList<>();
+    refCols.add(new ChainRefCol("cubeState", "countrycapital"));
+    refCols.add(new ChainRefCol("cubeCityStateCountry", "capital"));
+    cubeDimensions2.add(new ReferencedDimAttribute(new FieldSchema("cubeCountryCapital", "String", "ref dim"),
+      "Country capital", refCols, null, null, null, null));
 
     Map<String, String> cubeProperties = new HashMap<>();
     cubeProperties.put(MetastoreUtil.getCubeTimedDimensionListKey(BASE_CUBE_NAME),
@@ -2570,8 +2587,8 @@ public class CubeTestSetup {
         });
       }
     };
-    Dimension countryDim = new Dimension(dimName, dimAttrs, null, joinchains, dimProps, 0L);
-    client.createDimension(countryDim);
+    Dimension stateDim = new Dimension(dimName, dimAttrs, null, joinchains, dimProps, 0L);
+    client.createDimension(stateDim);
 
     String dimTblName = "statetable";
     List<FieldSchema> dimColumns = new ArrayList<FieldSchema>();
