@@ -431,9 +431,11 @@ public class LensSessionImpl extends HiveSessionImpl {
     @Getter
     final String type;
 
-    /** The location. */
+    final String uri;
+
+    /** The final location. */
     @Getter
-    final String location;
+    String location;
     // For tests
     /** The restore count. */
     transient AtomicInteger restoreCount = new AtomicInteger();
@@ -445,14 +447,14 @@ public class LensSessionImpl extends HiveSessionImpl {
      * Instantiates a new resource entry.
      *
      * @param type     the type
-     * @param location the location
+     * @param uri the uri of resource
      */
-    public ResourceEntry(String type, String location) {
+    public ResourceEntry(String type, String uri) {
       if (type == null || location == null) {
         throw new NullPointerException("ResourceEntry type or location cannot be null");
       }
       this.type = type;
-      this.location = location;
+      this.uri = uri;
     }
 
     public boolean isAddedToDatabase(String database) {
