@@ -115,12 +115,12 @@ public class HiveSessionService extends BaseLensService implements SessionServic
    */
   @Override
   public void addResource(LensSessionHandle sessionid, String type, String path) {
-    String command = "add " + type.toLowerCase() + " " + path;
     try {
       acquire(sessionid);
-      closeCliServiceOp(getCliService().executeStatement(getHiveSessionHandle(sessionid), command, null));
-      getSession(sessionid).addResource(type, path);
-    } catch (HiveSQLException e) {
+      SessionState ss = getSession(sessionid).getSessionState();
+      String finalLocation = ss.add_resource(SessionState.ResourceType.valueOf(type), path);
+      getSession(sessionid).addResource(type, path, finalLocation);
+    } catch (RuntimeException e) {
       log.error("Failed to add resource type:" + type + " path:" + path + " in session", e);
       throw new WebApplicationException(e);
     } finally {
@@ -367,7 +367,7 @@ public class HiveSessionService extends BaseLensService implements SessionServic
         // Add resources for restored sessions
         for (LensSessionImpl.ResourceEntry resourceEntry : session.getResources()) {
           try {
-            addResource(sessionHandle, resourceEntry.getType(), resourceEntry.getLocation());
+            addResource(sessionHandle, resourceEntry.getType(), resourceEntry.getUri());
           } catch (Exception e) {
             log.error("Failed to restore resource for session: " + session + " resource: " + resourceEntry, e);
           }

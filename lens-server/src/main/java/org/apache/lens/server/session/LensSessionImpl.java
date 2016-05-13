@@ -264,7 +264,7 @@ public class LensSessionImpl extends HiveSessionImpl {
     Iterator<ResourceEntry> itr = persistInfo.getResources().iterator();
     while (itr.hasNext()) {
       ResourceEntry res = itr.next();
-      if (res.getType().equals(type) && res.getLocation().equals(path)) {
+      if (res.getType().equals(type) && res.getUri().equals(path)) {
         itr.remove();
       }
     }
@@ -277,8 +277,8 @@ public class LensSessionImpl extends HiveSessionImpl {
    * @param type the type
    * @param path the path
    */
-  public void addResource(String type, String path) {
-    ResourceEntry resource = new ResourceEntry(type, path);
+  public void addResource(String type, String path, String finalLocation) {
+    ResourceEntry resource = new ResourceEntry(type, path, finalLocation);
     persistInfo.getResources().add(resource);
     synchronized (sessionDbClassLoaders) {
       // Update all DB class loaders
@@ -431,11 +431,12 @@ public class LensSessionImpl extends HiveSessionImpl {
     @Getter
     final String type;
 
+    @Getter
     final String uri;
 
     /** The final location. */
     @Getter
-    String location;
+    final String location;
     // For tests
     /** The restore count. */
     transient AtomicInteger restoreCount = new AtomicInteger();
@@ -449,12 +450,13 @@ public class LensSessionImpl extends HiveSessionImpl {
      * @param type     the type
      * @param uri the uri of resource
      */
-    public ResourceEntry(String type, String uri) {
-      if (type == null || location == null) {
+    public ResourceEntry(String type, String uri, String location) {
+      if (type == null || uri == null || location == null) {
         throw new NullPointerException("ResourceEntry type or location cannot be null");
       }
       this.type = type;
       this.uri = uri;
+      this.location = location;
     }
 
     public boolean isAddedToDatabase(String database) {
@@ -551,7 +553,7 @@ public class LensSessionImpl extends HiveSessionImpl {
       out.writeInt(resources.size());
       for (ResourceEntry resource : resources) {
         out.writeUTF(resource.getType());
-        out.writeUTF(resource.getLocation());
+        out.writeUTF(resource.getUri());
       }
 
       out.writeInt(config.size());
