@@ -18,6 +18,7 @@
  */
 package org.apache.lens.server.query;
 
+import static javax.ws.rs.core.MediaType.APPLICATION_XML_TYPE;
 import static javax.ws.rs.core.Response.Status.*;
 
 import static org.apache.lens.server.LensServerTestUtil.DB_WITH_JARS;
@@ -66,7 +67,7 @@ import org.apache.lens.server.api.session.SessionService;
 import org.apache.lens.server.common.ErrorResponseExpectedData;
 import org.apache.lens.server.common.TestDataUtils;
 import org.apache.lens.server.common.TestResourceFile;
-import org.apache.lens.server.error.LensExceptionMapper;
+import org.apache.lens.server.error.GenericExceptionMapper;
 import org.apache.lens.server.session.HiveSessionService;
 import org.apache.lens.server.session.LensSessionImpl;
 
@@ -109,7 +110,7 @@ public class TestQueryService extends LensJerseyTest {
     @Override
     public Set<Class<?>> getClasses() {
       final Set<Class<?>> classes = super.getClasses();
-      classes.add(LensExceptionMapper.class);
+      classes.add(GenericExceptionMapper.class);
       classes.add(LensJAXBContextResolver.class);
       return classes;
     }
@@ -773,6 +774,128 @@ public class TestQueryService extends LensJerseyTest {
     validateHttpEndPoint(target(), null, handle3, null);
   }
 
+  @Test(dataProvider = "mediaTypeData")
+  public void testExecuteAsyncDuplicate(MediaType mt) throws InterruptedException, IOException, LensException {
+    // test post execute op
+    final WebTarget target = target().path("queryapi/queries");
+
+    queryService.pauseQuerySubmitter(true);
+    final FormDataMultiPart mp = new FormDataMultiPart();
+    mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("sessionid").build(), lensSessionId, mt));
+    mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("query").build(), "select ID, IDSTR from "
+        + TEST_TABLE));
+    mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("operation").build(), "execute"));
+    mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("conf").fileName("conf").build(), new LensConf(),
+        mt));
+    // Dummy query
+    final QueryHandle handle = target.request(mt)
+        .post(Entity.entity(mp, MediaType.MULTIPART_FORM_DATA_TYPE), new GenericType<LensAPIResult<QueryHandle>>() {
+        }).getData();
+
+    target.path(handle.toString()).queryParam("sessionid", lensSessionId).request(mt).delete(APIResult.class);
+
+    final QueryHandle handle1 = target.request(mt)
+        .post(Entity.entity(mp, MediaType.MULTIPART_FORM_DATA_TYPE), new GenericType<LensAPIResult<QueryHandle>>() {
+        }).getData();
+
+    final QueryHandle handle2 = target.request(mt)
+        .post(Entity.entity(mp, MediaType.MULTIPART_FORM_DATA_TYPE), new GenericType<LensAPIResult<QueryHandle>>() {
+        }).getData();
+
+    assertNotNull(handle1);
+    assertNotNull(handle2);
+    assertEquals(handle1, handle2);
+    // Cancel the query
+    target.path(handle1.toString()).queryParam("sessionid", lensSessionId).request(mt).delete(APIResult.class);
+
+    // Create a different query
+    final FormDataMultiPart mp1 = new FormDataMultiPart();
+    mp1.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("sessionid").build(), lensSessionId, mt));
+    mp1.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("query").build(), "select ID, IDSTR from "
+        + TEST_TABLE));
+    mp1.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("operation").build(), "execute"));
+    mp1.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("conf").fileName("conf").build(), new LensConf(),
+        mt));
+    final QueryHandle handle3 = target.request(mt)
+        .post(Entity.entity(mp1, MediaType.MULTIPART_FORM_DATA_TYPE), new GenericType<LensAPIResult<QueryHandle>>() {
+        }).getData();
+    assertNotNull(handle3);
+    target.path(handle3.toString()).queryParam("sessionid", lensSessionId).request(mt).delete(APIResult.class);
+
+    // After completion If we launch the same query it should return a new
+    // handle.
+    final QueryHandle handle4 = target.request(mt)
+        .post(Entity.entity(mp1, MediaType.MULTIPART_FORM_DATA_TYPE), new GenericType<LensAPIResult<QueryHandle>>() {
+        }).getData();
+    assertNotEquals(handle4, handle3);
+
+    target.path(handle4.toString()).queryParam("sessionid", lensSessionId).request(mt).delete(APIResult.class);
+    // Launch the query in different session should result in the different
+    // handle.
+
+    final FormDataMultiPart mp2 = new FormDataMultiPart();
+    mp2.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("sessionid").build(), lensSessionId, mt));
+    mp2.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("query").build(), "select ID, IDSTR from "
+        + TEST_TABLE));
+    mp2.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("operation").build(), "execute"));
+    mp2.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("conf").fileName("conf").build(), new LensConf(),
+        mt));
+    final QueryHandle handle5 = target.request(mt)
+        .post(Entity.entity(mp2, MediaType.MULTIPART_FORM_DATA_TYPE), new GenericType<LensAPIResult<QueryHandle>>() {
+        }).getData();
+
+    Map<String, String> sessionconf = new HashMap<>();
+    sessionconf.put("test.session.key", "svalue");
+
+    LensSessionHandle lensSessionId1 = queryService.openSession("foo@localhost", "bar", sessionconf);
+    final FormDataMultiPart mp3 = new FormDataMultiPart();
+    mp3.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("sessionid").build(), lensSessionId1, mt));
+    mp3.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("query").build(), "select ID, IDSTR from "
+        + TEST_TABLE));
+    mp3.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("operation").build(), "execute"));
+    mp3.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("conf").fileName("conf").build(), new LensConf(),
+        mt));
+    final QueryHandle handle6 = target.request(mt)
+        .post(Entity.entity(mp3, MediaType.MULTIPART_FORM_DATA_TYPE), new GenericType<LensAPIResult<QueryHandle>>() {
+        }).getData();
+
+    assertNotNull(handle5);
+    assertNotNull(handle6);
+    assertNotEquals(handle5, handle6);
+    target.path(handle5.toString()).queryParam("sessionid", lensSessionId).request(mt).delete(APIResult.class);
+    target.path(handle6.toString()).queryParam("sessionid", lensSessionId1).request(mt).delete(APIResult.class);
+
+    // Diffrent conf should different handle
+    LensConf conf = new LensConf();
+    final FormDataMultiPart mp4 = new FormDataMultiPart();
+    mp4.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("sessionid").build(), lensSessionId, mt));
+    mp4.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("query").build(), "select ID, IDSTR from "
+        + TEST_TABLE));
+    mp4.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("operation").build(), "execute"));
+    mp4.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("conf").fileName("conf").build(), conf, mt));
+    final QueryHandle handle7 = target.request(mt)
+        .post(Entity.entity(mp4, MediaType.MULTIPART_FORM_DATA_TYPE), new GenericType<LensAPIResult<QueryHandle>>() {
+        }).getData();
+
+    // Add a property
+    conf.addProperty("test", "test");
+    final FormDataMultiPart mp5 = new FormDataMultiPart();
+    mp5.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("sessionid").build(), lensSessionId, mt));
+    mp5.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("query").build(), "select ID, IDSTR from "
+        + TEST_TABLE));
+    mp5.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("operation").build(), "execute"));
+    mp5.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("conf").fileName("conf").build(), conf, mt));
+    final QueryHandle handle8 = target.request(mt)
+        .post(Entity.entity(mp5, MediaType.MULTIPART_FORM_DATA_TYPE), new GenericType<LensAPIResult<QueryHandle>>() {
+        }).getData();
+    assertNotNull(handle7);
+    assertNotNull(handle8);
+    assertNotEquals(handle7, handle8);
+    target.path(handle7.toString()).queryParam("sessionid", lensSessionId).request(mt).delete(APIResult.class);
+    target.path(handle8.toString()).queryParam("sessionid", lensSessionId1).request(mt).delete(APIResult.class);
+    queryService.pauseQuerySubmitter(false);
+  }
+
   /**
    * Validate persisted result.
    *
@@ -1257,7 +1380,7 @@ public class TestQueryService extends LensJerseyTest {
   @Test(dataProvider = "mediaTypeData")
   public void testExecuteWithTimeoutQuery(MediaType mt) throws IOException, InterruptedException {
     final WebTarget target = target().path("queryapi/queries");
-
+    //1. Validate Persistent result
     final FormDataMultiPart mp = new FormDataMultiPart();
     mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("sessionid").build(), lensSessionId,
       mt));
@@ -1275,6 +1398,7 @@ public class TestQueryService extends LensJerseyTest {
     assertNotNull(result.getResult());
     validatePersistentResult((PersistentQueryResult) result.getResult(), result.getQueryHandle(), true, false);
 
+    //2. Validate InMemory result
     final FormDataMultiPart mp2 = new FormDataMultiPart();
     LensConf conf = new LensConf();
     conf.addProperty(LensConfConstants.QUERY_PERSISTENT_RESULT_INDRIVER, "false");
@@ -1289,6 +1413,27 @@ public class TestQueryService extends LensJerseyTest {
       mt));
 
     validateInmemoryResultForTimeoutQuery(target, mp2, mt);
+  }
+
+  @Test
+  public void testAutoCancelOnTimeOut() throws Exception {
+    queryService.pauseQuerySubmitter(true);
+    //First query will not be queued. @see QueryExecutionServiceImpl.QuerySubmitter.run
+    queryService.executeAsync(lensSessionId, "select 1 from "+TEST_TABLE, new LensConf(), "dummyQuery");
+
+    //Second query after pause will be queued
+    QueryHandleWithResultSet result = queryService.execute(lensSessionId, "select ID, IDSTR from "+ TEST_TABLE, 100,
+      new LensConf(),  "testQuery");
+    assertNotNull(result.getQueryHandle());
+    assertTrue(result.getStatus().queued());
+    int checkCtr = 0;
+    boolean cancelled = false;
+    while (!cancelled && checkCtr++ < 100) { //Max 10 secs wait
+      Thread.sleep(100); //wait for query to get auto cancelled
+      cancelled = queryService.getUpdatedQueryContext(lensSessionId, result.getQueryHandle()).getStatus().cancelled();
+    }
+    assertTrue(cancelled); //auto cancelled beyond timeout
+    queryService.pauseQuerySubmitter(false);
   }
 
   private void validateInmemoryResultForTimeoutQuery(WebTarget target, FormDataMultiPart mp, MediaType mt) {
@@ -1338,7 +1483,7 @@ public class TestQueryService extends LensJerseyTest {
 
     final FormDataMultiPart mp = new FormDataMultiPart();
     mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("sessionid").build(), lensSessionId,
-        MediaType.APPLICATION_XML_TYPE));
+        APPLICATION_XML_TYPE));
     mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("query").build(), "select ID, IDSTR from "
         + TEST_TABLE));
     mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("operation").build(), "execute_with_timeout"));
@@ -1346,14 +1491,15 @@ public class TestQueryService extends LensJerseyTest {
     mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("timeoutmillis").build(), timeOutMillis + ""));
     LensConf conf = new LensConf();
     conf.addProperty(LensConfConstants.QUERY_PERSISTENT_RESULT_SET, "true");
+    conf.addProperty(LensConfConstants.CANCEL_QUERY_ON_TIMEOUT, "false");
     conf.addProperty(LensConfConstants.QUERY_PERSISTENT_RESULT_INDRIVER, "false");
     conf.addProperty(LensConfConstants.PREFETCH_INMEMORY_RESULTSET, "true");
     conf.addProperty(LensConfConstants.PREFETCH_INMEMORY_RESULTSET_ROWS, preFetchRows);
     conf.addProperty(LensConfConstants.QUERY_OUTPUT_FORMATTER, DeferredInMemoryResultFormatter.class.getName());
     conf.addProperty("deferPersistenceByMillis", deferPersistenceByMillis); // property used for test only
     mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("conf").fileName("conf").build(), conf,
-        MediaType.APPLICATION_XML_TYPE));
-    QueryHandleWithResultSet result =target.request(MediaType.APPLICATION_XML_TYPE)
+        APPLICATION_XML_TYPE));
+    QueryHandleWithResultSet result =target.request(APPLICATION_XML_TYPE)
             .post(Entity.entity(mp, MediaType.MULTIPART_FORM_DATA_TYPE),
                 new GenericType<LensAPIResult<QueryHandleWithResultSet>>() {}).getData();
     QueryHandle handle = result.getQueryHandle();
@@ -1374,11 +1520,11 @@ public class TestQueryService extends LensJerseyTest {
       assertNull(result.getResult()); // Query execution not finished yet
     }
 
-    waitForQueryToFinish(target(), lensSessionId, handle, Status.SUCCESSFUL, MediaType.APPLICATION_XML_TYPE);
+    waitForQueryToFinish(target(), lensSessionId, handle, Status.SUCCESSFUL, APPLICATION_XML_TYPE);
 
     // Test Persistent Result
     validatePersistedResult(handle, target(), lensSessionId, new String[][] { { "ID", "INT" }, { "IDSTR", "STRING" } },
-        false, true, MediaType.APPLICATION_XML_TYPE);
+        false, true, APPLICATION_XML_TYPE);
   }
 
   public static class DeferredInMemoryResultFormatter extends FileSerdeFormatter {
