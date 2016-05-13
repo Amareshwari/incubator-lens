@@ -272,7 +272,7 @@ public class LensSessionImpl extends HiveSessionImpl {
     Iterator<ResourceEntry> itr = persistInfo.getResources().iterator();
     while (itr.hasNext()) {
       ResourceEntry res = itr.next();
-      if (res.getType().equals(type) && res.getUri().equals(path)) {
+      if (res.getType().equalsIgnoreCase(type) && res.getUri().equals(path)) {
         itr.remove();
       }
     }
@@ -444,13 +444,13 @@ public class LensSessionImpl extends HiveSessionImpl {
 
     /** The final location. */
     @Getter
-    final String location;
+    String location;
     // For tests
     /** The restore count. */
     transient AtomicInteger restoreCount = new AtomicInteger();
 
     /** Set of databases for which this resource has been added */
-    final transient Set<String> databases = new HashSet<String>();
+    final transient Set<String> databases = new HashSet<>();
 
     /**
      * Instantiates a new resource entry.
@@ -458,11 +458,15 @@ public class LensSessionImpl extends HiveSessionImpl {
      * @param type     the type
      * @param uri the uri of resource
      */
+    public ResourceEntry(String type, String uri) {
+      this(type, uri, uri);
+    }
+
     public ResourceEntry(String type, String uri, String location) {
       if (type == null || uri == null || location == null) {
-        throw new NullPointerException("ResourceEntry type or location cannot be null");
+        throw new NullPointerException("ResourceEntry type or uri or location cannot be null");
       }
-      this.type = type;
+      this.type = type.toUpperCase();
       this.uri = uri;
       this.location = location;
     }
@@ -588,8 +592,8 @@ public class LensSessionImpl extends HiveSessionImpl {
       resources.clear();
       for (int i = 0; i < resSize; i++) {
         String type = in.readUTF();
-        String location = in.readUTF();
-        resources.add(new ResourceEntry(type, location));
+        String uri = in.readUTF();
+        resources.add(new ResourceEntry(type, uri));
       }
 
       config.clear();
