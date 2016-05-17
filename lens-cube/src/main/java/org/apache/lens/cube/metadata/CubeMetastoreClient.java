@@ -2388,7 +2388,7 @@ public class CubeMetastoreClient {
     List<Date> storageStartDates = getStorageTimes(storageTableName, MetastoreUtil.getStoragetableStartTimesKey());
     for(Date startDate : storageStartDates) {
       if (fromDate.before(startDate)) {
-        log.info("from date {} is before validity start time: {}, hence discarding {}",
+        log.debug("from date {} is before validity start time: {}, hence discarding {}",
                 fromDate, startDate, storageTableName);
         return false;
       }
@@ -2397,7 +2397,7 @@ public class CubeMetastoreClient {
     List<Date> storageEndDates = getStorageTimes(storageTableName, MetastoreUtil.getStoragetableEndTimesKey());
     for(Date endDate : storageEndDates) {
       if (toDate.after(endDate)) {
-        log.info("to date {} is after validity end time: {}, hence discarding {}",
+        log.debug("to date {} is after validity end time: {}, hence discarding {}",
                 toDate, endDate, storageTableName);
         return false;
       }
