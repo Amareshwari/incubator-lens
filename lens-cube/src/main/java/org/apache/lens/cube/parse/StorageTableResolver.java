@@ -567,7 +567,10 @@ class StorageTableResolver implements ContextRewriter {
     Iterator<String> it = storageTbls.iterator();
     while (it.hasNext()) {
       String storageTableName = it.next();
-      if (!client.partColExists(storageTableName, partCol)) {
+      if (!client.isStorageTableCandidateForRange(storageTableName, fromDate, toDate)) {
+        skipStorageCauses.put(storageTableName, new SkipStorageCause(RANGE_NOT_ANSWERABLE));
+        it.remove();
+      } else if (!client.partColExists(storageTableName, partCol)) {
         log.info("{} does not exist in {}", partCol, storageTableName);
         skipStorageCauses.put(storageTableName, SkipStorageCause.partColDoesNotExist(partCol));
         it.remove();
@@ -693,7 +696,7 @@ class StorageTableResolver implements ContextRewriter {
     Set<String> validStorageTbls = new HashSet<>();
     for (String storageTableName : storageTableNames) {
       // skip all storage tables for which are not eligible for this partition
-      if (client.isStorageTableCandidateForRange(storageTableName, part.getPartSpec(), part.getPartSpec())) {
+      if (client.isStorageTablePartitionACandidate(storageTableName, part.getPartSpec())) {
         validStorageTbls.add(storageTableName);
       } else {
         log.info("Skipping {} as it is not valid for part {}", storageTableName, part.getPartSpec());
@@ -706,8 +709,8 @@ class StorageTableResolver implements ContextRewriter {
     FactPartition part, Set<String> storageTableNames) throws LensException, HiveException, ParseException {
     for (String storageTableName : storageTableNames) {
       // skip all storage tables for which are not eligible for this partition
-      if (client.isStorageTableCandidateForRange(storageTableName, part.getPartSpec(), part.getPartSpec()) &&
-          (client.factPartitionExists(fact, part, storageTableName))) {
+      if (client.isStorageTablePartitionACandidate(storageTableName, part.getPartSpec())
+        && (client.factPartitionExists(fact, part, storageTableName))) {
         part.getStorageTables().add(storageTableName);
         part.setFound(true);
       }

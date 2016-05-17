@@ -55,7 +55,6 @@ import org.testng.annotations.Test;
 
 import com.google.common.base.Splitter;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import lombok.extern.slf4j.Slf4j;
 
@@ -914,7 +913,7 @@ public class TestCubeRewriter extends TestQueryRewrite {
     assertEquals(
       pruneCauses.getBrief().substring(0, MISSING_PARTITIONS.errorFormat.length() - 3),
       MISSING_PARTITIONS.errorFormat.substring(0,
-        MISSING_PARTITIONS.errorFormat.length() - 3));
+        MISSING_PARTITIONS.errorFormat.length() - 3), pruneCauses.getBrief());
 
     Set<String> expectedSet =
       Sets.newTreeSet(Arrays.asList("summary1", "summary2", "testfact2_raw", "summary3", "testfact"));
@@ -927,7 +926,8 @@ public class TestCubeRewriter extends TestQueryRewrite {
         missingPartitionCause = true;
       }
     }
-    assertTrue(missingPartitionCause, MISSING_PARTITIONS + " error does not occur for facttables set " + expectedSet);
+    assertTrue(missingPartitionCause, MISSING_PARTITIONS + " error does not occur for facttables set " + expectedSet
+      + " Details :" + pruneCauses.getDetails());
     assertEquals(pruneCauses.getDetails().get("testfactmonthly").iterator().next().getCause(),
       NO_FACT_UPDATE_PERIODS_FOR_GIVEN_RANGE);
     assertEquals(pruneCauses.getDetails().get("testfact2").iterator().next().getCause(),

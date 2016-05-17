@@ -358,12 +358,9 @@ public class TestUnionQueries extends TestQueryRewrite {
       @Override
       public Map<String, String> providePartitionsForStorage(String storage) {
         if (storage.contains("c3")) {
-          // should start from number of days in two months
-
-          return getWhereForDays(storage, TWO_MONTHS_BACK, getDateWithOffset(DAILY, -9));
-
+          return getWhereForDays(storage, TWO_MONTHS_BACK, getDateWithOffset(DAILY, -10));
         } else if (storage.contains("c5")) {
-          return getWhereForDays(storage, getDateWithOffset(DAILY, -9), NOW);
+          return getWhereForDays(storage, getDateWithOffset(DAILY, -10), NOW);
         }
         return null;
       }

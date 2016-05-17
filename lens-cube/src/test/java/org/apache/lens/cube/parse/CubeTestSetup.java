@@ -1485,15 +1485,15 @@ public class CubeTestSetup {
     s3.setOutputFormat(HiveIgnoreKeyTextOutputFormat.class.getCanonicalName());
     s3.setPartCols(partCols);
     s3.setTimePartCols(timePartCols);
-    s3.getTblProps().put(MetastoreUtil.getStoragetableStartTimesKey(), "now - 90 days");
-    s3.getTblProps().put(MetastoreUtil.getStoragetableEndTimesKey(), "now - 10 days");
+    s3.getTblProps().put(MetastoreUtil.getStoragetableStartTimesKey(), "now.day - 90 days");
+    s3.getTblProps().put(MetastoreUtil.getStoragetableEndTimesKey(), "now.day - 10 days");
 
     StorageTableDesc s5 = new StorageTableDesc();
     s5.setInputFormat(TextInputFormat.class.getCanonicalName());
     s5.setOutputFormat(HiveIgnoreKeyTextOutputFormat.class.getCanonicalName());
     s5.setPartCols(partCols);
     s5.setTimePartCols(timePartCols);
-    s5.getTblProps().put(MetastoreUtil.getStoragetableStartTimesKey(), "now - 10 days");
+    s5.getTblProps().put(MetastoreUtil.getStoragetableStartTimesKey(), "now.day - 10 days");
 
     storageAggregatePeriods.put(c1, updates);
     storageAggregatePeriods.put(c2, updates);
