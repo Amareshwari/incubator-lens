@@ -2401,7 +2401,8 @@ public class CubeMetastoreClient {
 
     List<Date> storageStartDates = getStorageTimes(storageTableName, MetastoreUtil.getStoragetableStartTimesKey());
     for(Date startDate : storageStartDates) {
-      if (startDate.after(toDate)) {
+      // toDate is exclusive on the range
+      if (startDate.after(toDate) || startDate.equals(toDate)) {
         log.debug("to date {} is before validity start time: {}, hence discarding {}",
           toDate, startDate, storageTableName);
         return false;

@@ -1015,8 +1015,8 @@ public class TestCubeMetastoreClient {
     StorageTableDesc s1 = new StorageTableDesc(TextInputFormat.class, HiveIgnoreKeyTextOutputFormat.class,
       datePartSingleton, datePartKeySingleton);
 
-    s1.getTblProps().put(MetastoreUtil.getStoragetableStartTimesKey(), "2015, now-10 days");
-    s1.getTblProps().put(MetastoreUtil.getStoragetableEndTimesKey(), "now - 1 day");
+    s1.getTblProps().put(MetastoreUtil.getStoragetableStartTimesKey(), "2015, now.day -10 days");
+    s1.getTblProps().put(MetastoreUtil.getStoragetableEndTimesKey(), "now.day - 1 day");
 
     Map<String, Set<UpdatePeriod>> updatePeriods = getHashMap(c1, Sets.newHashSet(HOURLY, DAILY));
     Map<String, StorageTableDesc> storageTables = getHashMap(c1, s1);
@@ -1144,26 +1144,30 @@ public class TestCubeMetastoreClient {
   private void assertRangeValidityForStorageTable(String storageTable) throws HiveException, LensException {
     Object[][] testCases = new Object[][] {
       {"now - 15 days", "now - 11 days", false},
-      {"now - 15 days", "now - 10 days", false},
+      {"now - 15 days", "now.day - 10 days", false},
       {"now - 15 days", "now - 1 hour", true},
       {"now - 9 days", "now - 1 hour", true},
       {"now - 3 hour", "now - 1 hour", false},
       {"now - 9 days", "now - 2 days", true},
+      {"now - 9 days", "now - 1 days", true},
+      {"now.day - 1 days", "now - 1 hour", false},
     };
     for(Object[] testCase: testCases) {
       assertEquals(client.isStorageTableCandidateForRange(storageTable, testCase[0].toString(), testCase[1].toString()),
-        testCase[2]);
+        testCase[2], "Failed for " + Arrays.asList(testCase).toString());
     }
     Object[][] partTimes = new Object[][] {
       {"now - 15 days", false},
       {"now - 10 days", true},
       {"now - 1 hour", false},
+      {"now.day - 1 day", false},
+      {"now.day - 10 days", true},
       {"now - 9 days", true},
       {"now - 2 days", true},
     };
     for(Object[] partTime : partTimes) {
       assertEquals(client.isStorageTablePartitionACandidate(storageTable, resolveDate(partTime[0].toString(),
-          new Date())), partTime[1]);
+          new Date())), partTime[1], "Failed for " + Arrays.asList(partTime).toString());
     }
   }
 
