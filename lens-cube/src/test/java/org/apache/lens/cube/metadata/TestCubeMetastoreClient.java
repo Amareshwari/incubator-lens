@@ -20,6 +20,7 @@
 package org.apache.lens.cube.metadata;
 
 import static org.apache.lens.cube.metadata.DateFactory.*;
+import static org.apache.lens.cube.metadata.DateUtil.resolveDate;
 import static org.apache.lens.cube.metadata.MetastoreUtil.*;
 import static org.apache.lens.cube.metadata.UpdatePeriod.*;
 import static org.apache.lens.server.api.util.LensUtil.getHashMap;
@@ -1143,14 +1144,26 @@ public class TestCubeMetastoreClient {
   private void assertRangeValidityForStorageTable(String storageTable) throws HiveException, LensException {
     Object[][] testCases = new Object[][] {
       {"now - 15 days", "now - 11 days", false},
-      {"now - 15 days", "now - 1 hour", false},
-      {"now - 9 days", "now - 1 hour", false},
+      {"now - 15 days", "now - 10 days", false},
+      {"now - 15 days", "now - 1 hour", true},
+      {"now - 9 days", "now - 1 hour", true},
       {"now - 3 hour", "now - 1 hour", false},
       {"now - 9 days", "now - 2 days", true},
     };
     for(Object[] testCase: testCases) {
       assertEquals(client.isStorageTableCandidateForRange(storageTable, testCase[0].toString(), testCase[1].toString()),
         testCase[2]);
+    }
+    Object[][] partTimes = new Object[][] {
+      {"now - 15 days", false},
+      {"now - 10 days", true},
+      {"now - 1 hour", false},
+      {"now - 9 days", true},
+      {"now - 2 days", true},
+    };
+    for(Object[] partTime : partTimes) {
+      assertEquals(client.isStorageTablePartitionACandidate(storageTable, resolveDate(partTime[0].toString(),
+          new Date())), partTime[1]);
     }
   }
 
