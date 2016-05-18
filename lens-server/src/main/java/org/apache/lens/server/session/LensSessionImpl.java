@@ -284,6 +284,7 @@ public class LensSessionImpl extends HiveSessionImpl {
    *
    * @param type the type
    * @param path the path
+   * @param finalLocation The final location where resources is downloaded
    */
   public void addResource(String type, String path, String finalLocation) {
     ResourceEntry resource = new ResourceEntry(type, path, finalLocation);

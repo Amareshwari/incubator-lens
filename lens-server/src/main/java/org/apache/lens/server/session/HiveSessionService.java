@@ -134,6 +134,9 @@ public class HiveSessionService extends BaseLensService implements SessionServic
       SessionState ss = getSession(sessionid).getSessionState();
       resourceEntry.location = ss.add_resource(SessionState.ResourceType.valueOf(resourceEntry.getType()),
         resourceEntry.getUri());
+      if (resourceEntry.location == null) {
+        throw new NullPointerException("Resource's final location cannot be null");
+      }
     } finally {
       release(sessionid);
     }
