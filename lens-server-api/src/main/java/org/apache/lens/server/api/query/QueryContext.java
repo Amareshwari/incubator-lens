@@ -199,6 +199,9 @@ public class QueryContext extends AbstractQueryContext {
 
   transient FailureContext statusUpdateFailures = new FailureContext();
 
+  @Getter
+  @Setter
+  private transient boolean isLaunching = false;
   /**
    * Creates context from query
    *
