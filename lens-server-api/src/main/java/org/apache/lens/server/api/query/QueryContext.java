@@ -202,6 +202,10 @@ public class QueryContext extends AbstractQueryContext {
   @Getter
   @Setter
   private transient boolean isLaunching = false;
+
+  @Getter
+  @Setter
+  private transient Thread queryLauncher;
   /**
    * Creates context from query
    *

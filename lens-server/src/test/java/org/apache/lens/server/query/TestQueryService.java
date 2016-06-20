@@ -281,6 +281,28 @@ public class TestQueryService extends LensJerseyTest {
     assertTrue(lensQuery.getFinishTime() > 0);
   }
 
+  /**
+   * Test multiple launches and failure in execute operation.
+   *
+   * @throws InterruptedException the interrupted exception
+   */
+  @Test(dataProvider = "mediaTypeData")
+  public void testMultipleLaunches(MediaType mt) throws Exception {
+    QueryHandle handle = executeAndGetHandle(target(), Optional.of(lensSessionId),
+      Optional.of("select wait,fail from non_exist"),
+      Optional.<LensConf>absent(), mt);
+    assertTrue(queryService.getQueryContext(handle).isLaunching());
+    // launch one more.
+    QueryHandle handle2 = executeAndGetHandle(target(), Optional.of(lensSessionId),
+      Optional.of("select wait,fail from non_exist"),
+      Optional.<LensConf>absent(), mt);
+    assertNotEquals(handle, handle2);
+    assertTrue(queryService.getQueryContext(handle2).isLaunching());
+    // cancel both the queries.
+    assertTrue(queryService.cancelQuery(lensSessionId, handle));
+    assertTrue(queryService.cancelQuery(lensSessionId, handle2));
+  }
+
   @Test
   public void testPriorityOnMockQuery() throws Exception {
     String query = "select mock, fail from " + TEST_TABLE;

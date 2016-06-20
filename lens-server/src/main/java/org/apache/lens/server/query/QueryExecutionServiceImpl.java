@@ -750,9 +750,15 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     @Override
     public void run() {
       try {
+        // Set current thread sothat launching can be interrupted.
+        query.setQueryLauncher(Thread.currentThread());
         // acquire session before launching query.
         acquire(query.getLensSessionIdentifier());
-        launchQuery(query);
+        if (query.getStatus().cancelled()) {
+          return;
+        } else {
+          launchQuery(query);
+        }
       } catch (Exception e) {
         log.error("Error launching query: {}", query.getQueryHandle(), e);
         incrCounter(QUERY_SUBMITTER_COUNTER);
@@ -766,6 +772,14 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
           release(query.getLensSessionIdentifier());
         } catch (LensException e) {
           log.error("Error releasing session", e);
+        }
+      }
+      if (query.getStatus().cancelled()) {
+        try {
+          // query is cancelled while launching, cancel it on driver.
+          query.getSelectedDriver().cancelQuery(query.getQueryHandle());
+        } catch (LensException e) {
+          log.error("Error canceling query", e);
         }
       }
     }
@@ -2518,6 +2532,9 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
         return false;
       }
 
+      if (ctx.isLaunching()) {
+        ctx.getQueryLauncher().interrupt();
+      }
       if (ctx.launched() || ctx.running()) {
         if (!ctx.getSelectedDriver().cancelQuery(queryHandle)) {
           log.info("Could not cancel query {}", queryHandle);
