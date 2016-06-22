@@ -97,7 +97,7 @@ public class MaxConcurrentDriverQueriesConstraint implements QueryLaunchingConst
   private int getLauncherCount(final EstimatedImmutableQueryCollection launchedQueries, LensDriver selectedDriver) {
     int launcherCount = 0;
     for (QueryContext ctx : launchedQueries.getQueries(selectedDriver)) {
-      if(ctx.isLaunching()) {
+      if (ctx.isLaunching()) {
         launcherCount++;
       }
     }

@@ -27,7 +27,6 @@ import org.apache.lens.api.Priority;
 import org.apache.lens.api.util.CommonUtils.EntryParser;
 import org.apache.lens.server.api.common.ConfigBasedObjectCreationFactory;
 
-import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 
 public class MaxConcurrentDriverQueriesConstraintFactory
