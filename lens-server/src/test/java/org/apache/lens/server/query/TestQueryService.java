@@ -294,7 +294,7 @@ public class TestQueryService extends LensJerseyTest {
     assertTrue(queryService.getQueryContext(handle).isLaunching());
     // launch one more.
     QueryHandle handle2 = executeAndGetHandle(target(), Optional.of(lensSessionId),
-      Optional.of("select wait,fail from non_exist"),
+      Optional.of("select wait,fail2 from non_exist"),
       Optional.<LensConf>absent(), mt);
     assertNotEquals(handle, handle2);
     assertTrue(queryService.getQueryContext(handle2).isLaunching());
