@@ -749,6 +749,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     @Override
     public void run() {
       try {
+        logSegregationContext.setLogSegragationAndQueryId(query.getQueryHandleString());
         // Set current thread sothat launching can be interrupted.
         query.setQueryLauncher(Thread.currentThread());
         // acquire session before launching query.
@@ -778,7 +779,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
           // query is cancelled while launching, cancel it on driver.
           query.getSelectedDriver().cancelQuery(query.getQueryHandle());
         } catch (LensException e) {
-          log.error("Error canceling query", e);
+          log.error("Error cancelling query", e);
         }
       }
     }

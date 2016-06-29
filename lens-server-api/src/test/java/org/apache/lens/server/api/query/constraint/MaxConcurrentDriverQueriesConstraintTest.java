@@ -177,7 +177,7 @@ public class MaxConcurrentDriverQueriesConstraintTest {
     LensDriver mockDriver = mock(LensDriver.class);
 
     Set<QueryContext> queries = new HashSet<>(currentDriverLaunchedQueries);
-    for (int i = 0 ; i < currentDriverLaunchedQueries; i++) {
+    for (int i = 0; i < currentDriverLaunchedQueries; i++) {
       QueryContext mQuery = mock(QueryContext.class);
       when(mQuery.isLaunching()).thenReturn(true);
       queries.add(mQuery);
