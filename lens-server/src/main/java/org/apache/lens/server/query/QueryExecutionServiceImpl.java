@@ -695,10 +695,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
             log.debug("Acquiring lock in QuerySubmitter");
             removalFromLaunchedQueriesLock.lock();
             try {
-              boolean isQueryAllowedToLaunch = this.constraintsChecker.canLaunch(query, launchedQueries);
-
-              log.debug("isQueryAllowedToLaunch:{}", isQueryAllowedToLaunch);
-              if (isQueryAllowedToLaunch) {
+              if (this.constraintsChecker.canLaunch(query, launchedQueries)) {
 
                 /* Query is not going to be added to waiting queries. No need to keep the lock.
                  First release lock, then launch query */
@@ -847,6 +844,9 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
           for (QueryContext ctx : launched) {
             if (stopped || statusPoller.isInterrupted()) {
               return;
+            }
+            if (ctx.isLaunching()) {
+              continue;
             }
 
             logSegregationContext.setLogSegragationAndQueryId(ctx.getQueryHandleString());
