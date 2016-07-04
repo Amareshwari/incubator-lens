@@ -189,7 +189,7 @@ public class CandidateFact implements CandidateTable, QueryAST {
       Set<String> exprCols = HQLParser.getColsInExpr(cubeql.getAliasForTableName(cubeql.getCube()), selectExpr);
       if (getColumns().containsAll(exprCols)) {
         selectIndices.add(i);
-        if (cubeql.getCube().getDimAttributeNames().containsAll(exprCols)) {
+        if (!HQLParser.hasAggregate(selectExpr)) {
           dimFieldIndices.add(i);
         }
         ASTNode aliasNode = HQLParser.findNodeByPath(selectExpr, Identifier);
