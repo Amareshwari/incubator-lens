@@ -180,8 +180,6 @@ public class CandidateFact implements CandidateTable, QueryAST {
    * @throws LensException
    */
   public void updateASTs(CubeQueryContext cubeql) throws LensException {
-    Set<String> cubeCols = cubeql.getCube().getAllFieldNames();
-
     // update select AST with selected fields
     int currentChild = 0;
     for (int i = 0; i < cubeql.getSelectAST().getChildCount(); i++) {
@@ -189,7 +187,10 @@ public class CandidateFact implements CandidateTable, QueryAST {
       Set<String> exprCols = HQLParser.getColsInExpr(cubeql.getAliasForTableName(cubeql.getCube()), selectExpr);
       if (getColumns().containsAll(exprCols)) {
         selectIndices.add(i);
-        if (!HQLParser.hasAggregate(selectExpr)) {
+        if (exprCols.isEmpty() // no direct fact columns
+          || cubeql.getCube().getDimAttributeNames().containsAll(exprCols) // all columns are dim attributes
+          // does not have measure names and is not aggregate
+          || (!cubeql.getCube().getMeasureNames().containsAll(exprCols) && !HQLParser.hasAggregate(selectExpr))) {
           dimFieldIndices.add(i);
         }
         ASTNode aliasNode = HQLParser.findNodeByPath(selectExpr, Identifier);
