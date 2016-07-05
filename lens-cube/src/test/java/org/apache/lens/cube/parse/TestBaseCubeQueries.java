@@ -684,7 +684,7 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
     assertTrue(hqlQuery.toLowerCase().startsWith("select coalesce(mq1.booleancut, mq2.booleancut) booleancut, "
       + "mq2.expr2 `round((sum(msr2) / 1000))`, mq1.msr13 msr13 from ")
       || hqlQuery.toLowerCase().startsWith("select coalesce(mq1.booleancut, mq2.booleancut) booleancut, "
-      + "mq1.expr2 `round((sum(msr2) / 1000))`, mq2.msr13 msr13 from "), hqlQuery);
+        + "mq1.expr2 `round((sum(msr2) / 1000))`, mq2.msr13 msr13 from "), hqlQuery);
     assertTrue(hqlQuery.contains("mq1 full outer join ")
         && hqlQuery.endsWith("mq2 on mq1.booleancut <=> mq2.booleancut"),
       hqlQuery);
