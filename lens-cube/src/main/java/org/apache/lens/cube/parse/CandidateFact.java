@@ -188,9 +188,8 @@ public class CandidateFact implements CandidateTable, QueryAST {
       if (getColumns().containsAll(exprCols)) {
         selectIndices.add(i);
         if (exprCols.isEmpty() // no direct fact columns
-          || cubeql.getCube().getDimAttributeNames().containsAll(exprCols) // all columns are dim attributes
-          // does not have measure names and is not aggregate
-          || (!cubeql.getCube().getMeasureNames().containsAll(exprCols) && !HQLParser.hasAggregate(selectExpr))) {
+          // does not have measure names
+          || (!containsAny(cubeql.getCube().getMeasureNames(), exprCols))) {
           dimFieldIndices.add(i);
         }
         ASTNode aliasNode = HQLParser.findNodeByPath(selectExpr, Identifier);
@@ -219,6 +218,19 @@ public class CandidateFact implements CandidateTable, QueryAST {
     // are assumed to be common in multi fact queries.
 
     // push down of having clauses happens just after this call in cubequerycontext
+  }
+
+  // The source set contains atleast one column in the colSet
+  static boolean containsAny(Collection<String> srcSet, Collection<String> colSet) {
+    if (colSet == null || colSet.isEmpty()) {
+      return true;
+    }
+    for (String column : colSet) {
+      if (srcSet.contains(column)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @Override
