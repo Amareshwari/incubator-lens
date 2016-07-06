@@ -37,7 +37,7 @@ public class MaxConcurrentDriverQueriesConstraintFactory
   public static final String MAX_CONCURRENT_QUERIES_PER_QUEUE_KEY = PREFIX + "queue";
   public static final String DEFAULT_MAX_CONCURRENT_QUERIES_PER_QUEUE_LIMIT_KEY = "*";
   public static final String MAX_CONCURRENT_QUERIES_PER_PRIORITY_KEY = PREFIX + "priority";
-  public static final String MAX_CONCURRENT_LAUNCHERS = "driver.max.concurrent.launches";
+  public static final String MAX_CONCURRENT_LAUNCHES = "driver.max.concurrent.launches";
 
   private static final EntryParser<String, Integer> STRING_INT_PARSER = new EntryParser<String, Integer>() {
     @Override
@@ -73,7 +73,7 @@ public class MaxConcurrentDriverQueriesConstraintFactory
       maxConcurrentQueriesPerQueue,
       maxConcurrentQueriesPerPriority,
       maxConcurrentQueriesPerQueue.get(DEFAULT_MAX_CONCURRENT_QUERIES_PER_QUEUE_LIMIT_KEY),
-      conf.getInt(MAX_CONCURRENT_LAUNCHERS, Integer.MAX_VALUE));
+      conf.getInt(MAX_CONCURRENT_LAUNCHES, Integer.MAX_VALUE));
 
   }
 }
