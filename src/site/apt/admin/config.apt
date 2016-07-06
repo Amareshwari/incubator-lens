@@ -99,7 +99,7 @@ Lens server configuration
 *--+--+---+--+
 |36|lens.server.launcher.pool.keepalive.millis|60000|Thread keep alive time in milliseconds for the query launcher thread pool. If there are no query launches for this period,then cached threads will be released from the pool.|
 *--+--+---+--+
-|37|lens.server.launcher.pool.max.threads|20|Maximum number of threads in the query launcher thread pool|
+|37|lens.server.launcher.pool.max.threads|100|Maximum number of threads in the query launcher thread pool. Keeping the default to hundred, we may never grow till there, it would go to max for concurrrent queries allowed on all drivers together. This value should be greater than the max concurrent queries allowed on all drivers.|
 *--+--+---+--+
 |38|lens.server.launcher.pool.min.threads|3|Minimum number of threads in the query launcher thread pool|
 *--+--+---+--+
