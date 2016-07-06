@@ -20,6 +20,7 @@
 package org.apache.lens.server.api.query.constraint;
 
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.lens.api.Priority;
 import org.apache.lens.server.api.driver.LensDriver;
@@ -37,23 +38,23 @@ public class MaxConcurrentDriverQueriesConstraint implements QueryLaunchingConst
   private final Map<String, Integer> maxConcurrentQueriesPerQueue;
   private final Map<Priority, Integer> maxConcurrentQueriesPerPriority;
   private final Integer defaultMaxConcurrentQueriesPerQueueLimit;
-  private final int maxConcurrentLaunchers;
+  private final int maxConcurrentLaunches;
 
   @Override
   public boolean allowsLaunchOf(
     final QueryContext candidateQuery, final EstimatedImmutableQueryCollection launchedQueries) {
 
     final LensDriver selectedDriver = candidateQuery.getSelectedDriver();
+    final Set<QueryContext> driverLaunchedQueries = launchedQueries.getQueries(selectedDriver);
     final boolean canLaunch = (launchedQueries.getQueriesCount(selectedDriver) < maxConcurrentQueries)
-      && (getLauncherCount(launchedQueries, selectedDriver) < maxConcurrentLaunchers)
-      && canLaunchWithQueueConstraint(candidateQuery, launchedQueries)
-      && canLaunchWithPriorityConstraint(candidateQuery, launchedQueries);
+      && (getLauncherCount(driverLaunchedQueries) < maxConcurrentLaunches)
+      && canLaunchWithQueueConstraint(candidateQuery, driverLaunchedQueries)
+      && canLaunchWithPriorityConstraint(candidateQuery, driverLaunchedQueries);
     log.debug("canLaunch:{}", canLaunch);
     return canLaunch;
   }
 
-  private boolean canLaunchWithQueueConstraint(QueryContext candidateQuery, EstimatedImmutableQueryCollection
-    launchedQueries) {
+  private boolean canLaunchWithQueueConstraint(QueryContext candidateQuery, Set<QueryContext> launchedQueries) {
     if (maxConcurrentQueriesPerQueue == null) {
       return true;
     }
@@ -67,7 +68,7 @@ public class MaxConcurrentDriverQueriesConstraint implements QueryLaunchingConst
       }
     }
     int launchedOnQueue = 0;
-    for (QueryContext context : launchedQueries.getQueries(candidateQuery.getSelectedDriver())) {
+    for (QueryContext context : launchedQueries) {
       if (context.getQueue().equals(queue)) {
         launchedOnQueue++;
       }
@@ -75,8 +76,7 @@ public class MaxConcurrentDriverQueriesConstraint implements QueryLaunchingConst
     return launchedOnQueue < limit;
   }
 
-  private boolean canLaunchWithPriorityConstraint(QueryContext candidateQuery, EstimatedImmutableQueryCollection
-    launchedQueries) {
+  private boolean canLaunchWithPriorityConstraint(QueryContext candidateQuery, Set<QueryContext> launchedQueries) {
     if (maxConcurrentQueriesPerPriority == null) {
       return true;
     }
@@ -86,7 +86,7 @@ public class MaxConcurrentDriverQueriesConstraint implements QueryLaunchingConst
       return true;
     }
     int launchedOnPriority = 0;
-    for (QueryContext context : launchedQueries.getQueries(candidateQuery.getSelectedDriver())) {
+    for (QueryContext context : launchedQueries) {
       if (context.getPriority().equals(priority)) {
         launchedOnPriority++;
       }
@@ -94,9 +94,9 @@ public class MaxConcurrentDriverQueriesConstraint implements QueryLaunchingConst
     return launchedOnPriority < limit;
   }
 
-  private int getLauncherCount(final EstimatedImmutableQueryCollection launchedQueries, LensDriver selectedDriver) {
+  private int getLauncherCount(final Set<QueryContext> launchedQueries) {
     int launcherCount = 0;
-    for (QueryContext ctx : launchedQueries.getQueries(selectedDriver)) {
+    for (QueryContext ctx : launchedQueries) {
       if (ctx.isLaunching()) {
         launcherCount++;
       }

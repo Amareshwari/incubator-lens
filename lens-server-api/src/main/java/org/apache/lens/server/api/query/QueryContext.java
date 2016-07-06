@@ -26,6 +26,7 @@ import static org.apache.lens.server.api.LensConfConstants.PREFETCH_INMEMORY_RES
 import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Future;
 
 import org.apache.lens.api.LensConf;
 import org.apache.lens.api.query.LensQuery;
@@ -205,7 +206,7 @@ public class QueryContext extends AbstractQueryContext {
 
   @Getter
   @Setter
-  private transient Thread queryLauncher;
+  private transient Future queryLauncher;
   /**
    * Creates context from query
    *

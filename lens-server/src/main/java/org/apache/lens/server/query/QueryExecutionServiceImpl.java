@@ -704,7 +704,8 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
                 // this query
                 query.setLaunching(true);
                 launchedQueries.add(query);
-                queryLauncherPool.submit(new QueryLauncher(query));
+                Future launcherFuture = queryLauncherPool.submit(new QueryLauncher(query));
+                query.setQueryLauncher(launcherFuture);
               } else {
                 /* Query is going to be added to waiting queries. Keep holding the lock to avoid any removal from
                 launched queries. First add to waiting queries, then release lock */
@@ -747,8 +748,6 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     public void run() {
       try {
         logSegregationContext.setLogSegragationAndQueryId(query.getQueryHandleString());
-        // Set current thread sothat launching can be interrupted.
-        query.setQueryLauncher(Thread.currentThread());
         // acquire session before launching query.
         acquire(query.getLensSessionIdentifier());
         if (query.getStatus().cancelled()) {
@@ -784,7 +783,6 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     private void launchQuery(final QueryContext query) throws LensException {
 
       checkEstimatedQueriesState(query);
-      query.setLaunching(true);
       query.getSelectedDriver().getQueryHook().preLaunch(query);
       QueryStatus oldStatus = query.getStatus();
       QueryStatus newStatus = new QueryStatus(query.getStatus().getProgress(), null,
@@ -1455,7 +1453,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
 
     ThreadPoolExecutor estimatePool = new ThreadPoolExecutor(minPoolSize, maxPoolSize, keepAlive, TimeUnit.MILLISECONDS,
       new SynchronousQueue<Runnable>(), threadFactory);
-    estimatePool.allowCoreThreadTimeOut(true);
+    estimatePool.allowCoreThreadTimeOut(false);
     estimatePool.prestartCoreThread();
     this.estimatePool = estimatePool;
   }
@@ -2533,7 +2531,9 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
       }
 
       if (ctx.isLaunching()) {
-        ctx.getQueryLauncher().interrupt();
+        boolean launchCancelled = ctx.getQueryLauncher().cancel(true);
+        log.info("query launch cancellation success : {}", launchCancelled);
+
       }
       if (ctx.launched() || ctx.running()) {
         if (!ctx.getSelectedDriver().cancelQuery(queryHandle)) {

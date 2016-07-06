@@ -45,7 +45,7 @@ public class MaxConcurrentDriverQueriesConstraintTest {
   MaxConcurrentDriverQueriesConstraintFactory factory = new MaxConcurrentDriverQueriesConstraintFactory();
   QueryLaunchingConstraint constraint = factory.create(getConfiguration(
     "driver.max.concurrent.launched.queries", 10,
-    "driver.max.concurrent.launched.queries", 4
+    "driver.max.concurrent.launches", 4
   ));
 
   QueryLaunchingConstraint perQueueConstraint = factory.create(getConfiguration(
@@ -65,7 +65,7 @@ public class MaxConcurrentDriverQueriesConstraintTest {
 
   @DataProvider
   public Object[][] dpTestAllowsLaunchOfQuery() {
-    return new Object[][]{{2, true}, {3, true}, {10, false}, {11, false}};
+    return new Object[][]{{2, true}, {3, true}, {4, true}, {5, true}, {10, false}, {11, false}};
   }
 
   @DataProvider

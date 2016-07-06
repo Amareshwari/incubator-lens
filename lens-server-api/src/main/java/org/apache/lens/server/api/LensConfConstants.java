@@ -936,7 +936,9 @@ public final class LensConfConstants {
    * Key used to get maximum number of threads in the laucnher thread pool
    */
   public static final String LAUNCHER_POOL_MAX_THREADS = SERVER_PFX + "launcher.pool.max.threads";
-  public static final int DEFAULT_LAUNCHER_POOL_MAX_THREADS = 20;
+  // keeping the default to hundred, we may never grow till there, it would go to max for concurrrent queries allowed on
+  // all drivers together.
+  public static final int DEFAULT_LAUNCHER_POOL_MAX_THREADS = 100;
 
   /**
    * Key used to get keep alive time for threads in the launcher thread pool
