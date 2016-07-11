@@ -50,6 +50,8 @@ import org.apache.hadoop.conf.Configuration;
 
 import org.glassfish.jersey.test.TestProperties;
 
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.AfterTest;
 import org.testng.annotations.BeforeTest;
@@ -107,6 +109,11 @@ public class TestQueryConstraints extends LensJerseyTest {
     loadData(TEST_TABLE, TestResourceFile.TEST_DATA2_FILE.getValue());
   }
 
+  @BeforeClass
+  public void setupTest() {
+    restartLensServer();
+  }
+
   @Override
   public Map<String, String> getServerConfOverWrites() {
     return LensUtil.getHashMap(LensConfConstants.DRIVER_TYPES_AND_CLASSES, "mockHive:" + HiveDriver.class.getName(),
@@ -143,7 +150,7 @@ public class TestQueryConstraints extends LensJerseyTest {
   }
 
   /** The test table. */
-  public static final String TEST_TABLE = "TEST_TABLE";
+  public static final String TEST_TABLE = "QUERY_CONSTRAINTS_TEST_TABLE";
 
   /**
    * Creates the table.
@@ -235,7 +242,7 @@ public class TestQueryConstraints extends LensJerseyTest {
         Optional.of(conf), mt);
   }
 
-  @AfterMethod
+  @AfterClass
   private void waitForPurge() throws InterruptedException {
     waitForPurge(0, queryService.finishedQueries);
   }
