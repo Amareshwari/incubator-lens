@@ -50,12 +50,7 @@ import org.apache.hadoop.conf.Configuration;
 
 import org.glassfish.jersey.test.TestProperties;
 
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.AfterTest;
-import org.testng.annotations.BeforeTest;
-import org.testng.annotations.Test;
+import org.testng.annotations.*;
 
 import com.beust.jcommander.internal.Lists;
 
@@ -111,6 +106,11 @@ public class TestQueryConstraints extends LensJerseyTest {
 
   @BeforeClass
   public void setupTest() {
+    restartLensServer();
+  }
+
+  @AfterClass
+  public void afterTest() {
     restartLensServer();
   }
 
