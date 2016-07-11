@@ -298,6 +298,7 @@ public class TestQueryService extends LensJerseyTest {
       Optional.<LensConf>absent(), mt);
     assertNotEquals(handle, handle2);
     assertTrue(queryService.getQueryContext(handle2).isLaunching());
+    assertTrue(queryService.getLaunchingQueriesCount() > 1);
     // cancel both the queries.
     assertTrue(queryService.cancelQuery(lensSessionId, handle));
     assertTrue(queryService.cancelQuery(lensSessionId, handle2));

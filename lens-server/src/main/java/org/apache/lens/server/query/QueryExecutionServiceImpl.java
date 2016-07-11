@@ -656,8 +656,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
 
     private final QueryLaunchingConstraintsChecker constraintsChecker;
 
-    public QuerySubmitter(@NonNull final ErrorCollection errorCollection,
-                          @NonNull final EstimatedQueryCollection waitingQueries,
+    public QuerySubmitter(@NonNull final EstimatedQueryCollection waitingQueries,
                           @NonNull final QueryLaunchingConstraintsChecker constraintsChecker) {
 
       this.waitingQueries = waitingQueries;
@@ -756,12 +755,14 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
           launchQuery(query);
         }
       } catch (Exception e) {
-        log.error("Error launching query: {}", query.getQueryHandle(), e);
-        incrCounter(QUERY_SUBMITTER_COUNTER);
-        try {
-          setFailedStatus(query, "Launching query failed", e);
-        } catch (LensException e1) {
-          log.error("Error in setting failed status", e1);
+        if (!query.getStatus().cancelled()) {
+          log.error("Error launching query: {}", query.getQueryHandle(), e);
+          incrCounter(QUERY_SUBMITTER_COUNTER);
+          try {
+            setFailedStatus(query, "Launching query failed", e);
+          } catch (LensException e1) {
+            log.error("Error in setting failed status", e1);
+          }
         }
       } finally {
         try {
@@ -770,9 +771,10 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
           log.error("Error releasing session", e);
         }
       }
-      if (query.getStatus().cancelled()) {
+      if (query.getStatus().cancelled()
+        && (query.getSelectedDriver() != null && !query.getDriverStatus().isFinished())) {
         try {
-          // query is cancelled while launching, cancel it on driver.
+          // query is cancelled while launching and is still running on driver. cancel it on driver.
           query.getSelectedDriver().cancelQuery(query.getQueryHandle());
         } catch (LensException e) {
           log.error("Error cancelling query", e);
@@ -782,23 +784,26 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
 
     private void launchQuery(final QueryContext query) throws LensException {
 
-      checkEstimatedQueriesState(query);
-      query.getSelectedDriver().getQueryHook().preLaunch(query);
-      QueryStatus oldStatus = query.getStatus();
-      QueryStatus newStatus = new QueryStatus(query.getStatus().getProgress(), null,
-        QueryStatus.Status.LAUNCHED, "Query is launched on driver", false, null, null, null);
-      query.validateTransition(newStatus);
+      try {
+        checkEstimatedQueriesState(query);
+        query.getSelectedDriver().getQueryHook().preLaunch(query);
+        QueryStatus oldStatus = query.getStatus();
+        QueryStatus newStatus = new QueryStatus(query.getStatus().getProgress(), null,
+          QueryStatus.Status.LAUNCHED, "Query is launched on driver", false, null, null, null);
+        query.validateTransition(newStatus);
 
-      // Check if we need to pass session's effective resources to selected driver
-      addSessionResourcesToDriver(query);
-      query.getSelectedDriver().executeAsync(query);
-      query.setStatusSkippingTransitionTest(newStatus);
-      query.setLaunchTime(System.currentTimeMillis());
-      query.clearTransientStateAfterLaunch();
+        // Check if we need to pass session's effective resources to selected driver
+        addSessionResourcesToDriver(query);
+        query.getSelectedDriver().executeAsync(query);
+        query.setStatusSkippingTransitionTest(newStatus);
+        query.setLaunchTime(System.currentTimeMillis());
+        query.clearTransientStateAfterLaunch();
 
-      log.info("Added to launched queries. QueryId:{}", query.getQueryHandleString());
-      fireStatusChangeEvent(query, newStatus, oldStatus);
-      query.setLaunching(false);
+        log.info("Added to launched queries. QueryId:{}", query.getQueryHandleString());
+        fireStatusChangeEvent(query, newStatus, oldStatus);
+      } finally {
+        query.setLaunching(false);
+      }
     }
   }
 
@@ -1210,8 +1215,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
 
     this.queryConstraintsChecker = new DefaultQueryLaunchingConstraintsChecker(queryConstraints);
 
-    this.querySubmitterRunnable = new QuerySubmitter(LensServices.get().getErrorCollection(), this.waitingQueries,
-      this.queryConstraintsChecker);
+    this.querySubmitterRunnable = new QuerySubmitter(this.waitingQueries, this.queryConstraintsChecker);
     this.querySubmitter = new Thread(querySubmitterRunnable, "QuerySubmitter");
 
     ImmutableSet<WaitingQueriesSelectionPolicy> selectionPolicies = getImplementations(
@@ -1501,6 +1505,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     @Override
     public void run() {
       try {
+        logSegregationContext.setLogSegragationAndQueryId(handle.getHandleIdString());
         cancelQuery(handle);
       } catch (Exception e) {
         log.error("Error while cancelling query {}", handle, e);
@@ -2505,6 +2510,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
   @Override
   public boolean cancelQuery(LensSessionHandle sessionHandle, QueryHandle queryHandle) throws LensException {
     try {
+      logSegregationContext.setLogSegragationAndQueryId(queryHandle.getHandleIdString());
       log.info("CancelQuery: session:{} query:{}", sessionHandle, queryHandle);
       acquire(sessionHandle);
       return cancelQuery(queryHandle);
@@ -3048,6 +3054,17 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
   @Override
   public long getFinishedQueriesCount() {
     return finishedQueries.size();
+  }
+
+  @Override
+  public long getLaunchingQueriesCount() {
+    long count = 0;
+    for (QueryContext ctx : launchedQueries.getQueries()) {
+      if (ctx.isLaunching()) {
+        count++;
+      }
+    }
+    return count;
   }
 
   @Data

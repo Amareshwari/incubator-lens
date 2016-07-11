@@ -64,16 +64,17 @@ public class MaxConcurrentDriverQueriesConstraintFactory
 
   @Override
   public MaxConcurrentDriverQueriesConstraint create(final Configuration conf) {
+    int maxConcurrentQueries = conf.getInt(MAX_CONCURRENT_QUERIES_KEY, Integer.MAX_VALUE);
     Map<String, Integer> maxConcurrentQueriesPerQueue = parseMapFromString(
       conf.get(MAX_CONCURRENT_QUERIES_PER_QUEUE_KEY), STRING_INT_PARSER);
     Map<Priority, Integer> maxConcurrentQueriesPerPriority = parseMapFromString(
       conf.get(MAX_CONCURRENT_QUERIES_PER_PRIORITY_KEY), PRIORITY_INT_PARSER);
 
-    return new MaxConcurrentDriverQueriesConstraint(conf.getInt(MAX_CONCURRENT_QUERIES_KEY, Integer.MAX_VALUE),
+    return new MaxConcurrentDriverQueriesConstraint(maxConcurrentQueries,
       maxConcurrentQueriesPerQueue,
       maxConcurrentQueriesPerPriority,
       maxConcurrentQueriesPerQueue.get(DEFAULT_MAX_CONCURRENT_QUERIES_PER_QUEUE_LIMIT_KEY),
-      conf.getInt(MAX_CONCURRENT_LAUNCHES, Integer.MAX_VALUE));
+      conf.getInt(MAX_CONCURRENT_LAUNCHES, maxConcurrentQueries));
 
   }
 }
