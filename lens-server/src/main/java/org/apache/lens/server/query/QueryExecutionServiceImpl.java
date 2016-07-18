@@ -3156,7 +3156,6 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
       @Override
       public void run() {
         try {
-          logSegregationContext.setLogSegragationAndQueryId(finishedLensQuery.getHandle());
           processWaitingQueries(finishedLensQuery);
         } catch (final Throwable e) {
           log.error("Error in processing waiting queries", e);

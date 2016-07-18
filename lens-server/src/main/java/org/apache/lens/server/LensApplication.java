@@ -73,8 +73,8 @@ public class LensApplication extends Application {
       log.info("Added filter {}", wsFilterClass);
     }
 
-    log.debug("LensRequestContextInitFilter added...");
-    classes.add(LensRequestContextInitFilter.class);
+    log.debug("LensRequestLoggingFilter added...");
+    classes.add(LensRequestLoggingFilter.class);
     classes.add(GenericExceptionMapper.class);
     return classes;
   }
