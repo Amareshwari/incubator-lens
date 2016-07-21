@@ -1283,6 +1283,9 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
   }
 
   private void awaitTermination(QueryResultPurger service) {
+    if (service == null) {
+      return;
+    }
     try {
       service.awaitTermination(1, TimeUnit.MINUTES);
     } catch (InterruptedException e) {
@@ -3258,7 +3261,6 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
       @Override
       public void run() {
         try {
-          logSegregationContext.setLogSegragationAndQueryId(finishedLensQuery.getHandle());
           processWaitingQueries(finishedLensQuery);
         } catch (final Throwable e) {
           log.error("Error in processing waiting queries", e);

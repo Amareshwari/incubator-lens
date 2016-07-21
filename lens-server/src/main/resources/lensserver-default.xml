@@ -55,7 +55,7 @@
 
   <property>
     <name>lens.server.servicenames</name>
-    <value>session,query,metastore,scheduler,quota</value>
+    <value>session,query,savedquery,metastore,scheduler,quota</value>
     <description>These services would be started in the specified order when lens-server starts up</description>
   </property>
 
@@ -395,7 +395,7 @@
 
   <property>
     <name>lens.server.ws.resourcenames</name>
-    <value>session,metastore,query,quota,scheduler,index,log</value>
+    <value>session,metastore,query,savedquery,quota,scheduler,index,log</value>
     <description>These JAX-RS resources would be started in the specified order when lens-server starts up</description>
   </property>
 
@@ -472,14 +472,14 @@
   </property>
   <property>
     <name>lens.server.ws.filternames</name>
-    <value>authentication,consistentState,serverMode</value>
+    <value>requestlogger,consistentState,serverMode</value>
     <description>These JAX-RS filters would be started in the specified order when lens-server starts up</description>
   </property>
 
   <property>
-    <name>lens.server.authentication.ws.filter.impl</name>
-    <value>org.apache.lens.server.AuthenticationFilter</value>
-    <description>Implementation class for Authentication Filter</description>
+    <name>lens.server.requestlogger.ws.filter.impl</name>
+    <value>org.apache.lens.server.LensRequestLoggingFilter</value>
+    <description>Implementation class for Request logging Filter</description>
   </property>
 
   <property>
