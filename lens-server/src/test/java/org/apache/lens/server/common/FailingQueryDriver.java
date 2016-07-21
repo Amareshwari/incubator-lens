@@ -56,8 +56,8 @@ public class FailingQueryDriver extends MockDriver {
     // simulate wait for execution.
     if (ctx.getUserQuery().contains("wait")) {
       try {
-        // wait for 10 seconds.
-        Thread.sleep(10000);
+        // wait for 1 second.
+        Thread.sleep(1000);
       } catch (InterruptedException e) {
         // ignore interrupted exception
       }
