@@ -745,65 +745,53 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
 
     @Override
     public void run() {
-      try {
-        logSegregationContext.setLogSegragationAndQueryId(query.getQueryHandleString());
-        // acquire session before launching query.
-        acquire(query.getLensSessionIdentifier());
-        if (query.getStatus().cancelled()) {
-          return;
-        } else {
-          launchQuery(query);
-        }
-      } catch (Exception e) {
-        if (!query.getStatus().cancelled()) {
-          log.error("Error launching query: {}", query.getQueryHandle(), e);
-          incrCounter(QUERY_SUBMITTER_COUNTER);
-          try {
-            setFailedStatus(query, "Launching query failed", e);
-          } catch (LensException e1) {
-            log.error("Error in setting failed status", e1);
+      synchronized (query) {
+        try {
+          logSegregationContext.setLogSegragationAndQueryId(query.getQueryHandleString());
+          // acquire session before launching query.
+          acquire(query.getLensSessionIdentifier());
+          if (query.getStatus().cancelled()) {
+            return;
+          } else {
+            launchQuery(query);
           }
-        }
-      } finally {
-        try {
-          release(query.getLensSessionIdentifier());
-        } catch (LensException e) {
-          log.error("Error releasing session", e);
-        }
-      }
-      if (query.getStatus().cancelled()
-        && (query.getSelectedDriver() != null && !query.getDriverStatus().isFinished())) {
-        try {
-          // query is cancelled while launching and is still running on driver. cancel it on driver.
-          query.getSelectedDriver().cancelQuery(query.getQueryHandle());
-        } catch (LensException e) {
-          log.error("Error cancelling query", e);
+        } catch (Exception e) {
+          if (!query.getStatus().cancelled()) {
+            log.error("Error launching query: {}", query.getQueryHandle(), e);
+            incrCounter(QUERY_SUBMITTER_COUNTER);
+            try {
+              setFailedStatus(query, "Launching query failed", e);
+            } catch (LensException e1) {
+              log.error("Error in setting failed status", e1);
+            }
+          }
+        } finally {
+          query.setLaunching(false);
+          try {
+            release(query.getLensSessionIdentifier());
+          } catch (LensException e) {
+            log.error("Error releasing session", e);
+          }
         }
       }
     }
 
     private void launchQuery(final QueryContext query) throws LensException {
+      checkEstimatedQueriesState(query);
+      query.getSelectedDriver().getQueryHook().preLaunch(query);
+      QueryStatus oldStatus = query.getStatus();
+      QueryStatus newStatus = new QueryStatus(query.getStatus().getProgress(), null,
+        QueryStatus.Status.LAUNCHED, "Query is launched on driver", false, null, null, null);
+      query.validateTransition(newStatus);
+      // Check if we need to pass session's effective resources to selected driver
+      addSessionResourcesToDriver(query);
+      query.getSelectedDriver().executeAsync(query);
+      query.setStatusSkippingTransitionTest(newStatus);
+      query.setLaunchTime(System.currentTimeMillis());
+      query.clearTransientStateAfterLaunch();
 
-      try {
-        checkEstimatedQueriesState(query);
-        query.getSelectedDriver().getQueryHook().preLaunch(query);
-        QueryStatus oldStatus = query.getStatus();
-        QueryStatus newStatus = new QueryStatus(query.getStatus().getProgress(), null,
-          QueryStatus.Status.LAUNCHED, "Query is launched on driver", false, null, null, null);
-        query.validateTransition(newStatus);
-
-        // Check if we need to pass session's effective resources to selected driver
-        addSessionResourcesToDriver(query);
-        query.getSelectedDriver().executeAsync(query);
-        query.setStatusSkippingTransitionTest(newStatus);
-        query.setLaunchTime(System.currentTimeMillis());
-        query.clearTransientStateAfterLaunch();
-
-        log.info("Added to launched queries. QueryId:{}", query.getQueryHandleString());
-        fireStatusChangeEvent(query, newStatus, oldStatus);
-      } finally {
-        query.setLaunching(false);
-      }
+      log.info("Added to launched queries. QueryId:{}", query.getQueryHandleString());
+      fireStatusChangeEvent(query, newStatus, oldStatus);
     }
   }
 
@@ -1334,6 +1322,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     }
     // Needs to be done before queries' states are persisted, hence doing here. Await of other
     // executor services can be done after persistence, hence they are done in #stop
+    awaitTermination(queryLauncherPool);
     awaitTermination(queryCancellationPool);
   }
 
@@ -1346,7 +1335,6 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     super.stop();
     awaitTermination(waitingQueriesSelectionSvc);
     awaitTermination(estimatePool);
-    awaitTermination(queryLauncherPool);
     awaitTermination(queryResultPurger);
     log.info("Query execution service stopped");
   }
@@ -1489,7 +1477,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
 
     ThreadPoolExecutor launcherPool = new ThreadPoolExecutor(minPoolSize, maxPoolSize, keepAlive, TimeUnit.MILLISECONDS,
       new SynchronousQueue<Runnable>(), threadFactory);
-    launcherPool.allowCoreThreadTimeOut(true);
+    launcherPool.allowCoreThreadTimeOut(false);
     launcherPool.prestartCoreThread();
     this.queryLauncherPool = launcherPool;
   }
