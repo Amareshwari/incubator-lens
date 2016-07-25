@@ -94,6 +94,12 @@ public class TestQueryConstraints extends LensJerseyTest {
   @BeforeTest
   public void setUp() throws Exception {
     super.setUp();
+
+  }
+
+  @BeforeClass
+  public void setupTest() throws Exception {
+    restartLensServer();
     queryService = LensServices.get().getService(QueryExecutionService.NAME);
     metricsSvc = LensServices.get().getService(MetricsService.NAME);
     Map<String, String> sessionConf = new HashMap<>();
@@ -104,13 +110,10 @@ public class TestQueryConstraints extends LensJerseyTest {
     loadData(TEST_TABLE, TestResourceFile.TEST_DATA2_FILE.getValue());
   }
 
-  @BeforeClass
-  public void setupTest() {
-    restartLensServer();
-  }
-
   @AfterClass
-  public void afterTest() {
+  public void afterTest() throws Exception {
+    dropTable(TEST_TABLE);
+    queryService.closeSession(lensSessionId);
     restartLensServer();
   }
 
@@ -127,13 +130,6 @@ public class TestQueryConstraints extends LensJerseyTest {
      */
   @AfterTest
   public void tearDown() throws Exception {
-    dropTable(TEST_TABLE);
-    queryService.closeSession(lensSessionId);
-    for (LensDriver driver : queryService.getDrivers()) {
-      if (driver instanceof HiveDriver) {
-        assertFalse(((HiveDriver) driver).hasLensSession(lensSessionId));
-      }
-    }
     super.tearDown();
   }
 
