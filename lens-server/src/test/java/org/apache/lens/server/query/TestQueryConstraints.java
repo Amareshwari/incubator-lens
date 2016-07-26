@@ -211,7 +211,7 @@ public class TestQueryConstraints extends LensJerseyTest {
     }
     for (QueryHandle handle : handles) {
       RestAPITestUtil.waitForQueryToFinish(target(), lensSessionId, handle, mt);
-      queryService.closeResultSet(lensSessionId, handle);
+      queryService.fetchResultSet(lensSessionId, handle, 0, 100);
       assertValidity();
     }
   }
@@ -238,7 +238,7 @@ public class TestQueryConstraints extends LensJerseyTest {
         Optional.of(conf), mt);
   }
 
-  @AfterClass
+  @AfterMethod
   private void waitForPurge() throws InterruptedException {
     waitForPurge(0, queryService.finishedQueries);
   }
