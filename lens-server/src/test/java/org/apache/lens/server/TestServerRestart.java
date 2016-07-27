@@ -44,12 +44,15 @@ import org.apache.lens.server.api.query.QueryContext;
 import org.apache.lens.server.api.query.QueryExecutionService;
 import org.apache.lens.server.api.session.SessionService;
 import org.apache.lens.server.api.util.LensUtil;
+import org.apache.lens.server.common.LenServerTestException;
+import org.apache.lens.server.common.LensServerTestFileUtils;
 import org.apache.lens.server.common.TestResourceFile;
 import org.apache.lens.server.query.QueryExecutionServiceImpl;
 import org.apache.lens.server.query.TestQueryService;
 import org.apache.lens.server.session.HiveSessionService;
 import org.apache.lens.server.session.LensSessionImpl;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hive.service.Service;
 
@@ -396,7 +399,7 @@ public class TestServerRestart extends LensAllApplicationJerseyTest {
     assertEquals(result.getStatus(), Status.SUCCEEDED);
 
     // restart server
-    restartLensServer();
+    restartLensServer(getServerConf());
 
     // Check resources added again
     verifyParamOnRestart(restartTestSession);
@@ -436,5 +439,30 @@ public class TestServerRestart extends LensAllApplicationJerseyTest {
     System.out.println("Session params:" + sessionParams.getElements());
     assertEquals(sessionParams.getElements().size(), 1);
     Assert.assertTrue(sessionParams.getElements().contains("lens.session.testRestartKey=myvalue"));
+  }
+
+  @Test(dataProvider = "mediaTypeData")
+  public void testServerMustRestartOnManualDeletionOfAddedResources(MediaType mt)
+    throws IOException, LensException, LenServerTestException {
+
+    /* Begin: Setup */
+
+    /* Add a resource jar to current working directory */
+    File jarFile = new File(TestResourceFile.TEST_RESTART_ON_RESOURCE_MOVE_JAR.getValue());
+    FileUtils.touch(jarFile);
+
+    /* Add the created resource jar to lens server */
+    LensSessionHandle sessionHandle = LensServerTestUtil.openSession(target(), "foo", "bar", new LensConf(), mt);
+    LensServerTestUtil.addResource(target(), sessionHandle, "jar", jarFile.getPath(), mt);
+
+    /* Delete resource jar from current working directory */
+    LensServerTestFileUtils.deleteFile(jarFile);
+
+    /* End: Setup */
+
+    /* Verification Steps: server should restart without exceptions */
+    restartLensServer();
+    HiveSessionService service = LensServices.get().getService(SessionService.NAME);
+    service.closeSession(sessionHandle);
   }
 }
