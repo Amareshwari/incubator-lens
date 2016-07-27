@@ -88,6 +88,7 @@ public class TestCubeRewriter extends TestQueryRewrite {
   @Test
   public void testQueryWithContinuousUpdatePeriod() throws Exception {
     Configuration conf = getConf();
+    conf.set(CubeQueryConfUtil.DRIVER_SUPPORTED_STORAGES, "C0");
     conf.setClass(CubeQueryConfUtil.TIME_RANGE_WRITER_CLASS, BetweenTimeRangeWriter.class, TimeRangeWriter.class);
 
     DateFormat qFmt = new SimpleDateFormat("yyyy-MM-dd-HH:mm:ss");
