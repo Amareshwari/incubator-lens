@@ -39,7 +39,6 @@ import org.apache.lens.client.exceptions.LensAPIException;
 import org.apache.lens.client.exceptions.LensClientIOException;
 import org.apache.lens.client.resultset.ResultSet;
 import org.apache.lens.server.LensAllApplicationJerseyTest;
-import org.apache.lens.server.api.util.LensUtil;
 
 import org.testng.Assert;
 import org.testng.annotations.*;
