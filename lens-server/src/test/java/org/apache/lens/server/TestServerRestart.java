@@ -60,9 +60,7 @@ import org.glassfish.jersey.media.multipart.FormDataBodyPart;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
 import org.glassfish.jersey.media.multipart.FormDataMultiPart;
 import org.testng.Assert;
-import org.testng.annotations.AfterTest;
-import org.testng.annotations.BeforeTest;
-import org.testng.annotations.Test;
+import org.testng.annotations.*;
 
 import com.google.common.base.Optional;
 import lombok.extern.slf4j.Slf4j;
@@ -102,6 +100,17 @@ public class TestServerRestart extends LensAllApplicationJerseyTest {
     super.tearDown();
   }
 
+  @BeforeClass
+  public void restartBeforeClass() throws Exception {
+    // restart server with test configuration for tests
+    restartLensServer(getServerConf());
+  }
+
+  @AfterClass
+  public void restart() throws Exception {
+    // restart server with normal configuration once the tests are done.
+    restartLensServer();
+  }
   /** The file created. */
   private boolean fileCreated;
 
