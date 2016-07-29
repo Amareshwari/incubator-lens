@@ -215,7 +215,7 @@ public class JDBCDriver extends AbstractLensDriver {
       log.debug("Canceling resultFuture object");
       ret = resultFuture.cancel(true);
       log.debug("Done resultFuture cancel!");
-      // queryResult object would be null be query is not yet launched - since we did future.cancel, no other cancel is
+      // queryResult object would be null if query is not yet launched - since we did future.cancel, no other cancel is
       // required.
       if (queryResult != null && isStatementCancelSupported) {
         log.debug("Cancelling query through statement cancel");
