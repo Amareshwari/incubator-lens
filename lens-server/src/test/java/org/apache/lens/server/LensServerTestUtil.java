@@ -77,14 +77,19 @@ public final class LensServerTestUtil {
    * @throws InterruptedException the interrupted exception
    */
   public static void createTable(String tblName, WebTarget parent, LensSessionHandle lensSessionId, String schemaStr,
-    MediaType mt)
+    boolean useDBSerde, MediaType mt)
     throws InterruptedException {
     LensConf conf = new LensConf();
     conf.addProperty(LensConfConstants.QUERY_PERSISTENT_RESULT_INDRIVER, "false");
     final WebTarget target = parent.path("queryapi/queries");
 
     final FormDataMultiPart mp = new FormDataMultiPart();
-    String createTable = "CREATE TABLE IF NOT EXISTS " + tblName + schemaStr;
+    String serdeStr = "";
+    if (useDBSerde) {
+      serdeStr = "ROW FORMAT SERDE 'DatabaseJarSerde' STORED AS TEXTFILE ";
+    }
+    String createTable = "CREATE TABLE IF NOT EXISTS " + tblName + schemaStr + serdeStr;
+
 
     mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("sessionid").build(), lensSessionId,
       mt));
@@ -113,6 +118,11 @@ public final class LensServerTestUtil {
     assertTrue(ctx.getDriverStartTime() > 0, debugHelpMsg);
     assertTrue(ctx.getDriverFinishTime() > 0, debugHelpMsg);
     assertTrue(ctx.getFinishTime() > 0, debugHelpMsg);
+  }
+
+  public static void createTable(String tblName, WebTarget parent, LensSessionHandle lensSessionId, String schemaStr,
+    MediaType mt) throws InterruptedException {
+    createTable(tblName, parent, lensSessionId, "(ID INT, IDSTR STRING)", false, mt);
   }
 
   public static void createTable(String tblName, WebTarget parent, LensSessionHandle lensSessionId, MediaType mt)

@@ -78,7 +78,7 @@ public class TestMetastoreService extends LensJerseyTest {
   CubeMetastoreServiceImpl metastoreService;
   LensSessionHandle lensSessionId;
 
-  private void assertSuccess(APIResult result) {
+  private static void assertSuccess(APIResult result) {
     assertEquals(result.getStatus(), Status.SUCCEEDED, String.valueOf(result));
   }
 
@@ -260,11 +260,17 @@ public class TestMetastoreService extends LensJerseyTest {
     assertSuccess(result);
   }
 
-  private void setCurrentDatabase(String dbName, MediaType mediaType) throws Exception {
-    WebTarget dbTarget = target().path("metastore").path("databases/current");
+  public static void setCurrentDatabase(WebTarget target, LensSessionHandle lensSessionId, String dbName, MediaType
+    mediaType) throws
+    Exception {
+    WebTarget dbTarget = target.path("metastore").path("databases/current");
     APIResult result = dbTarget.queryParam("sessionid", lensSessionId).request(mediaType)
       .put(getEntityForString(dbName, mediaType), APIResult.class);
     assertSuccess(result);
+  }
+
+  private void setCurrentDatabase(String dbName, MediaType mediaType) throws Exception {
+    setCurrentDatabase(target(), lensSessionId, dbName, mediaType);
   }
 
   private String getCurrentDatabase(MediaType mediaType) throws Exception {

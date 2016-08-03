@@ -34,11 +34,13 @@ import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.lens.api.*;
 import org.apache.lens.api.APIResult.Status;
 import org.apache.lens.api.query.*;
 import org.apache.lens.api.result.LensAPIResult;
 import org.apache.lens.driver.hive.TestRemoteHiveDriver;
+import org.apache.lens.server.api.LensConfConstants;
 import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.query.QueryContext;
 import org.apache.lens.server.api.query.QueryExecutionService;
@@ -47,6 +49,7 @@ import org.apache.lens.server.api.util.LensUtil;
 import org.apache.lens.server.common.LenServerTestException;
 import org.apache.lens.server.common.LensServerTestFileUtils;
 import org.apache.lens.server.common.TestResourceFile;
+import org.apache.lens.server.metastore.TestMetastoreService;
 import org.apache.lens.server.query.QueryExecutionServiceImpl;
 import org.apache.lens.server.query.TestQueryService;
 import org.apache.lens.server.session.HiveSessionService;
@@ -68,7 +71,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * The Class TestServerRestart.
  */
-@Test(alwaysRun = true, groups = "restart-test", dependsOnGroups = "unit-test")
+@Test//(alwaysRun = true, groups = "restart-test", dependsOnGroups = "unit-test")
 @Slf4j
 public class TestServerRestart extends LensAllApplicationJerseyTest {
 
@@ -92,7 +95,8 @@ public class TestServerRestart extends LensAllApplicationJerseyTest {
 
   @Override
   public Map<String, String> getServerConfOverWrites() {
-    return LensUtil.getHashMap("lens.server.state.persistence.interval.millis", "1000");
+    return LensUtil.getHashMap("lens.server.state.persistence.interval.millis", "1000",
+      LensConfConstants.DATABASE_RESOURCE_DIR, "target/resources");
   }
 
   @AfterTest
@@ -100,8 +104,12 @@ public class TestServerRestart extends LensAllApplicationJerseyTest {
     super.tearDown();
   }
 
+  private final static String DB1 = "HIVE_SERVER_RESTART_WITH_DB_RESOURCES";
+
   @BeforeClass
   public void restartBeforeClass() throws Exception {
+    LensServerTestUtil.createTestDatabaseResources(new String[]{DB1}, getServerConf());
+
     // restart server with test configuration for tests
     restartLensServer(getServerConf());
   }
@@ -304,24 +312,7 @@ public class TestServerRestart extends LensAllApplicationJerseyTest {
       restoreCounts[i] = sessionResources.get(i).getRestoreCount();
     }
     log.info("@@ Current counts {}", Arrays.toString(restoreCounts));
-    // Restart hive server
-    TestRemoteHiveDriver.stopHS2Service();
-
-    // Wait for server to stop
-    while (TestRemoteHiveDriver.getServerState() != Service.STATE.STOPPED) {
-      log.info("Waiting for HS2 to stop. Current state {}", TestRemoteHiveDriver.getServerState());
-      Thread.sleep(1000);
-    }
-
-    TestRemoteHiveDriver.createHS2Service();
-    // Wait for server to come up
-    while (Service.STATE.STARTED != TestRemoteHiveDriver.getServerState()) {
-      log.info("Waiting for HS2 to start {}", TestRemoteHiveDriver.getServerState());
-      Thread.sleep(1000);
-    }
-    Thread.sleep(10000);
-    log.info("Server restarted");
-
+    restartHiveServer();
     // Check params to be set
     verifyParamOnRestart(lensSessionId);
 
@@ -371,6 +362,79 @@ public class TestServerRestart extends LensAllApplicationJerseyTest {
     queryService.closeSession(lensSessionId);
   }
 
+  private void restartHiveServer() throws Exception {
+    // Restart hive server
+    TestRemoteHiveDriver.stopHS2Service();
+
+    // Wait for server to stop
+    while (TestRemoteHiveDriver.getServerState() != Service.STATE.STOPPED) {
+      log.info("Waiting for HS2 to stop. Current state {}", TestRemoteHiveDriver.getServerState());
+      Thread.sleep(1000);
+    }
+
+    TestRemoteHiveDriver.createHS2Service();
+    // Wait for server to come up
+    while (Service.STATE.STARTED != TestRemoteHiveDriver.getServerState()) {
+      log.info("Waiting for HS2 to start {}", TestRemoteHiveDriver.getServerState());
+      Thread.sleep(1000);
+    }
+    Thread.sleep(10000);
+    log.info("Server restarted");
+  }
+
+  @Test
+  public void testHiveServerRestartWithDBResources() throws Exception {
+    QueryExecutionServiceImpl queryService = LensServices.get().getService(QueryExecutionService.NAME);
+    Assert.assertTrue(queryService.getHealthStatus().isHealthy());
+
+    LensSessionHandle lensSessionId = queryService.openSession("foo", "bar", new HashMap<String, String>());
+    TestMetastoreService.setCurrentDatabase(target(), lensSessionId, DB1, defaultMT);
+    String testTable = "test_hive_server_restart_db1";
+
+    // Create data file
+    createRestartTestDataFile();
+
+    // Create a test table
+    createTable(testTable, target(), lensSessionId, defaultMT);
+    loadData("testTable", TestResourceFile.TEST_DATA_FILE.getValue(), target(), lensSessionId, defaultMT);
+    log.info("Loaded data");
+
+    log.info("Hive Server restart test");
+    // test post execute op
+    final String query = "select COUNT(ID) from test_hive_server_restart";
+
+    QueryHandle handle = executeAndGetHandle(target(), Optional.of(lensSessionId),
+      Optional.of(query), Optional.<LensConf>absent(), defaultMT);
+
+    // wait for query to move out of QUEUED state
+    LensQuery ctx = getLensQuery(target(), lensSessionId, handle, defaultMT);
+    while (ctx.getStatus().queued()) {
+      ctx = getLensQuery(target(), lensSessionId, handle, defaultMT);
+      Thread.sleep(1000);
+    }
+
+    restartHiveServer();
+
+    // Poll for first query, we should not get any exception
+    ctx = waitForQueryToFinish(target(), lensSessionId, handle, defaultMT);
+
+    Assert.assertTrue(ctx.getStatus().finished());
+    log.info("Previous query status: {}", ctx.getStatus().getStatusMessage());
+
+    // query after restart would fail.
+    QueryHandle handle1 = executeAndGetHandle(target(), Optional.of(lensSessionId),
+      Optional.of(query), Optional.<LensConf>absent(), defaultMT);
+    waitForQueryToFinish(target(), lensSessionId, handle1, defaultMT);
+
+    // next query should pass
+    QueryHandle handle2 = executeAndGetHandle(target(), Optional.of(lensSessionId),
+      Optional.of(query), Optional.<LensConf>absent(), defaultMT);
+    waitForQueryToFinish(target(), lensSessionId, handle1, QueryStatus.Status.SUCCESSFUL, defaultMT);
+
+    log.info("End hive server restart with db resources test");
+    LensServerTestUtil.dropTable(testTable, target(), lensSessionId, defaultMT);
+    queryService.closeSession(lensSessionId);
+  }
   /**
    * Test session restart.
    *
