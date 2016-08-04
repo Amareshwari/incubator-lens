@@ -785,8 +785,6 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
       QueryStatus newStatus = new QueryStatus(query.getStatus().getProgress(), null,
         QueryStatus.Status.LAUNCHED, "Query is launched on driver", false, null, null, null);
       query.validateTransition(newStatus);
-      // Check if we need to pass session's effective resources to selected driver
-      addSessionResourcesToDriver(query);
       query.getSelectedDriver().executeAsync(query);
       query.setStatusSkippingTransitionTest(newStatus);
       query.setLaunchTime(System.currentTimeMillis());
@@ -1868,7 +1866,6 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
       acquire(sessionHandle);
       prepared = prepareQuery(sessionHandle, query, lensConf, SubmitOp.EXPLAIN_AND_PREPARE);
       prepared.setQueryName(queryName);
-      addSessionResourcesToDriver(prepared);
       QueryPlan plan = prepared.getSelectedDriver().explainAndPrepare(prepared).toQueryPlan();
       plan.setPrepareHandle(prepared.getPrepareHandle());
       return plan;
@@ -2782,7 +2779,6 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
       explainQueryContext.setLensSessionIdentifier(sessionHandle.getPublicId().toString());
       accept(query, qconf, SubmitOp.EXPLAIN);
       rewriteAndSelect(explainQueryContext);
-      addSessionResourcesToDriver(explainQueryContext);
       return explainQueryContext.getSelectedDriver().explain(explainQueryContext).toQueryPlan();
     } catch (UnsupportedEncodingException e) {
       throw new LensException(e);
@@ -3142,24 +3138,8 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     try {
       LensSessionImpl session = getSession(sessionHandle);
       acquire(sessionHandle);
-      // Add resources for this session
-      List<ResourceEntry> resources = session.getLensSessionPersistInfo().getResources();
-      if (resources != null && !resources.isEmpty()) {
-        for (ResourceEntry resource : resources) {
-          log.info("{} Restoring resource {} for session {}", hiveDriver, resource, lensSession);
-          String command = "add " + resource.getType().toLowerCase() + " " + resource.getUri();
-          try {
-            // Execute add resource query in blocking mode
-            hiveDriver.execute(createResourceQuery(command, sessionHandle, hiveDriver));
-            resource.restoredResource();
-            log.info("{} Restored resource {} for session {}", hiveDriver, resource, lensSession);
-          } catch (Exception exc) {
-            log.error("{} Unable to add resource {} for session {}", hiveDriver, resource, lensSession, exc);
-          }
-        }
-      } else {
-        log.info("{} No resources to restore for session {}", hiveDriver, lensSession);
-      }
+      // add DB resources for this session
+      addSessionResourcesToDriver(event.getDriver(), lensSession);
     } catch (Exception e) {
       log.warn(
         "Lens session went away! {} driver session: {}", lensSession,
@@ -3172,11 +3152,8 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
   /**
    * Add session's resources to selected driver if needed
    *
-   * @param ctx QueryContext for executinf queries
    */
-  protected void addSessionResourcesToDriver(final AbstractQueryContext ctx) {
-    LensDriver driver = ctx.getSelectedDriver();
-    String sessionIdentifier = ctx.getLensSessionIdentifier();
+  protected void addSessionResourcesToDriver(LensDriver driver, String sessionIdentifier) {
 
     if (!(driver instanceof HiveDriver) || StringUtils.isBlank(sessionIdentifier)) {
       // Adding resources only required for Hive driver
@@ -3188,41 +3165,36 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     // Check if jars need to be passed to selected driver
     final LensSessionHandle sessionHandle = getSessionHandle(sessionIdentifier);
     final LensSessionImpl session = getSession(sessionHandle);
+    String currentDB = session.getCurrentDatabase();
 
-    // Add resources if either they haven't been marked as added on the session, or if Hive driver says they need
-    // to be added to the corresponding hive driver
-    if (!hiveDriver.areDBResourcesAddedForSession(sessionIdentifier, ctx.getDatabase())) {
-      Collection<ResourceEntry> dbResources = session.getDBResources(ctx.getDatabase());
+    Collection<ResourceEntry> dbResources = session.getDBResources(currentDB);
 
-      if (CollectionUtils.isNotEmpty(dbResources)) {
-        log.info("Proceeding to add resources for DB {} for query {} resources: {}", session.getCurrentDatabase(),
-          ctx.getLogHandle(), dbResources);
+    if (CollectionUtils.isNotEmpty(dbResources)) {
+      log.info("Proceeding to add resources for DB {} for session {} resources: {} on driver {}", currentDB,
+        sessionIdentifier, dbResources, driver);
 
-        List<ResourceEntry> failedDBResources = addResources(dbResources, sessionHandle, hiveDriver);
-        Iterator<ResourceEntry> itr = dbResources.iterator();
-        while (itr.hasNext()) {
-          ResourceEntry res = itr.next();
-          if (!failedDBResources.contains(res)) {
-            itr.remove();
-          }
+      List<ResourceEntry> failedDBResources = addResources(dbResources, sessionHandle, hiveDriver);
+      log.error("Failed to add DB resources {} on driver {} ", failedDBResources, driver);
+      // the following is a book keeping code only for tests.
+      for (ResourceEntry res : dbResources) {
+        if (!failedDBResources.contains(res)) {
+          res.addToSession(sessionIdentifier);
         }
-      } else {
-        log.info("No need to add DB resources for session: {} db= {}", sessionIdentifier, session.getCurrentDatabase());
       }
-      hiveDriver.setResourcesAddedForSession(sessionIdentifier, ctx.getDatabase());
+    } else {
+      log.info("No need to add DB resources for session: {} db= {}", sessionIdentifier, currentDB);
     }
 
     // Get pending session resources which needed to be added for this database
-    Collection<ResourceEntry> pendingResources =
-      session.getPendingSessionResourcesForDatabase(ctx.getDatabase());
-    log.info("Adding pending {} session resources for session {} for database {}", pendingResources.size(),
-      sessionIdentifier, ctx.getDatabase());
-    List<ResourceEntry> failedResources = addResources(pendingResources, sessionHandle, hiveDriver);
-    // Mark added resources so that we don't add them again. If any of the resources failed
-    // to be added, then they will be added again
-    for (ResourceEntry res : pendingResources) {
+    log.info("Adding {} session resources for session {} for database {} on driver {}",
+      session.getSessionResources().size(), sessionIdentifier, currentDB, driver);
+    List<ResourceEntry> failedResources = addResources(session.getSessionResources(), sessionHandle, hiveDriver);
+    log.error("Failed to add session resources {} on driver {}", failedResources, driver);
+
+     // the following is a book keeping code only for tests.
+    for (ResourceEntry res : session.getSessionResources()) {
       if (!failedResources.contains(res)) {
-        res.addToDatabase(ctx.getDatabase());
+        res.addToDatabase(currentDB);
       }
     }
   }

@@ -143,8 +143,6 @@ public class HiveDriver extends AbstractLensDriver {
   // Store mapping of Lens session ID to Hive session identifier
   /** The lens to hive session. */
   private Map<String, SessionHandle> lensToHiveSession;
-  /** Keep track of resources added to the Hive session */
-  private Map<SessionHandle, Boolean> resourcesAddedForSession;
 
   /** The driver listeners. */
   private List<LensEventListener<DriverEvent>> driverListeners;
@@ -166,30 +164,6 @@ public class HiveDriver extends AbstractLensDriver {
 
   private String sessionDbKey(String sessionHandle, String database) {
     return sessionHandle + SESSION_KEY_DELIMITER + database;
-  }
-
-  /**
-   * Return true if resources have been added to this Hive session
-   * @param sessionHandle lens session identifier
-   * @param database lens database
-   * @return true if resources have been already added to this session + db pair
-   */
-  public boolean areDBResourcesAddedForSession(String sessionHandle, String database) {
-    String key = sessionDbKey(sessionHandle, database);
-    SessionHandle hiveSession = lensToHiveSession.get(key);
-    return hiveSession != null
-      && resourcesAddedForSession.containsKey(hiveSession)
-      && resourcesAddedForSession.get(hiveSession);
-  }
-
-  /**
-   * Tell Hive driver that resources have been added for this session and for the given database
-   * @param sessionHandle lens session identifier
-   * @param database lens database
-   */
-  public void setResourcesAddedForSession(String sessionHandle, String database) {
-    SessionHandle hiveSession = lensToHiveSession.get(sessionDbKey(sessionHandle, database));
-    resourcesAddedForSession.put(hiveSession, Boolean.TRUE);
   }
 
   /**
@@ -332,7 +306,6 @@ public class HiveDriver extends AbstractLensDriver {
     lensToHiveSession = new HashMap<>();
     opHandleToSession = new ConcurrentHashMap<>();
     orphanedHiveSessions = new ConcurrentLinkedQueue<>();
-    resourcesAddedForSession = new HashMap<>();
     connectionExpiryThread.setDaemon(true);
     connectionExpiryThread.setName("HiveDriver-ConnectionExpiryThread");
     connectionExpiryThread.start();
@@ -1347,7 +1320,6 @@ public class HiveDriver extends AbstractLensDriver {
               log.error("Error closing hive session {} for lens session {}", hiveSession.getHandleIdentifier(),
                 sessionDbKey, e);
             }
-            resourcesAddedForSession.remove(hiveSession);
           }
         }
       }

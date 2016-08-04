@@ -92,12 +92,6 @@ public class LensSessionImpl extends HiveSessionImpl implements AutoCloseable {
   private final List<QueryHandle> activeQueries = new ArrayList<>();
 
   /**
-   * Keep track of DB static resources which failed to be added to this session
-   */
-  private final Map<String, List<ResourceEntry>> failedDBResources = new HashMap<>();
-
-
-  /**
    * Cache of database specific class loaders for this session
    * This is updated lazily on add/remove resource calls and switch database calls.
    */
@@ -475,28 +469,18 @@ public class LensSessionImpl extends HiveSessionImpl implements AutoCloseable {
    * @return db resources
    */
   public Collection<ResourceEntry> getDBResources(String database) {
-    synchronized (failedDBResources) {
-      List<ResourceEntry> failed = failedDBResources.get(database);
-      if (failed == null && getDbResService().getResourcesForDatabase(database) != null) {
-        failed = new ArrayList<>(getDbResService().getResourcesForDatabase(database));
-        failedDBResources.put(database, failed);
-      }
-      return failed;
+    if (getDbResService().getResourcesForDatabase(database) != null) {
+      return new ArrayList<>(getDbResService().getResourcesForDatabase(database));
     }
+    return new ArrayList<>();
   }
 
 
   /**
    * Get session's resources which have to be added for the given database
    */
-  public Collection<ResourceEntry> getPendingSessionResourcesForDatabase(String database) {
-    List<ResourceEntry> pendingResources = new ArrayList<>();
-    for (ResourceEntry res : persistInfo.getResources()) {
-      if (!res.isAddedToDatabase(database)) {
-        pendingResources.add(res);
-      }
-    }
-    return pendingResources;
+  public Collection<ResourceEntry> getSessionResources() {
+    return persistInfo.getResources();
   }
 
   /**
@@ -526,13 +510,14 @@ public class LensSessionImpl extends HiveSessionImpl implements AutoCloseable {
     /** The final location. */
     @Getter
     String location;
-    // For tests
-    /** The restore count. */
-    transient AtomicInteger restoreCount = new AtomicInteger();
 
-    /** Set of databases for which this resource has been added */
-    final transient Set<String> databases = new HashSet<>();
+    /** Set of databases for which this resource has been added. Used only in tests */
+    @Getter
+    final transient Map<String, Integer> databases = new HashMap<>();
 
+    /** All sessions for which the resource has been added and how many types it was added. Used only in test */
+    @Getter
+    final transient Map<String, Integer> sessions = new HashMap<>();
     /**
      * Instantiates a new resource entry.
      *
@@ -553,25 +538,27 @@ public class LensSessionImpl extends HiveSessionImpl implements AutoCloseable {
     }
 
     public boolean isAddedToDatabase(String database) {
-      return databases.contains(database);
+      return databases.containsKey(database);
     }
 
     public void addToDatabase(String database) {
-      databases.add(database);
+      Integer dbCount = databases.get(database);
+      if (dbCount == null) {
+        dbCount = new Integer(1);
+      } else {
+        dbCount++;
+      }
+      databases.put(database, dbCount);
     }
 
-    /**
-     * Restored resource.
-     */
-    public void restoredResource() {
-      restoreCount.incrementAndGet();
-    }
-
-    /**
-     * @return the value of restoreCount for the resource
-     */
-    public int getRestoreCount() {
-      return restoreCount.get();
+    public synchronized void addToSession(String session) {
+      Integer sessionCount = sessions.get(session);
+      if (sessionCount == null) {
+        sessionCount = new Integer(1);
+      } else {
+        sessionCount++;
+      }
+      sessions.put(session, sessionCount);
     }
 
     /*
@@ -593,7 +580,7 @@ public class LensSessionImpl extends HiveSessionImpl implements AutoCloseable {
     public boolean equals(Object obj) {
       if (obj instanceof ResourceEntry) {
         ResourceEntry other = (ResourceEntry) obj;
-        return type.equals(other.type) && location.equals(other.location);
+        return type.equals(other.type) && uri.equals(other.uri);
       }
       return false;
     }

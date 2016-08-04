@@ -1646,8 +1646,9 @@ public class TestQueryService extends LensJerseyTest {
    * Check if DB static jars get passed to Hive driver
    * @throws Exception
    */
-  @Test(dataProvider = "mediaTypeData")
-  public void testHiveDriverGetsDBJars(MediaType mt) throws Exception {
+  @Test
+  public void testHiveDriverGetsDBJars() throws Exception {
+    MediaType mt = defaultMT;
     // Set DB to a db with static jars
     HiveSessionService sessionService = LensServices.get().getService(SessionService.NAME);
 
@@ -1663,27 +1664,31 @@ public class TestQueryService extends LensJerseyTest {
     LensSessionImpl session = sessionService.getSession(sessionHandle);
 
     // Jars should be pending until query is run
-    assertEquals(session.getPendingSessionResourcesForDatabase(DB_WITH_JARS).size(), 1);
-    assertEquals(session.getPendingSessionResourcesForDatabase(DB_WITH_JARS_2).size(), 1);
+    assertFalse(session.getLensSessionPersistInfo().getResources().isEmpty());
+    for (LensSessionImpl.ResourceEntry resource : session.getLensSessionPersistInfo().getResources()) {
+      assertFalse(resource.isAddedToDatabase(DB_WITH_JARS_2));
+      assertFalse(resource.isAddedToDatabase(DB_WITH_JARS));
+    }
+
+    for (LensSessionImpl.ResourceEntry resource : session.getDBResources(DB_WITH_JARS_2)) {
+      assertNull(resource.getSessions().get(sessionHandle.getPublicId().toString()));
+    }
+    for (LensSessionImpl.ResourceEntry resource : session.getDBResources(DB_WITH_JARS)) {
+      assertNull(resource.getSessions().get(sessionHandle.getPublicId().toString()));
+    }
 
     final String tableInDBWithJars = "testHiveDriverGetsDBJars";
     try {
       // First execute query on the session with db should load jars from DB
-      LensServerTestUtil.createTable(tableInDBWithJars, target(), sessionHandle, "(ID INT, IDSTR STRING) "
-        + "ROW FORMAT SERDE \"DatabaseJarSerde\"", mt);
+      LensServerTestUtil.createTable(tableInDBWithJars, target(), sessionHandle, "(ID INT, IDSTR STRING)", true, mt);
 
-      boolean addedToHiveDriver = false;
-
-      for (LensDriver driver : queryService.getDrivers()) {
-        if (driver instanceof HiveDriver) {
-          addedToHiveDriver =
-            ((HiveDriver) driver).areDBResourcesAddedForSession(sessionHandle.getPublicId().toString(), DB_WITH_JARS);
-          if (addedToHiveDriver) {
-            break; //There are two Hive drivers now both pointing to same hive server. So break after first success
-          }
-        }
+      for (LensSessionImpl.ResourceEntry resource : session.getDBResources(DB_WITH_JARS)) {
+        assertEquals((int) resource.getSessions().get(sessionHandle.getPublicId().toString()), 2);
       }
-      assertTrue(addedToHiveDriver);
+
+      for (LensSessionImpl.ResourceEntry resource : session.getDBResources(DB_WITH_JARS_2)) {
+        assertNull(resource.getSessions().get(sessionHandle.getPublicId().toString()));
+      }
 
       // Switch database
       log.info("@@@# database switch test");
@@ -1692,8 +1697,15 @@ public class TestQueryService extends LensJerseyTest {
         + "ROW FORMAT SERDE \"DatabaseJarSerde\"", mt);
 
       // All db jars should have been added
-      assertTrue(session.getDBResources(DB_WITH_JARS_2).isEmpty());
-      assertTrue(session.getDBResources(DB_WITH_JARS).isEmpty());
+      assertFalse(session.getDBResources(DB_WITH_JARS_2).isEmpty());
+      assertFalse(session.getDBResources(DB_WITH_JARS).isEmpty());
+
+      for (LensSessionImpl.ResourceEntry resource : session.getDBResources(DB_WITH_JARS_2)) {
+        assertEquals((int)resource.getSessions().get(sessionHandle.getPublicId().toString()), 2);
+      }
+      for (LensSessionImpl.ResourceEntry resource : session.getDBResources(DB_WITH_JARS)) {
+        assertEquals((int) resource.getSessions().get(sessionHandle.getPublicId().toString()), 2);
+      }
 
       // All session resources must have been added to both DBs
       assertFalse(session.getLensSessionPersistInfo().getResources().isEmpty());
@@ -1701,9 +1713,6 @@ public class TestQueryService extends LensJerseyTest {
         assertTrue(resource.isAddedToDatabase(DB_WITH_JARS_2));
         assertTrue(resource.isAddedToDatabase(DB_WITH_JARS));
       }
-
-      assertTrue(session.getPendingSessionResourcesForDatabase(DB_WITH_JARS).isEmpty());
-      assertTrue(session.getPendingSessionResourcesForDatabase(DB_WITH_JARS_2).isEmpty());
 
     } finally {
       log.info("@@@ TEST_OVER");

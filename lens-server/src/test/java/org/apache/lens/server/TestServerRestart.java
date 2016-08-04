@@ -307,11 +307,11 @@ public class TestServerRestart extends LensAllApplicationJerseyTest {
 
     List<LensSessionImpl.ResourceEntry> sessionResources = queryService.getSession(lensSessionId)
       .getLensSessionPersistInfo().getResources();
-    int[] restoreCounts = new int[sessionResources.size()];
-    for (int i = 0; i < sessionResources.size(); i++) {
-      restoreCounts[i] = sessionResources.get(i).getRestoreCount();
+    Map<LensSessionImpl.ResourceEntry, Map<String, Integer>> databaseCounts = new HashMap<>();
+    for (LensSessionImpl.ResourceEntry res : sessionResources) {
+      databaseCounts.put(res, new HashMap<>(res.getDatabases()));
     }
-    log.info("@@ Current counts {}", Arrays.toString(restoreCounts));
+    log.info("@@ Current counts {}", databaseCounts);
     restartHiveServer();
     // Check params to be set
     verifyParamOnRestart(lensSessionId);
@@ -344,15 +344,18 @@ public class TestServerRestart extends LensAllApplicationJerseyTest {
     log.info("Final status for {}: {}", handle, ctx.getStatus().getStatus());
 
     // Now we can expect that session resources have been added back exactly once
-    for (int i = 0; i < sessionResources.size(); i++) {
-      LensSessionImpl.ResourceEntry resourceEntry = sessionResources.get(i);
+    for (LensSessionImpl.ResourceEntry resourceEntry : sessionResources) {
       //The restore count can vary based on How many Hive Drivers were able to execute the estimate on the query
       //successfully after Hive Server Restart.
-      Assert.assertTrue((resourceEntry.getRestoreCount() > restoreCounts[i]
-          && resourceEntry.getRestoreCount() <=  restoreCounts[i] + NO_OF_HIVE_DRIVERS),
-          "Restore test failed for " + resourceEntry + " pre count=" + restoreCounts[i] + " post count=" + resourceEntry
-              .getRestoreCount());
-      log.info("@@ Latest count {}={}", resourceEntry, resourceEntry.getRestoreCount());
+      for (Map.Entry<String, Integer> newCount : resourceEntry.getDatabases().entrySet()) {
+        Assert.assertTrue(newCount.getValue() > databaseCounts.get(resourceEntry).get(newCount.getKey()),
+          "Restore test failed for " + resourceEntry + " pre count=" + databaseCounts.get(resourceEntry)
+            + " post count=" + newCount);
+        Assert.assertTrue(newCount.getValue() <= databaseCounts.get(resourceEntry).get(newCount.getKey())
+          + NO_OF_HIVE_DRIVERS, "Restore test failed for " + resourceEntry + " pre count="
+          + databaseCounts.get(resourceEntry) + " post count=" + newCount);
+        log.info("@@ Latest count {}={}", resourceEntry, newCount);
+      }
     }
     // Assert.assertEquals(stat.getStatus(), QueryStatus.Status.SUCCESSFUL,
     // "Expected to be successful " + handle);
@@ -379,7 +382,7 @@ public class TestServerRestart extends LensAllApplicationJerseyTest {
       Thread.sleep(1000);
     }
     Thread.sleep(10000);
-    log.info("Server restarted");
+    log.info("Hive Server restarted");
   }
 
   @Test
@@ -389,19 +392,19 @@ public class TestServerRestart extends LensAllApplicationJerseyTest {
 
     LensSessionHandle lensSessionId = queryService.openSession("foo", "bar", new HashMap<String, String>());
     TestMetastoreService.setCurrentDatabase(target(), lensSessionId, DB1, defaultMT);
-    String testTable = "test_hive_server_restart_db1";
+    String testTable = DB1 + ".test_hive_server_restart_db1";
 
     // Create data file
     createRestartTestDataFile();
 
     // Create a test table
-    createTable(testTable, target(), lensSessionId, defaultMT);
-    loadData("testTable", TestResourceFile.TEST_DATA_FILE.getValue(), target(), lensSessionId, defaultMT);
+    createTable(testTable, target(), lensSessionId, "(ID INT, IDSTR STRING)", true, defaultMT);
+    loadData(testTable, TestResourceFile.TEST_DATA_FILE.getValue(), target(), lensSessionId, defaultMT);
     log.info("Loaded data");
 
     log.info("Hive Server restart test");
     // test post execute op
-    final String query = "select COUNT(ID) from test_hive_server_restart";
+    final String query = "select COUNT(ID) from " + testTable;
 
     QueryHandle handle = executeAndGetHandle(target(), Optional.of(lensSessionId),
       Optional.of(query), Optional.<LensConf>absent(), defaultMT);
@@ -419,17 +422,17 @@ public class TestServerRestart extends LensAllApplicationJerseyTest {
     ctx = waitForQueryToFinish(target(), lensSessionId, handle, defaultMT);
 
     Assert.assertTrue(ctx.getStatus().finished());
-    log.info("Previous query status: {}", ctx.getStatus().getStatusMessage());
 
-    // query after restart would fail.
-    QueryHandle handle1 = executeAndGetHandle(target(), Optional.of(lensSessionId),
-      Optional.of(query), Optional.<LensConf>absent(), defaultMT);
-    waitForQueryToFinish(target(), lensSessionId, handle1, defaultMT);
+    // couple of queries after restart would fail.
+    int numQueriesCanFail = 5;
+    for (int i = 0; i < numQueriesCanFail; i++) {
+      execute(target(), Optional.of(lensSessionId), Optional.of(query), Optional.<LensConf>absent(), defaultMT);
+    }
 
     // next query should pass
     QueryHandle handle2 = executeAndGetHandle(target(), Optional.of(lensSessionId),
       Optional.of(query), Optional.<LensConf>absent(), defaultMT);
-    waitForQueryToFinish(target(), lensSessionId, handle1, QueryStatus.Status.SUCCESSFUL, defaultMT);
+    waitForQueryToFinish(target(), lensSessionId, handle2, QueryStatus.Status.SUCCESSFUL, defaultMT);
 
     log.info("End hive server restart with db resources test");
     LensServerTestUtil.dropTable(testTable, target(), lensSessionId, defaultMT);

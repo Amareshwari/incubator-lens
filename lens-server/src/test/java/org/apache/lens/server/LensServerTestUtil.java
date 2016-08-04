@@ -122,7 +122,7 @@ public final class LensServerTestUtil {
 
   public static void createTable(String tblName, WebTarget parent, LensSessionHandle lensSessionId, String schemaStr,
     MediaType mt) throws InterruptedException {
-    createTable(tblName, parent, lensSessionId, "(ID INT, IDSTR STRING)", false, mt);
+    createTable(tblName, parent, lensSessionId, schemaStr, false, mt);
   }
 
   public static void createTable(String tblName, WebTarget parent, LensSessionHandle lensSessionId, MediaType mt)
