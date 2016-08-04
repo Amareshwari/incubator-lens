@@ -3174,7 +3174,9 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
         sessionIdentifier, dbResources, driver);
 
       List<ResourceEntry> failedDBResources = addResources(dbResources, sessionHandle, hiveDriver);
-      log.error("Failed to add DB resources {} on driver {} ", failedDBResources, driver);
+      if (failedDBResources != null && !failedDBResources.isEmpty()) {
+        log.error("Failed to add DB resources {} on driver {} ", failedDBResources, driver);
+      }
       // the following is a book keeping code only for tests.
       for (ResourceEntry res : dbResources) {
         if (!failedDBResources.contains(res)) {
@@ -3189,7 +3191,9 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     log.info("Adding {} session resources for session {} for database {} on driver {}",
       session.getSessionResources().size(), sessionIdentifier, currentDB, driver);
     List<ResourceEntry> failedResources = addResources(session.getSessionResources(), sessionHandle, hiveDriver);
-    log.error("Failed to add session resources {} on driver {}", failedResources, driver);
+    if (failedResources != null && !failedResources.isEmpty()) {
+      log.error("Failed to add session resources {} on driver {}", failedResources, driver);
+    }
 
      // the following is a book keeping code only for tests.
     for (ResourceEntry res : session.getSessionResources()) {

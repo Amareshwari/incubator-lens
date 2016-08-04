@@ -1671,10 +1671,10 @@ public class TestQueryService extends LensJerseyTest {
     }
 
     for (LensSessionImpl.ResourceEntry resource : session.getDBResources(DB_WITH_JARS_2)) {
-      assertNull(resource.getSessions().get(sessionHandle.getPublicId().toString()));
+      assertNull(resource.getSessionCounts().get(sessionHandle.getPublicId().toString()));
     }
     for (LensSessionImpl.ResourceEntry resource : session.getDBResources(DB_WITH_JARS)) {
-      assertNull(resource.getSessions().get(sessionHandle.getPublicId().toString()));
+      assertNull(resource.getSessionCounts().get(sessionHandle.getPublicId().toString()));
     }
 
     final String tableInDBWithJars = "testHiveDriverGetsDBJars";
@@ -1683,11 +1683,11 @@ public class TestQueryService extends LensJerseyTest {
       LensServerTestUtil.createTable(tableInDBWithJars, target(), sessionHandle, "(ID INT, IDSTR STRING)", true, mt);
 
       for (LensSessionImpl.ResourceEntry resource : session.getDBResources(DB_WITH_JARS)) {
-        assertEquals((int) resource.getSessions().get(sessionHandle.getPublicId().toString()), 2);
+        assertEquals((int) resource.getSessionCounts().get(sessionHandle.getPublicId().toString()), 2);
       }
 
       for (LensSessionImpl.ResourceEntry resource : session.getDBResources(DB_WITH_JARS_2)) {
-        assertNull(resource.getSessions().get(sessionHandle.getPublicId().toString()));
+        assertNull(resource.getSessionCounts().get(sessionHandle.getPublicId().toString()));
       }
 
       // Switch database
@@ -1701,10 +1701,10 @@ public class TestQueryService extends LensJerseyTest {
       assertFalse(session.getDBResources(DB_WITH_JARS).isEmpty());
 
       for (LensSessionImpl.ResourceEntry resource : session.getDBResources(DB_WITH_JARS_2)) {
-        assertEquals((int)resource.getSessions().get(sessionHandle.getPublicId().toString()), 2);
+        assertEquals((int)resource.getSessionCounts().get(sessionHandle.getPublicId().toString()), 2);
       }
       for (LensSessionImpl.ResourceEntry resource : session.getDBResources(DB_WITH_JARS)) {
-        assertEquals((int) resource.getSessions().get(sessionHandle.getPublicId().toString()), 2);
+        assertEquals((int) resource.getSessionCounts().get(sessionHandle.getPublicId().toString()), 2);
       }
 
       // All session resources must have been added to both DBs

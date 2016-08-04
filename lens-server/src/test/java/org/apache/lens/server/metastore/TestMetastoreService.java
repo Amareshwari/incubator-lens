@@ -261,8 +261,7 @@ public class TestMetastoreService extends LensJerseyTest {
   }
 
   public static void setCurrentDatabase(WebTarget target, LensSessionHandle lensSessionId, String dbName, MediaType
-    mediaType) throws
-    Exception {
+    mediaType) throws Exception {
     WebTarget dbTarget = target.path("metastore").path("databases/current");
     APIResult result = dbTarget.queryParam("sessionid", lensSessionId).request(mediaType)
       .put(getEntityForString(dbName, mediaType), APIResult.class);
