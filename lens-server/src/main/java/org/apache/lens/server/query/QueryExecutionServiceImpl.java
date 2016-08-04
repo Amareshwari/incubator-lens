@@ -3138,7 +3138,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     try {
       LensSessionImpl session = getSession(sessionHandle);
       acquire(sessionHandle);
-      // add DB resources for this session
+      // add DB and session resources for this hive session
       addSessionResourcesToDriver(event.getDriver(), lensSession);
     } catch (Exception e) {
       log.warn(
