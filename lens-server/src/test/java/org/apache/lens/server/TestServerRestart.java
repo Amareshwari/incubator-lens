@@ -34,7 +34,6 @@ import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.lens.api.*;
 import org.apache.lens.api.APIResult.Status;
 import org.apache.lens.api.query.*;
@@ -104,7 +103,7 @@ public class TestServerRestart extends LensAllApplicationJerseyTest {
     super.tearDown();
   }
 
-  private final static String DB1 = "HIVE_SERVER_RESTART_WITH_DB_RESOURCES";
+  private static final String DB1 = "HIVE_SERVER_RESTART_WITH_DB_RESOURCES";
 
   @BeforeClass
   public void restartBeforeClass() throws Exception {
