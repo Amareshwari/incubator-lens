@@ -90,6 +90,12 @@
   </property>
 
   <property>
+    <name>lens.server.alarm-service.service.impl</name>
+    <value>org.apache.lens.server.scheduler.AlarmService</value>
+    <description>Implementation class for alarm service</description>
+  </property>
+
+  <property>
     <name>lens.server.scheduler.service.impl</name>
     <value>org.apache.lens.server.scheduler.SchedulerServiceImpl</value>
     <description>Implementation class for query scheduler service</description>
@@ -371,7 +377,7 @@
 
   <property>
     <name>lens.server.ws.resourcenames</name>
-    <value>session,metastore,query,savedquery,quota,scheduler,index,log</value>
+    <value>session,metastore,alarm-service,query,savedquery,quota,scheduler,index,log</value>
     <description>These JAX-RS resources would be started in the specified order when lens-server starts up</description>
   </property>
 
