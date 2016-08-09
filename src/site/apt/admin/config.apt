@@ -42,7 +42,7 @@ Lens server configuration
 *--+--+---+--+
 |9|lens.query.current.time.millis|0|Query current time in millis. This is used to resolve 'now'. If value is set to zero, 'now' is resolved to current value|
 *--+--+---+--+
-|10|lens.server.alarm-service.service.impl|org.apache.lens.server.scheduler.AlarmService|Implementation class for alarm service|
+|10|lens.server.alarm.service.impl|org.apache.lens.server.scheduler.AlarmService|Implementation class for alarm service|
 *--+--+---+--+
 |11|lens.server.appevent.ws.listener.impl|org.apache.lens.server.LensApplicationListener|Implementation class for Lens Application Listener|
 *--+--+---+--+
@@ -199,7 +199,7 @@ Lens server configuration
 *--+--+---+--+
 |85|lens.server.service.provider.factory|org.apache.lens.server.ServiceProviderFactoryImpl|Service provider factory implementation class. This parameter is used to lookup the factory implementation class name that would provide an instance of ServiceProvider. Users should instantiate the class to obtain its instance. Example -- Class spfClass = conf.getClass("lens.server.service.provider.factory", null, ServiceProviderFactory.class); ServiceProviderFactory spf = spfClass.newInstance(); ServiceProvider serviceProvider = spf.getServiceProvider(); -- This is not supposed to be overridden by users.|
 *--+--+---+--+
-|86|lens.server.servicenames|session,query,savedquery,metastore,scheduler,quota|These services would be started in the specified order when lens-server starts up|
+|86|lens.server.servicenames|session,alarm,query,savedquery,metastore,scheduler,quota|These services would be started in the specified order when lens-server starts up|
 *--+--+---+--+
 |87|lens.server.session.expiry.service.interval.secs|3600|Interval at which lens session expiry service runs|
 *--+--+---+--+
@@ -269,6 +269,6 @@ Lens server configuration
 *--+--+---+--+
 |120|lens.server.ws.listenernames|appevent|These listeners would be called in the specified order when lens-server starts up|
 *--+--+---+--+
-|121|lens.server.ws.resourcenames|session,metastore,alarm-service,query,savedquery,quota,scheduler,index,log|These JAX-RS resources would be started in the specified order when lens-server starts up|
+|121|lens.server.ws.resourcenames|session,metastore,query,savedquery,quota,scheduler,index,log|These JAX-RS resources would be started in the specified order when lens-server starts up|
 *--+--+---+--+
 The configuration parameters and their default values
