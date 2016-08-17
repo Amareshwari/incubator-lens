@@ -689,6 +689,57 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
         && hqlQuery.endsWith("mq2 on mq1.booleancut <=> mq2.booleancut"),
       hqlQuery);
   }
+
+  @Test
+  public void testMultiFactQueryCaseWhenExpressionWithChainField() throws Exception {
+    Configuration tconf = new Configuration(conf);
+    //tconf.set(CubeQueryConfUtil.getValidFactTablesKey("basecube"), "testfact5_base,testfact6_base");
+    String hqlQuery =
+      rewrite(
+        "select sum(case when dim22 = 'x' then msr12 else 0 end) as case_expr, sum(msr1) from basecube where " +
+          TWO_DAYS_RANGE,
+        tconf);
+    String expected1 =
+      getExpectedQuery(cubeName, "select sum(case when basecube.dim22 = 'x' then basecube.msr12 else 0 end) as " +
+          "`expr1` FROM ",
+        null, null, getWhereForHourly2days(cubeName, "C1_testfact2_raw_base"));
+    String expected2 =
+      getExpectedQuery(cubeName, "select sum(basecube.msr1) as `expr2` FROM ", null, null,
+        getWhereForHourly2days(cubeName, "c1_testfact1_raw_base"));
+    compareContains(expected1, hqlQuery);
+    compareContains(expected2, hqlQuery);
+    assertTrue(hqlQuery.toLowerCase().startsWith("select mq2.case_expr case_expr, mq1.expr2 `sum(msr1)` from ")
+      || hqlQuery.toLowerCase().startsWith("select mq1.case_expr case_expr, mq2.expr2 `sum(msr1)` from "), hqlQuery);
+    assertTrue(hqlQuery.contains("mq1 full outer join ")
+        && hqlQuery.endsWith("mq2"),
+      hqlQuery);
+  }
+
+  @Test
+  public void testMultiFactQueryCaseWhenExpression() throws Exception {
+    Configuration tconf = new Configuration(conf);
+    //tconf.set(CubeQueryConfUtil.getValidFactTablesKey("basecube"), "testfact5_base,testfact6_base");
+    String hqlQuery =
+      rewrite(
+        "select sum(case when dim13 = 'x' then msr12 else 0 end) as case_expr, sum(msr1) from basecube where " +
+          TWO_DAYS_RANGE,
+        tconf);
+    String expected1 =
+      getExpectedQuery(cubeName, "select sum(case when basecube.dim13 = 'x' then basecube.msr12 else 0 end) as " +
+          "`expr1` FROM ",
+        null, null, getWhereForHourly2days(cubeName, "C1_testfact2_raw_base"));
+    String expected2 =
+      getExpectedQuery(cubeName, "select sum(basecube.msr1) as `expr2` FROM ", null, null,
+        getWhereForHourly2days(cubeName, "c1_testfact1_raw_base"));
+    compareContains(expected1, hqlQuery);
+    compareContains(expected2, hqlQuery);
+    assertTrue(hqlQuery.toLowerCase().startsWith("select mq2.case_expr case_expr, mq1.expr2 `sum(msr1)` from ")
+      || hqlQuery.toLowerCase().startsWith("select mq1.case_expr case_expr, mq2.expr2 `sum(msr1)` from "), hqlQuery);
+    assertTrue(hqlQuery.contains("mq1 full outer join ")
+        && hqlQuery.endsWith("mq2"),
+      hqlQuery);
+  }
+
   @Test
   public void testFallbackPartCol() throws Exception {
     Configuration conf = getConfWithStorages("C1");
