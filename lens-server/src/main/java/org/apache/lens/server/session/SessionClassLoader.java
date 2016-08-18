@@ -26,10 +26,12 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.hadoop.hive.ql.exec.UDF;
+import org.apache.hadoop.hive.ql.exec.UDFClassLoader;
 
 @Slf4j
 @EqualsAndHashCode(callSuper = false)
-public class SessionClassLoader extends URLClassLoader {
+public class SessionClassLoader extends UDFClassLoader {
   @Getter
   @Setter
   private boolean closed;
