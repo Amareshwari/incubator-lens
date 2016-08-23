@@ -330,6 +330,9 @@
                 <jar destfile="${project.build.directory}/testjars/test2.jar">
                   <fileset dir="${project.build.directory}/additional-classes" includes="ClassLoaderTestClass2.class" />
                 </jar>
+                <jar destfile="${project.build.directory}/testjars/test3.jar">
+                  <fileset dir="${project.build.directory}/additional-classes" includes="ClassLoaderTestClass3.class" />
+                </jar>
                 <jar destfile="${project.build.directory}/testjars/serde.jar">
                   <fileset dir="${project.build.directory}/additional-classes" includes="DatabaseJarSerde.class" />
                 </jar>

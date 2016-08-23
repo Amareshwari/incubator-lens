@@ -1714,6 +1714,12 @@ public class TestQueryService extends LensJerseyTest {
         assertTrue(resource.isAddedToDatabase(DB_WITH_JARS));
       }
 
+      // add one more jar
+      sessionService.addResource(sessionHandle, "jar", "file://" + testJarFile.getAbsolutePath());
+      for (LensSessionImpl.ResourceEntry resource : session.getLensSessionPersistInfo().getResources()) {
+        assertTrue(resource.isAddedToDatabase(DB_WITH_JARS_2));
+        assertTrue(resource.isAddedToDatabase(DB_WITH_JARS));
+      }
     } finally {
       log.info("@@@ TEST_OVER");
       try {
@@ -1813,17 +1819,17 @@ public class TestQueryService extends LensJerseyTest {
     MetricRegistry reg = LensMetricsRegistry.getStaticRegistry();
 
     assertTrue(reg.getGauges().keySet().containsAll(Arrays.asList(
-      "lens.MethodMetricGauge." + gaugeKey + "-DRIVER_SELECTION",
-      "lens.MethodMetricGauge." + gaugeKey + "-hive/hive1-CUBE_REWRITE",
-      "lens.MethodMetricGauge." + gaugeKey + "-hive/hive1-DRIVER_ESTIMATE",
-      "lens.MethodMetricGauge." + gaugeKey + "-hive/hive1-RewriteUtil-rewriteQuery",
-      "lens.MethodMetricGauge." + gaugeKey + "-hive/hive2-CUBE_REWRITE",
-      "lens.MethodMetricGauge." + gaugeKey + "-hive/hive2-DRIVER_ESTIMATE",
-      "lens.MethodMetricGauge." + gaugeKey + "-hive/hive2-RewriteUtil-rewriteQuery",
-      "lens.MethodMetricGauge." + gaugeKey + "-jdbc/jdbc1-CUBE_REWRITE",
-      "lens.MethodMetricGauge." + gaugeKey + "-jdbc/jdbc1-DRIVER_ESTIMATE",
-      "lens.MethodMetricGauge." + gaugeKey + "-jdbc/jdbc1-RewriteUtil-rewriteQuery",
-      "lens.MethodMetricGauge." + gaugeKey + "-PARALLEL_ESTIMATE")),
+        "lens.MethodMetricGauge." + gaugeKey + "-DRIVER_SELECTION",
+        "lens.MethodMetricGauge." + gaugeKey + "-hive/hive1-CUBE_REWRITE",
+        "lens.MethodMetricGauge." + gaugeKey + "-hive/hive1-DRIVER_ESTIMATE",
+        "lens.MethodMetricGauge." + gaugeKey + "-hive/hive1-RewriteUtil-rewriteQuery",
+        "lens.MethodMetricGauge." + gaugeKey + "-hive/hive2-CUBE_REWRITE",
+        "lens.MethodMetricGauge." + gaugeKey + "-hive/hive2-DRIVER_ESTIMATE",
+        "lens.MethodMetricGauge." + gaugeKey + "-hive/hive2-RewriteUtil-rewriteQuery",
+        "lens.MethodMetricGauge." + gaugeKey + "-jdbc/jdbc1-CUBE_REWRITE",
+        "lens.MethodMetricGauge." + gaugeKey + "-jdbc/jdbc1-DRIVER_ESTIMATE",
+        "lens.MethodMetricGauge." + gaugeKey + "-jdbc/jdbc1-RewriteUtil-rewriteQuery",
+        "lens.MethodMetricGauge." + gaugeKey + "-PARALLEL_ESTIMATE")),
       reg.getGauges().keySet().toString());
   }
 

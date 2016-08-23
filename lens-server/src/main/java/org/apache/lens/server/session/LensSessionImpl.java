@@ -512,7 +512,7 @@ public class LensSessionImpl extends HiveSessionImpl implements AutoCloseable {
 
     /** Set of databases for which this resource has been added. Used only in tests */
     @Getter
-    private final transient Map<String, Integer> databaseCounts = new HashMap<>();
+    private final transient Map<String, Integer> dbHiveSession = new HashMap<>();
 
     /** All sessions for which the resource has been added and how many types it was added. Used only in test */
     @Getter
@@ -537,17 +537,17 @@ public class LensSessionImpl extends HiveSessionImpl implements AutoCloseable {
     }
 
     public boolean isAddedToDatabase(String database) {
-      return databaseCounts.containsKey(database);
+      return dbHiveSession.containsKey(database);
     }
 
     public void addToDatabase(String database) {
-      Integer dbCount = databaseCounts.get(database);
+      Integer dbCount = dbHiveSession.get(database);
       if (dbCount == null) {
         dbCount = new Integer(1);
       } else {
         dbCount++;
       }
-      databaseCounts.put(database, dbCount);
+      dbHiveSession.put(database, dbCount);
     }
 
     public synchronized void addToSession(String session) {

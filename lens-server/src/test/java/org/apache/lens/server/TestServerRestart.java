@@ -308,7 +308,7 @@ public class TestServerRestart extends LensAllApplicationJerseyTest {
       .getLensSessionPersistInfo().getResources();
     Map<LensSessionImpl.ResourceEntry, Map<String, Integer>> databaseCounts = new HashMap<>();
     for (LensSessionImpl.ResourceEntry res : sessionResources) {
-      databaseCounts.put(res, new HashMap<>(res.getDatabaseCounts()));
+      databaseCounts.put(res, new HashMap<>(res.getDbHiveSession()));
     }
     log.info("@@ Current counts {}", databaseCounts);
     restartHiveServer();
@@ -346,7 +346,7 @@ public class TestServerRestart extends LensAllApplicationJerseyTest {
     for (LensSessionImpl.ResourceEntry resourceEntry : sessionResources) {
       //The restore count can vary based on How many Hive Drivers were able to execute the estimate on the query
       //successfully after Hive Server Restart.
-      for (Map.Entry<String, Integer> newCount : resourceEntry.getDatabaseCounts().entrySet()) {
+      for (Map.Entry<String, Integer> newCount : resourceEntry.getDbHiveSession().entrySet()) {
         Assert.assertTrue(newCount.getValue() > databaseCounts.get(resourceEntry).get(newCount.getKey()),
           "Restore test failed for " + resourceEntry + " pre count=" + databaseCounts.get(resourceEntry)
             + " post count=" + newCount);
