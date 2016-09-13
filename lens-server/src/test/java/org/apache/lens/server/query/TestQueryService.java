@@ -127,6 +127,10 @@ public class TestQueryService extends LensJerseyTest {
   @BeforeTest
   public void setUp() throws Exception {
     super.setUp();
+  }
+
+  @BeforeClass
+  public void create() throws Exception {
     queryService = LensServices.get().getService(QueryExecutionService.NAME);
     metricsSvc = LensServices.get().getService(MetricsService.NAME);
     Map<String, String> sessionconf = new HashMap<>();
@@ -166,6 +170,11 @@ public class TestQueryService extends LensJerseyTest {
    */
   @AfterTest
   public void tearDown() throws Exception {
+    super.tearDown();
+  }
+
+  @AfterClass
+  public void drop() throws Exception {
     dropTable(TEST_TABLE);
     queryService.closeSession(lensSessionId);
     for (LensDriver driver : queryService.getDrivers()) {
@@ -173,7 +182,6 @@ public class TestQueryService extends LensJerseyTest {
         assertFalse(((HiveDriver) driver).hasLensSession(lensSessionId));
       }
     }
-    super.tearDown();
   }
 
   /*
@@ -276,7 +284,7 @@ public class TestQueryService extends LensJerseyTest {
     LensQuery lensQuery = executeAndWaitForQueryToFinish(target(), lensSessionId, "select fail from non_exist",
       Optional.<LensConf>absent(), Optional.of(Status.FAILED), mt);
     assertTrue(lensQuery.getSubmissionTime() > 0);
-    assertEquals(lensQuery.getLaunchTime(), 0);
+    assertTrue(lensQuery.getLaunchTime() > 0);
     assertEquals(lensQuery.getDriverStartTime(), 0);
     assertEquals(lensQuery.getDriverFinishTime(), 0);
     assertTrue(lensQuery.getFinishTime() > 0);

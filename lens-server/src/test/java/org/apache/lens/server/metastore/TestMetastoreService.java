@@ -85,16 +85,23 @@ public class TestMetastoreService extends LensJerseyTest {
   @BeforeTest
   public void setUp() throws Exception {
     super.setUp();
+  }
+
+  @BeforeClass
+  public void create() throws Exception {
     cubeObjectFactory = new ObjectFactory();
     metastoreService = LensServices.get().getService(CubeMetastoreService.NAME);
     lensSessionId = metastoreService.openSession("foo", "bar", new HashMap<String, String>());
-
   }
 
   @AfterTest
   public void tearDown() throws Exception {
-    metastoreService.closeSession(lensSessionId);
     super.tearDown();
+  }
+
+  @AfterClass
+  public void drop() throws Exception {
+    metastoreService.closeSession(lensSessionId);
   }
 
   @Override
@@ -1039,10 +1046,13 @@ public class TestMetastoreService extends LensJerseyTest {
 
     XDimension dimension = cubeObjectFactory.createXDimension();
     dimension.setName(dimName);
+
     dimension.setAttributes(new XDimAttributes());
     dimension.setExpressions(new XExpressions());
     dimension.setJoinChains(new XJoinChains());
-    dimension.setProperties(new XProperties());
+    dimension.setProperties(new XProperties().withProperty(
+      new XProperty().withName(MetastoreUtil.getDimTimedDimensionKey(dimName)).withValue("dt"))
+    );
     XDimAttribute xd1 = cubeObjectFactory.createXDimAttribute();
     xd1.setName("col1");
     xd1.setType("STRING");
