@@ -58,7 +58,7 @@ class CandidateTableResolver implements ContextRewriter {
   @Override
   public void rewriteContext(CubeQueryContext cubeql) throws LensException {
     if (checkForQueriedColumns) {
-      log.debug("Dump queried columns:{}", cubeql.getTblAliasToColumns());
+      log.info("Dump queried columns:{}", cubeql.getTblAliasToColumns());
       populateCandidateTables(cubeql);
       resolveCandidateFactTables(cubeql);
       resolveCandidateDimTables(cubeql);
@@ -255,18 +255,25 @@ class CandidateTableResolver implements ContextRewriter {
         // atleast
         // one measure
         boolean toRemove = false;
-        for (String col : queriedDimAttrs) {
-          if (!cfact.getColumns().contains(col.toLowerCase())) {
-            // check if it available as reference, if not remove the candidate
-            if (!cubeql.getDeNormCtx().addRefUsage(cfact, col, cubeql.getCube().getName())) {
-              log.info("Not considering fact table:{} as column {} is not available", cfact, col);
-              cubeql.addFactPruningMsgs(cfact.fact, CandidateTablePruneCause.columnNotFound(col));
+        for (QueriedPhraseContext qur : cubeql.getQueriedPhrases()) {
+          if (qur.getQueriedMsrs().size() != 0) {
+            // queried phrase has measures
+            // TODO check for queried dimattributes along with measure existence check.
+            break;
+          }
+          for (String col : qur.getQueriedDimAttrs()) {
+            if (!cfact.getColumns().contains(col.toLowerCase())) {
+              // check if it available as reference, if not remove the candidate
+              if (!cubeql.getDeNormCtx().addRefUsage(cfact, col, cubeql.getCube().getName())) {
+                log.info("Not considering fact table:{} as column {} is not available", cfact, col);
+                cubeql.addFactPruningMsgs(cfact.fact, CandidateTablePruneCause.columnNotFound(col));
+                toRemove = true;
+                break;
+              }
+            } else if (!isFactColumnValidForRange(cubeql, cfact, col)) {
               toRemove = true;
               break;
             }
-          } else if (!isFactColumnValidForRange(cubeql, cfact, col)) {
-            toRemove = true;
-            break;
           }
         }
         // go over join chains and prune facts that dont have any of the columns in each chain
@@ -682,8 +689,8 @@ class CandidateTableResolver implements ContextRewriter {
         // can answer the query
         for (Iterator<CandidateDim> i = cubeql.getCandidateDimTables().get(dim).iterator(); i.hasNext();) {
           CandidateDim cdim = i.next();
-          if (cubeql.getColumnsQueried(dim.getName()) != null) {
-            for (String col : cubeql.getColumnsQueried(dim.getName())) {
+          if (cubeql.getColumnsQueriedForTable(dim.getName()) != null) {
+            for (String col : cubeql.getColumnsQueriedForTable(dim.getName())) {
               if (!cdim.getColumns().contains(col.toLowerCase())) {
                 // check if the column is an expression
                 if (cdim.getBaseTable().getExpressionNames().contains(col)) {
@@ -711,7 +718,7 @@ class CandidateTableResolver implements ContextRewriter {
 
         if (cubeql.getCandidateDimTables().get(dim).size() == 0) {
           throw new LensException(LensCubeErrorCode.NO_DIM_HAS_COLUMN.getLensErrorInfo(), dim.getName(), cubeql
-            .getColumnsQueried(dim.getName()).toString());
+            .getColumnsQueriedForTable(dim.getName()).toString());
         }
       }
     }
