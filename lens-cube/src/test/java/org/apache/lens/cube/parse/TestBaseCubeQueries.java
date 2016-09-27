@@ -87,7 +87,7 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
 
     e = getLensExceptionInRewrite("select msr11 + msr2 from basecube" + " where " + TWO_DAYS_RANGE, conf);
     assertEquals(e.getErrorCode(),
-        LensCubeErrorCode.EXPRESSION_NOT_IN_ANY_FACT.getLensErrorInfo().getErrorCode());
+        LensCubeErrorCode.NO_FACT_HAS_COLUMN.getLensErrorInfo().getErrorCode());
     // no fact has the all the dimensions queried
     e = getLensExceptionInRewrite("select dim1, test_time_dim, msr3, msr13 from basecube where "
       + TWO_DAYS_RANGE, conf);
@@ -728,7 +728,6 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
   @Test
   public void testMultiFactQueryCaseWhenExpressionWithChainField() throws Exception {
     Configuration tconf = new Configuration(conf);
-    //tconf.set(CubeQueryConfUtil.getValidFactTablesKey("basecube"), "testfact5_base,testfact6_base");
     String hqlQuery =
       rewrite(
         "select sum(case when dim22 = 'x' then msr12 else 0 end) as case_expr, sum(msr1) from basecube where " +
@@ -743,17 +742,14 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
         getWhereForHourly2days(cubeName, "c1_testfact1_raw_base"));
     compareContains(expected1, hqlQuery);
     compareContains(expected2, hqlQuery);
-    assertTrue(hqlQuery.toLowerCase().startsWith("select mq2.case_expr case_expr, mq1.expr2 `sum(msr1)` from ")
-      || hqlQuery.toLowerCase().startsWith("select mq1.case_expr case_expr, mq2.expr2 `sum(msr1)` from "), hqlQuery);
-    assertTrue(hqlQuery.contains("mq1 full outer join ")
-        && hqlQuery.endsWith("mq2"),
-      hqlQuery);
+    assertTrue(hqlQuery.toLowerCase().startsWith("select mq2.expr1 `case_expr`, mq1.expr2 `sum(msr1)` from ")
+      || hqlQuery.toLowerCase().startsWith("select mq1.expr1 `case_expr`, mq2.expr2 `sum(msr1)` from "), hqlQuery);
+    assertTrue(hqlQuery.contains("mq1 full outer join ") && hqlQuery.endsWith("mq2"), hqlQuery);
   }
 
   @Test
   public void testMultiFactQueryCaseWhenExpression() throws Exception {
     Configuration tconf = new Configuration(conf);
-    //tconf.set(CubeQueryConfUtil.getValidFactTablesKey("basecube"), "testfact5_base,testfact6_base");
     String hqlQuery =
       rewrite(
         "select sum(case when dim13 = 'x' then msr12 else 0 end) as case_expr, sum(msr1) from basecube where " +
@@ -768,11 +764,9 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
         getWhereForHourly2days(cubeName, "c1_testfact1_raw_base"));
     compareContains(expected1, hqlQuery);
     compareContains(expected2, hqlQuery);
-    assertTrue(hqlQuery.toLowerCase().startsWith("select mq2.case_expr case_expr, mq1.expr2 `sum(msr1)` from ")
-      || hqlQuery.toLowerCase().startsWith("select mq1.case_expr case_expr, mq2.expr2 `sum(msr1)` from "), hqlQuery);
-    assertTrue(hqlQuery.contains("mq1 full outer join ")
-        && hqlQuery.endsWith("mq2"),
-      hqlQuery);
+    assertTrue(hqlQuery.toLowerCase().startsWith("select mq2.expr1 `case_expr`, mq1.expr2 `sum(msr1)` from ")
+      || hqlQuery.toLowerCase().startsWith("select mq1.expr1 `case_expr`, mq2.expr2 `sum(msr1)` from "), hqlQuery);
+    assertTrue(hqlQuery.contains("mq1 full outer join ") && hqlQuery.endsWith("mq2"), hqlQuery);
   }
 
   @Test

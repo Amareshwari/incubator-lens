@@ -1,3 +1,21 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 package org.apache.lens.cube.parse;
 
 import java.util.*;
@@ -15,17 +33,16 @@ import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 @Data
-@EqualsAndHashCode(callSuper = false)
+@EqualsAndHashCode(callSuper = true)
 @Slf4j
 class QueriedPhraseContext extends TracksQueriedColumns implements TrackQueriedCubeFields {
   private final ASTNode exprAST;
-  private Map<String, Set<String>> tblAliasToColumns = new HashMap<>();
   private Boolean aggregate;
   private String expr;
-  private Set<String> queriedDimAttrs = new HashSet<>();
-  private Set<String> queriedMsrs = new HashSet<>();
-  private Set<String> queriedExprColumns = new HashSet<>();
-  private Set<String> columns = new HashSet<>();
+  private final Set<String> queriedDimAttrs = new HashSet<>();
+  private final Set<String> queriedMsrs = new HashSet<>();
+  private final Set<String> queriedExprColumns = new HashSet<>();
+  private final Set<String> columns = new HashSet<>();
 
   void setNotAggregate() {
     this.aggregate = false;
@@ -36,16 +53,6 @@ class QueriedPhraseContext extends TracksQueriedColumns implements TrackQueriedC
       aggregate = HQLParser.hasAggregate(exprAST);
     }
     return aggregate;
-  }
-
-  public void addColumnsQueried(String tblAlias, String column) {
-
-    Set<String> cols = tblAliasToColumns.get(tblAlias.toLowerCase());
-    if (cols == null) {
-      cols = new LinkedHashSet<>();
-      tblAliasToColumns.put(tblAlias.toLowerCase(), cols);
-    }
-    cols.add(column);
   }
 
   String getExpr() {
@@ -92,31 +99,29 @@ class QueriedPhraseContext extends TracksQueriedColumns implements TrackQueriedC
   }
 
   boolean isEvaluable(CubeQueryContext cubeQl, CandidateFact cfact) throws LensException {
+    // all measures of the queried phrase should be present
+    for (String msr : queriedMsrs) {
+      if (!checkForColumnExistsAndValidForRange(cfact, msr, cubeQl)) {
+        return false;
+      }
+    }
+    // all expression columns should be evaluable
+    for (String exprCol : queriedExprColumns) {
+      if (!cubeQl.getExprCtx().isEvaluable(exprCol, cfact)) {
+        log.info("expression {} is not evaluable in fact table:{}", expr, cfact);
+        return false;
+      }
+    }
     // all dim-attributes should be present.
     for (String col : queriedDimAttrs) {
       if (!cfact.getColumns().contains(col.toLowerCase())) {
         // check if it available as reference
         if (!cubeQl.getDeNormCtx().addRefUsage(cfact, col, cubeQl.getCube().getName())) {
-          log.info("Not considering fact table:{} as column {} is not available", cfact, col);
+          log.info("column {} is not available in fact table:{} ", col, cfact);
           return false;
         }
       } else if (!isFactColumnValidForRange(cubeQl, cfact, col)) {
-        log.info("Not considering fact table:{} as column {} is not available in range queried", cfact, col);
-        return false;
-      }
-    }
-
-    // all expression columns should be evaluable
-    for (String exprCol : queriedExprColumns) {
-      if (!cubeQl.getExprCtx().isEvaluable(exprCol, cfact)) {
-        log.info("Not considering fact table:{} as expression {} is not evaluatable", cfact, expr);
-        return false;
-      }
-    }
-
-    // all measures should be present
-    for (String msr : queriedMsrs) {
-      if (!checkForColumnExistsAndValidForRange(cfact, msr, cubeQl)) {
+        log.info("column {} is not available in range queried in fact {}", col, cfact);
         return false;
       }
     }

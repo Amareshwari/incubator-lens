@@ -59,8 +59,7 @@ class ExpressionResolver implements ContextRewriter {
     private Set<ExprSpecContext> allExprs = new LinkedHashSet<ExprSpecContext>();
     private Set<CandidateTable> directlyAvailableIn = new HashSet<CandidateTable>();
     @Getter
-    private Map<CandidateTable, Set<ExprSpecContext>> evaluableExpressions =
-      new HashMap<CandidateTable, Set<ExprSpecContext>>();
+    private Map<CandidateTable, Set<ExprSpecContext>> evaluableExpressions = new HashMap<>();
     private boolean hasMeasures = false;
 
     public boolean hasMeasures() {

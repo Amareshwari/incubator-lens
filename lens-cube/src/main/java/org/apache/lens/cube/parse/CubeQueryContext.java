@@ -86,7 +86,6 @@ public class CubeQueryContext extends TracksQueriedColumns implements QueryAST {
   // Joinchains accessed in the query
   @Getter
   protected Map<String, JoinChain> joinchains = new HashMap<String, JoinChain>();
-  private final Set<String> queriedDimAttrs = new HashSet<String>();
 
   @Getter
   private final Set<String> queriedMsrs = new HashSet<String>();
@@ -136,9 +135,7 @@ public class CubeQueryContext extends TracksQueriedColumns implements QueryAST {
 
   @Getter
   private final List<QueriedPhraseContext> queriedPhrases = new ArrayList<>();
-  // All aggregate expressions in the query
-  @Getter
-  private final Set<String> aggregateExprs = new HashSet<>();
+
   // Join conditions used in all join expressions
   @Getter
   private final Map<QBJoinTree, String> joinConds = new HashMap<QBJoinTree, String>();
@@ -214,11 +211,6 @@ public class CubeQueryContext extends TracksQueriedColumns implements QueryAST {
     }
     if (qb.getParseInfo().getSelForClause(clauseName) != null) {
       this.selectAST = qb.getParseInfo().getSelForClause(clauseName);
-    }
-
-    for (ASTNode aggrTree : qb.getParseInfo().getAggregationExprsForClause(clauseName).values()) {
-      String aggr = HQLParser.getString(aggrTree);
-      aggregateExprs.add(aggr);
     }
 
     extractMetaTables();
@@ -1115,16 +1107,13 @@ public class CubeQueryContext extends TracksQueriedColumns implements QueryAST {
     return isCubeMeasure(msrname);
   }
 
-  public boolean isAggregateExpr(String expr) {
-    return aggregateExprs.contains(expr == null ? null : expr.toLowerCase());
-  }
-
   public boolean hasAggregates() {
-    return !aggregateExprs.isEmpty() || getExprCtx().hasAggregates();
-  }
-
-  public void addAggregateExpr(String expr) {
-    aggregateExprs.add(expr);
+    for (QueriedPhraseContext qur : queriedPhrases) {
+      if (qur.isAggregate()) {
+        return true;
+      }
+    }
+    return false;
   }
 
   public void setJoinCond(QBJoinTree qb, String cond) {
@@ -1198,17 +1187,6 @@ public class CubeQueryContext extends TracksQueriedColumns implements QueryAST {
     } else {
       return ((Cube) cube).getTimeDimOfPartitionColumn(partCol);
     }
-  }
-
-  /**
-   * @return the queriedDimAttrs
-   */
-  public Set<String> getQueriedDimAttrs() {
-    return queriedDimAttrs;
-  }
-
-  public void addQueriedDimAttrs(Set<String> dimAttrs) {
-    queriedDimAttrs.addAll(dimAttrs);
   }
 
   public void addQueriedMsrs(Set<String> msrs) {

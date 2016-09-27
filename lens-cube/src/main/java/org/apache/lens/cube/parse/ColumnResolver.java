@@ -150,7 +150,6 @@ class ColumnResolver implements ContextRewriter {
     for (int i = 0; i < cubeql.getWhereAST().getChildCount(); i++) {
       ASTNode queriedExpr = (ASTNode) cubeql.getWhereAST().getChild(i);
       QueriedPhraseContext qur = new QueriedPhraseContext(queriedExpr);
-      getColsForTree(cubeql, queriedExpr, qur, true);
       addColumnsForWhere(cubeql, qur, queriedExpr, cubeql.getWhereAST());
       cubeql.addColumnsQueried(qur.getTblAliasToColumns());
       cubeql.addQueriedPhrase(qur);
@@ -198,7 +197,7 @@ class ColumnResolver implements ContextRewriter {
       cubeql.addColumnsQueried(sel.getTblAliasToColumns());
       sel.setSelectAlias(selectAlias);
       sel.setFinalAlias(!StringUtils.isBlank(selectFinalAlias) ? "`" + selectFinalAlias + "`" :
-        selectFinalAlias);
+        selectAlias);
       sel.setActualAlias(alias != null ? alias.toLowerCase() : null);
       cubeql.addSelectPhrase(sel);
     }

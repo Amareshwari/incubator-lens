@@ -70,7 +70,7 @@ class GroupbyResolver implements ContextRewriter {
       for (SelectPhraseContext sel : selectExprs) {
         String expr = sel.getExprWithoutAlias();
         if (!groupByExprs.contains(expr)) {
-          if (!cubeql.isAggregateExpr(expr)) {
+          if (!sel.isAggregate()) {
             ASTNode exprAST = HQLParser.parseExpr(expr);
             ASTNode groupbyAST = cubeql.getGroupByAST();
             if (!isConstantsUsed(exprAST)) {
