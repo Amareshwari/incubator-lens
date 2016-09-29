@@ -729,14 +729,11 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
   public void testMultiFactQueryCaseWhenExpressionWithChainField() throws Exception {
     Configuration tconf = new Configuration(conf);
     String hqlQuery =
-      rewrite(
-        "select sum(case when dim22 = 'x' then msr12 else 0 end) as case_expr, sum(msr1) from basecube where " +
-          TWO_DAYS_RANGE,
-        tconf);
+      rewrite("select sum(case when dim22 = 'x' then msr12 else 0 end) as case_expr, sum(msr1) from basecube where "
+          + TWO_DAYS_RANGE, tconf);
     String expected1 =
-      getExpectedQuery(cubeName, "select sum(case when basecube.dim22 = 'x' then basecube.msr12 else 0 end) as " +
-          "`expr1` FROM ",
-        null, null, getWhereForHourly2days(cubeName, "C1_testfact2_raw_base"));
+      getExpectedQuery(cubeName, "select sum(case when basecube.dim22 = 'x' then basecube.msr12 else 0 end) as "
+          + "`expr1` FROM ", null, null, getWhereForHourly2days(cubeName, "C1_testfact2_raw_base"));
     String expected2 =
       getExpectedQuery(cubeName, "select sum(basecube.msr1) as `expr2` FROM ", null, null,
         getWhereForHourly2days(cubeName, "c1_testfact1_raw_base"));
@@ -751,14 +748,11 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
   public void testMultiFactQueryCaseWhenExpression() throws Exception {
     Configuration tconf = new Configuration(conf);
     String hqlQuery =
-      rewrite(
-        "select sum(case when dim13 = 'x' then msr12 else 0 end) as case_expr, sum(msr1) from basecube where " +
-          TWO_DAYS_RANGE,
-        tconf);
+      rewrite("select sum(case when dim13 = 'x' then msr12 else 0 end) as case_expr, sum(msr1) from basecube where "
+        + TWO_DAYS_RANGE, tconf);
     String expected1 =
-      getExpectedQuery(cubeName, "select sum(case when basecube.dim13 = 'x' then basecube.msr12 else 0 end) as " +
-          "`expr1` FROM ",
-        null, null, getWhereForHourly2days(cubeName, "C1_testfact2_raw_base"));
+      getExpectedQuery(cubeName, "select sum(case when basecube.dim13 = 'x' then basecube.msr12 else 0 end) as "
+        + "`expr1` FROM ", null, null, getWhereForHourly2days(cubeName, "C1_testfact2_raw_base"));
     String expected2 =
       getExpectedQuery(cubeName, "select sum(basecube.msr1) as `expr2` FROM ", null, null,
         getWhereForHourly2days(cubeName, "c1_testfact1_raw_base"));
@@ -767,6 +761,75 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
     assertTrue(hqlQuery.toLowerCase().startsWith("select mq2.expr1 `case_expr`, mq1.expr2 `sum(msr1)` from ")
       || hqlQuery.toLowerCase().startsWith("select mq1.expr1 `case_expr`, mq2.expr2 `sum(msr1)` from "), hqlQuery);
     assertTrue(hqlQuery.contains("mq1 full outer join ") && hqlQuery.endsWith("mq2"), hqlQuery);
+  }
+
+  @Test
+  public void testMultiFactQueryCaseWhenExpressionWithGroupby() throws Exception {
+    Configuration tconf = new Configuration(conf);
+    String hqlQuery =
+      rewrite("select dim1, sum(case when dim13 = 'x' then msr12 else 0 end) as case_expr, sum(msr1) from basecube "
+        + "where " + TWO_DAYS_RANGE, tconf);
+    String expected1 =
+      getExpectedQuery(cubeName, "select basecube.dim1 as `dim1`, sum(case when basecube.dim13 = 'x' then basecube"
+          + ".msr12 else 0 end) as `expr2` FROM ", null, " group by basecube.dim1 ",
+        getWhereForHourly2days(cubeName, "C1_testfact2_raw_base"));
+    String expected2 =
+      getExpectedQuery(cubeName, "select basecube.dim1 as `dim1`, sum(basecube.msr1) as `expr3` FROM ", null,
+        " group by basecube.dim1 ", getWhereForHourly2days(cubeName, "c1_testfact1_raw_base"));
+    compareContains(expected1, hqlQuery);
+    compareContains(expected2, hqlQuery);
+    assertTrue(hqlQuery.toLowerCase().startsWith(
+      "select coalesce(mq1.dim1, mq2.dim1) dim1, mq2.expr2 `case_expr`, mq1.expr3 `sum(msr1)` from ")
+      || hqlQuery.toLowerCase().startsWith(
+      "select coalesce(mq1.dim1, mq2.dim1) dim1, mq1.expr2 `case_expr`, mq2.expr3 `sum(msr1)` from "), hqlQuery);
+    assertTrue(hqlQuery.contains("mq1 full outer join ") && hqlQuery.endsWith("mq2 on mq1.dim1 <=> mq2.dim1"),
+      hqlQuery);
+  }
+
+  @Test
+  public void testMultiFactQueryCaseWhenExpressionWithHavingClause() throws Exception {
+    Configuration tconf = new Configuration(conf);
+    String hqlQuery =
+      rewrite("select sum(case when dim13 = 'x' then msr12 else 0 end) as case_expr, sum(msr1) from basecube "
+        + "where "
+        + TWO_DAYS_RANGE + " having sum(case when dim13 = 'x' then msr12 else 0 end) > 100 and sum(msr1) > 500", tconf);
+    String expected1 =
+      getExpectedQuery(cubeName, "select sum(case when basecube.dim13 = 'x' then basecube.msr12 else 0 end) as "
+        + "`expr1` FROM ", null, " having sum(case when basecube.dim13 = 'x' then basecube.msr12 else 0 end) > 100",
+        getWhereForHourly2days(cubeName, "C1_testfact2_raw_base"));
+    String expected2 =
+      getExpectedQuery(cubeName, "select sum(basecube.msr1) as `expr2` FROM ", null, " having sum(basecube.msr1) > 500",
+        getWhereForHourly2days(cubeName, "c1_testfact1_raw_base"));
+    compareContains(expected1, hqlQuery);
+    compareContains(expected2, hqlQuery);
+    assertTrue(hqlQuery.toLowerCase().startsWith("select mq2.expr1 `case_expr`, mq1.expr2 `sum(msr1)` from ")
+      || hqlQuery.toLowerCase().startsWith("select mq1.expr1 `case_expr`, mq2.expr2 `sum(msr1)` from "), hqlQuery);
+    assertTrue(hqlQuery.contains("mq1 full outer join ") && hqlQuery.endsWith("mq2"), hqlQuery);
+  }
+
+  @Test
+  public void testMultiFactQueryCaseWhenExpressionWithGroubyAndHavingClause() throws Exception {
+    Configuration tconf = new Configuration(conf);
+    String hqlQuery =
+      rewrite("select dim1, sum(case when dim13 = 'x' then msr12 else 0 end) as case_expr, sum(msr1) from basecube " +
+        "where "
+        + TWO_DAYS_RANGE + " having sum(case when dim13 = 'x' then msr12 else 0 end) > 100 and sum(msr1) > 500", tconf);
+    String expected1 =
+      getExpectedQuery(cubeName, "select basecube.dim1 as `dim1`, sum(case when basecube.dim13 = 'x' then basecube"
+          + ".msr12 else  0 end) as `expr2` FROM ", null,
+        " group by basecube.dim1 having sum(case when basecube.dim13 = 'x' then basecube.msr12 else 0 end) > 100",
+        getWhereForHourly2days(cubeName, "C1_testfact2_raw_base"));
+    String expected2 =
+      getExpectedQuery(cubeName, "select basecube.dim1 as `dim1`, sum(basecube.msr1) as `expr3` FROM ", null,
+        " group by basecube.dim1 having sum(basecube.msr1) > 500",
+        getWhereForHourly2days(cubeName, "c1_testfact1_raw_base"));
+    compareContains(expected1, hqlQuery);
+    compareContains(expected2, hqlQuery);
+    assertTrue(hqlQuery.toLowerCase().startsWith(
+      "select coalesce(mq1.dim1, mq2.dim1) dim1, mq2.expr2 `case_expr`, mq1.expr3 `sum(msr1)` from ")
+      || hqlQuery.toLowerCase().startsWith(
+      "select coalesce(mq1.dim1, mq2.dim1) dim1, mq1.expr2 `case_expr`, mq2.expr3 `sum(msr1)` from "), hqlQuery);
+    assertTrue(hqlQuery.contains("mq1 full outer join ") && hqlQuery.endsWith("mq2 on mq1.dim1 <=> mq2.dim1"), hqlQuery);
   }
 
   @Test

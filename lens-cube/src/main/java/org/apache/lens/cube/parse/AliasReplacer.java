@@ -18,11 +18,9 @@
  */
 package org.apache.lens.cube.parse;
 
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.lens.cube.error.LensCubeErrorCode;
 import org.apache.lens.cube.metadata.CubeInterface;
 import org.apache.lens.cube.metadata.Dimension;
@@ -42,7 +40,6 @@ import org.antlr.runtime.CommonToken;
  * <p/>
  * Replaces all the columns in all expressions with tablealias.column
  */
-@Slf4j
 class AliasReplacer implements ContextRewriter {
 
   public AliasReplacer(Configuration conf) {
@@ -57,7 +54,7 @@ class AliasReplacer implements ContextRewriter {
     for (QueriedPhraseContext qur : cubeql.getQueriedPhrases()) {
       extractTabAliasForCol(colToTableAlias, qur);
     }
-    findDimAttributesAndMeasures(cubeql);
+    findExpressionsAndMeasures(cubeql);
 
     if (colToTableAlias.isEmpty()) {
       return;
@@ -86,11 +83,6 @@ class AliasReplacer implements ContextRewriter {
 
     replaceAliases(cubeql.getJoinAST(), 0, colToTableAlias);
 
-
-
-    // Update the aggregate expression set
-    //AggregateResolver.updateAggregates(cubeql.getSelectAST(), cubeql);
-    //AggregateResolver.updateAggregates(cubeql.getHavingAST(), cubeql);
   }
 
   /**
@@ -98,7 +90,7 @@ class AliasReplacer implements ContextRewriter {
    * @param cubeql
    * @throws LensException
    */
-  private void findDimAttributesAndMeasures(CubeQueryContext cubeql) throws LensException {
+  private void findExpressionsAndMeasures(CubeQueryContext cubeql) throws LensException {
     CubeInterface cube = cubeql.getCube();
     if (cube != null) {
       String cubeAlias = cubeql.getAliasForTableName(cube.getName());
@@ -167,7 +159,6 @@ class AliasReplacer implements ContextRewriter {
   }
 
   static void extractTabAliasForCol(Map<String, String> colToTableAlias, TrackQueriedColumns tqc) throws LensException {
-    log.info ("Tqc columns dump : {}", tqc.getTblAliasToColumns());
     Set<String> columns = tqc.getTblAliasToColumns().get(CubeQueryContext.DEFAULT_TABLE);
     if (columns == null) {
       return;

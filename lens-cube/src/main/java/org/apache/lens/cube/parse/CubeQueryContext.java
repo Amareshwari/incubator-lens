@@ -1108,6 +1108,9 @@ public class CubeQueryContext extends TracksQueriedColumns implements QueryAST {
   }
 
   public boolean hasAggregates() {
+    if (getExprCtx().hasAggregates()) {
+      return true;
+    }
     for (QueriedPhraseContext qur : queriedPhrases) {
       if (qur.isAggregate()) {
         return true;

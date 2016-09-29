@@ -23,14 +23,16 @@ import static org.apache.hadoop.hive.ql.parse.HiveParser.*;
 import java.util.HashSet;
 import java.util.Set;
 
-import org.apache.commons.lang.StringUtils;
 import org.apache.lens.cube.error.LensCubeErrorCode;
 import org.apache.lens.cube.parse.HQLParser.ASTNodeVisitor;
 import org.apache.lens.cube.parse.HQLParser.TreeNode;
 import org.apache.lens.server.api.error.LensException;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hive.ql.lib.Node;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
+import org.apache.hadoop.hive.ql.parse.HiveParser;
 
 import com.google.common.base.Optional;
 
@@ -68,7 +70,7 @@ class ColumnResolver implements ContextRewriter {
     getColsForWhereTree(cubeql);
     getColsForAST(cubeql, cubeql.getJoinAST());
     getColsForAST(cubeql, cubeql.getGroupByAST());
-    getColsForAST(cubeql, cubeql.getHavingAST());
+    getColsForHavingAST(cubeql, cubeql.getHavingAST());
     getColsForAST(cubeql, cubeql.getOrderByAST());
 
     // Update join dimension tables
@@ -94,6 +96,25 @@ class ColumnResolver implements ContextRewriter {
     }
   }
 
+  private void getColsForHavingAST(CubeQueryContext cubeql, ASTNode clause) throws LensException {
+    if (clause == null) {
+      return;
+    }
+
+    // split having clause phrases to be column level sothat having clause can be pushed to multiple facts if required.
+    if (HQLParser.isAggregateAST(clause) || clause.getType() == HiveParser.TOK_TABLE_OR_COL
+      || clause.getType() == HiveParser.DOT || clause.getChildCount() == 0) {
+      QueriedPhraseContext qur = new QueriedPhraseContext(clause);
+      qur.setAggregate(true);
+      getColsForTree(cubeql, clause, qur, true);
+      cubeql.addColumnsQueried(qur.getTblAliasToColumns());
+      cubeql.addQueriedPhrase(qur);
+    } else {
+      for (Node child : clause.getChildren()) {
+        getColsForHavingAST(cubeql, (ASTNode)child);
+      }
+    }
+  }
   // finds columns in AST passed.
   static void getColsForTree(final CubeQueryContext cubeql, ASTNode tree, final TrackQueriedColumns tqc,
     final boolean skipAliases)
@@ -196,14 +217,14 @@ class ColumnResolver implements ContextRewriter {
       exprInd++;
       cubeql.addColumnsQueried(sel.getTblAliasToColumns());
       sel.setSelectAlias(selectAlias);
-      sel.setFinalAlias(!StringUtils.isBlank(selectFinalAlias) ? "`" + selectFinalAlias + "`" :
-        selectAlias);
+      sel.setFinalAlias(!StringUtils.isBlank(selectFinalAlias) ? "`" + selectFinalAlias + "`" : selectAlias);
       sel.setActualAlias(alias != null ? alias.toLowerCase() : null);
       cubeql.addSelectPhrase(sel);
     }
   }
 
-  private static void addColumnsForWhere(final CubeQueryContext cubeql, QueriedPhraseContext qur, ASTNode node, ASTNode parent) {
+  private static void addColumnsForWhere(final CubeQueryContext cubeql, QueriedPhraseContext qur, ASTNode node,
+    ASTNode parent) {
     if (node.getToken().getType() == TOK_TABLE_OR_COL && (parent != null && parent.getToken().getType() != DOT)) {
       // Take child ident.totext
       ASTNode ident = (ASTNode) node.getChild(0);
