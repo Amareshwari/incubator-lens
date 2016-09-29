@@ -52,13 +52,13 @@ class CandidateTableResolver implements ContextRewriter {
 
   private boolean checkForQueriedColumns = true;
 
-  public CandidateTableResolver(Configuration conf) {
+  public CandidateTableResolver(Configuration ignored) {
   }
 
   @Override
   public void rewriteContext(CubeQueryContext cubeql) throws LensException {
     if (checkForQueriedColumns) {
-      log.info("Dump queried columns:{}", cubeql.getTblAliasToColumns());
+      log.debug("Dump queried columns:{}", cubeql.getTblAliasToColumns());
       populateCandidateTables(cubeql);
       resolveCandidateFactTables(cubeql);
       resolveCandidateDimTables(cubeql);
@@ -243,7 +243,6 @@ class CandidateTableResolver implements ContextRewriter {
           dimExprs.add(qur);
         }
       }
-      log.info("Queried phrases : {} msrs: {}, dimExprs: {}",  cubeql.getQueriedPhrases(), queriedMsrs, dimExprs);
       // Remove fact tables based on whether they are valid or not.
       for (Iterator<CandidateFact> i = cubeql.getCandidateFacts().iterator(); i.hasNext();) {
         CandidateFact cfact = i.next();
@@ -270,8 +269,6 @@ class CandidateTableResolver implements ContextRewriter {
         // one measure
         boolean toRemove = false;
         for (QueriedPhraseContext qur : dimExprs) {
-          log.info("Phrase columns : {} evaluable in fact {} : {}", qur.getColumns(), cfact, qur.isEvaluable(cubeql,
-            cfact));
           if (!qur.isEvaluable(cubeql, cfact)) {
             log.info("Not considering fact table:{} as columns {} are not available", cfact, qur.getColumns());
             cubeql.addFactPruningMsgs(cfact.fact, CandidateTablePruneCause.columnNotFound(qur.getColumns()));
@@ -360,12 +357,10 @@ class CandidateTableResolver implements ContextRewriter {
       CandidateFact cfact = i.next();
       i.remove();
       if (!checkForFactColumnExistsAndValidForRange(cfact, msrs, cubeql)) {
-        log.info("{} does not have required measures {}", cfact, msrs);
         // cfact does not contain any of msrs and none of exprsWithMeasures are evaluable.
         // ignore the fact
         continue;
       } else if (allEvaluable(cfact, msrs, cubeql)) {
-        log.info("{} has required measures {}", cfact, msrs);
         // return single set
         Set<CandidateFact> one = new LinkedHashSet<>();
         one.add(cfact);
@@ -376,7 +371,6 @@ class CandidateTableResolver implements ContextRewriter {
           Set<QueriedPhraseContext> remainingMsrs = new HashSet<>(msrs);
           Set<QueriedPhraseContext> coveredMsrs  = coveredMeasures(cfact, msrs, cubeql);
           remainingMsrs.removeAll(coveredMsrs);
-          log.info("fact : {}, coveredMsrs:{} remainingMsrs: {}", coveredMsrs, remainingMsrs);
 
           Set<Set<CandidateFact>> coveringSets = findCoveringSets(cubeql, cfacts, remainingMsrs);
           if (!coveringSets.isEmpty()) {
@@ -738,8 +732,6 @@ class CandidateTableResolver implements ContextRewriter {
       return true;
     }
     for (QueriedPhraseContext qur : colSet) {
-      log.info("Phrase columns : {} evaluable in fact {} : {}", qur.getColumns(), table, qur.isEvaluable(cubeql,
-        table));
       if (qur.isEvaluable(cubeql, table)) {
         return true;
       }

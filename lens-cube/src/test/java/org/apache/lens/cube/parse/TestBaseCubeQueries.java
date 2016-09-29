@@ -781,7 +781,7 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
     assertTrue(hqlQuery.toLowerCase().startsWith(
       "select coalesce(mq1.dim1, mq2.dim1) dim1, mq2.expr2 `case_expr`, mq1.expr3 `sum(msr1)` from ")
       || hqlQuery.toLowerCase().startsWith(
-      "select coalesce(mq1.dim1, mq2.dim1) dim1, mq1.expr2 `case_expr`, mq2.expr3 `sum(msr1)` from "), hqlQuery);
+        "select coalesce(mq1.dim1, mq2.dim1) dim1, mq1.expr2 `case_expr`, mq2.expr3 `sum(msr1)` from "), hqlQuery);
     assertTrue(hqlQuery.contains("mq1 full outer join ") && hqlQuery.endsWith("mq2 on mq1.dim1 <=> mq2.dim1"),
       hqlQuery);
   }
@@ -811,8 +811,8 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
   public void testMultiFactQueryCaseWhenExpressionWithGroubyAndHavingClause() throws Exception {
     Configuration tconf = new Configuration(conf);
     String hqlQuery =
-      rewrite("select dim1, sum(case when dim13 = 'x' then msr12 else 0 end) as case_expr, sum(msr1) from basecube " +
-        "where "
+      rewrite("select dim1, sum(case when dim13 = 'x' then msr12 else 0 end) as case_expr, sum(msr1) from basecube "
+        + "where "
         + TWO_DAYS_RANGE + " having sum(case when dim13 = 'x' then msr12 else 0 end) > 100 and sum(msr1) > 500", tconf);
     String expected1 =
       getExpectedQuery(cubeName, "select basecube.dim1 as `dim1`, sum(case when basecube.dim13 = 'x' then basecube"
@@ -828,8 +828,9 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
     assertTrue(hqlQuery.toLowerCase().startsWith(
       "select coalesce(mq1.dim1, mq2.dim1) dim1, mq2.expr2 `case_expr`, mq1.expr3 `sum(msr1)` from ")
       || hqlQuery.toLowerCase().startsWith(
-      "select coalesce(mq1.dim1, mq2.dim1) dim1, mq1.expr2 `case_expr`, mq2.expr3 `sum(msr1)` from "), hqlQuery);
-    assertTrue(hqlQuery.contains("mq1 full outer join ") && hqlQuery.endsWith("mq2 on mq1.dim1 <=> mq2.dim1"), hqlQuery);
+        "select coalesce(mq1.dim1, mq2.dim1) dim1, mq1.expr2 `case_expr`, mq2.expr3 `sum(msr1)` from "), hqlQuery);
+    assertTrue(hqlQuery.contains("mq1 full outer join ") && hqlQuery.endsWith("mq2 on mq1.dim1 <=> mq2.dim1"),
+      hqlQuery);
   }
 
   @Test
