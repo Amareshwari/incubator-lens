@@ -309,7 +309,7 @@ class CandidateTableResolver implements ContextRewriter {
       }
       if (cubeql.getCandidateFacts().size() == 0) {
         throw new LensException(LensCubeErrorCode.NO_FACT_HAS_COLUMN.getLensErrorInfo(),
-          getColumns(dimExprs).toString());
+          getColumns(cubeql.getQueriedPhrases()).toString());
       }
       Set<Set<CandidateFact>> cfactset;
       if (queriedMsrs.isEmpty()) {
@@ -342,7 +342,7 @@ class CandidateTableResolver implements ContextRewriter {
     }
   }
 
-  private Set<String> getColumns(Set<QueriedPhraseContext> queriedPhraseContexts) {
+  private static Set<String> getColumns(Collection<QueriedPhraseContext> queriedPhraseContexts) {
     Set<String> cols = new HashSet<>();
     for (QueriedPhraseContext qur : queriedPhraseContexts) {
       cols.addAll(qur.getColumns());
@@ -741,6 +741,9 @@ class CandidateTableResolver implements ContextRewriter {
 
   static boolean allEvaluable(CandidateFact table, Collection<QueriedPhraseContext> colSet,
                                                           CubeQueryContext cubeql) throws LensException {
+    if (colSet == null || colSet.isEmpty()) {
+      return true;
+    }
     for (QueriedPhraseContext qur : colSet) {
       if (!qur.isEvaluable(cubeql, table)) {
         return false;

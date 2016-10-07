@@ -34,6 +34,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.lens.api.error.ErrorCollectionFactory;
 import org.apache.lens.cube.error.LensCubeErrorCode;
 import org.apache.lens.cube.error.NoCandidateFactAvailableException;
 import org.apache.lens.cube.metadata.TimeRange;
@@ -86,8 +87,11 @@ public class TestBaseCubeQueries extends TestQueryRewrite {
     LensException e;
 
     e = getLensExceptionInRewrite("select msr11 + msr2 from basecube" + " where " + TWO_DAYS_RANGE, conf);
+    e.buildLensErrorResponse(new ErrorCollectionFactory().createErrorCollection(), null, "testid");
     assertEquals(e.getErrorCode(),
-        LensCubeErrorCode.NO_FACT_HAS_COLUMN.getLensErrorInfo().getErrorCode());
+      LensCubeErrorCode.NO_FACT_HAS_COLUMN.getLensErrorInfo().getErrorCode());
+    assertTrue(e.getMessage().contains("msr11"), e.getMessage());
+    assertTrue(e.getMessage().contains("msr2"), e.getMessage());
     // no fact has the all the dimensions queried
     e = getLensExceptionInRewrite("select dim1, test_time_dim, msr3, msr13 from basecube where "
       + TWO_DAYS_RANGE, conf);

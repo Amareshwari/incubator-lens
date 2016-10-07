@@ -155,10 +155,10 @@ class GroupbyResolver implements ContextRewriter {
   public void rewriteContext(CubeQueryContext cubeql) throws LensException {
     // Process Aggregations by making sure that all group by keys are projected;
     // and all projection fields are added to group by keylist;
-    List<SelectPhraseContext> selectExprs = getExpressions(cubeql);
+    List<SelectPhraseContext> selectExprs = getSelectNonAggregateNonMeasureExpressions(cubeql);
     List<String> groupByExprs = new ArrayList<>();
     if (cubeql.getGroupByString() != null) {
-      String[] gby = getExpressions(cubeql.getGroupByAST()).toArray(new String[]{});
+      String[] gby = getGroupbyExpressions(cubeql.getGroupByAST()).toArray(new String[]{});
       for (String g : gby) {
         groupByExprs.add(g.trim());
       }
@@ -177,7 +177,7 @@ class GroupbyResolver implements ContextRewriter {
     return false;
   }
 
-  private List<SelectPhraseContext> getExpressions(CubeQueryContext cubeql) {
+  private List<SelectPhraseContext> getSelectNonAggregateNonMeasureExpressions(CubeQueryContext cubeql) {
 
     List<SelectPhraseContext> list = new ArrayList<>();
 
@@ -194,7 +194,7 @@ class GroupbyResolver implements ContextRewriter {
     return list;
   }
 
-  private List<String> getExpressions(ASTNode node) {
+  private List<String> getGroupbyExpressions(ASTNode node) {
 
     List<String> list = new ArrayList<>();
 
