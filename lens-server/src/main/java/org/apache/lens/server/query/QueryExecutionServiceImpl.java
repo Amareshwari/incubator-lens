@@ -125,6 +125,10 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
    */
   public static final String QUERY_PURGER_COUNTER = "query-purger-errors";
 
+  public static final String QUERY_EXPIRY_FAILURE_COUNTER = "query-expiry-errors";
+
+  public static final String TOTAL_QUERIES_EXPIRED = "total-expired-queries";
+
   /**
    * The Constant PREPARED_QUERY_PURGER_COUNTER.
    */
@@ -207,6 +211,11 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
    * The query purger.
    */
   private final Thread queryPurger = new Thread(new QueryPurger(), "QueryPurger");
+
+  /**
+   * The query expiry thread which cancels timedout queries.
+   */
+  private ScheduledExecutorService queryExpirer;
 
   /**
    * The prepare query purger.
@@ -1529,6 +1538,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
     statusPoller.start();
     queryPurger.start();
     prepareQueryPurger.start();
+    startQueryExpirer();
 
     if (conf.getBoolean(RESULTSET_PURGE_ENABLED, DEFAULT_RESULTSET_PURGE_ENABLED)) {
       queryResultPurger = new QueryResultPurger();
@@ -1602,6 +1612,44 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
       .build();
     //Using fixed values for pool . corePoolSize = maximumPoolSize = 3  and keepAliveTime = 60 secs
     queryCancellationPool = new ThreadPoolExecutor(3, 3, 60, TimeUnit.SECONDS, new LinkedBlockingQueue(), factory);
+  }
+
+  private void startQueryExpirer() {
+    ThreadFactory factory = new BasicThreadFactory.Builder()
+      .namingPattern("QueryExpirer-%d")
+      .daemon(true)
+      .priority(Thread.NORM_PRIORITY)
+      .build();
+    queryExpirer = Executors.newSingleThreadScheduledExecutor(factory);
+    long expiryRunInterval = conf.getLong(QUERY_EXPIRY_INTERVAL_SECONDS, DEFAULT_QUERY_EXPIRY_INTERVAL_SECONDS);
+    queryExpirer.scheduleWithFixedDelay(new Runnable() {
+      @Override
+      public void run() {
+        try {
+          expireQueries();
+        } catch (Exception e) {
+          incrCounter(QUERY_EXPIRY_FAILURE_COUNTER);
+          log.error("Unable to expire queries", e);
+        }
+      }
+    }, expiryRunInterval, expiryRunInterval, TimeUnit.SECONDS);
+    log.info("Enabled periodic exipry of queries at {} seconds interval", expiryRunInterval);
+  }
+
+
+  private void expireQueries() {
+    for (QueryContext ctx : launchedQueries.getQueries()) {
+      try {
+        if (ctx.hasTimedout()) {
+          log.info("Query {} has timedout, thus cancelling it", ctx.getLogHandle());
+          queryCancellationPool.submit(new CancelQueryTask(ctx.getQueryHandle()));
+          incrCounter(TOTAL_QUERIES_EXPIRED);
+        }
+      } catch (Exception e) {
+        incrCounter(QUERY_EXPIRY_FAILURE_COUNTER);
+        log.error("Unable to expire queries", e);
+      }
+    }
   }
 
   @AllArgsConstructor

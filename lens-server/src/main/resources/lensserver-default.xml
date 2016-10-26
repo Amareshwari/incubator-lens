@@ -286,10 +286,15 @@
   <!-- Finished Query Purging Configurations -->
   <property>
     <name>lens.server.querypurger.sleep.interval</name>
+    <value>3600</value>
+    <description>The interval(seconds) with which query expiry will run periodically. Default is 1 hour. </description>
+  </property>
+
+  <property>
+    <name>lens.server.query.expiry.interval.seconds</name>
     <value>10000</value>
     <description>The interval(milliseconds) with which purger to run periodically. Default 10 sec. </description>
   </property>
-
   <property>
     <name>lens.server.inmemory.resultset.ttl.secs</name>
     <value>300</value>

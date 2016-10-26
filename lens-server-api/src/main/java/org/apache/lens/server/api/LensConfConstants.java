@@ -1165,6 +1165,25 @@ public final class LensConfConstants {
   public static final String QUERY_HTTP_NOTIFICATION_TYPE_FINISHED = QUERY_HTTP_NOTIFICATION_TYPE_PFX + "FINISHED";
 
   /**
+   * This is the configuration to specify to timeout a query after running for sometime.
+   */
+  public static final String QUERY_TIMEOUT = QUERY_PFX + "timeout.minutes";
+
+  /**
+   * This is the default timeout for query to get killed after running for configured time.
+   */
+  public static final int DEFAULT_QUERY_TIMEOUT = 24 * 60; // 1day
+
+  /**
+   * Specifies how often query expiry will run
+   */
+  public static final String QUERY_EXPIRY_INTERVAL_SECONDS = SERVER_PFX + "query.expiry.interval.seconds";
+  /**
+   * Default value for query expiry interval
+   */
+  public static final long DEFAULT_QUERY_EXPIRY_INTERVAL_SECONDS = 1 * 60 * 60  ; // 1 hour
+
+  /**
    * The Constant GRIZZLY_CORE_POOL_SIZE.
    */
   public static final String GRIZZLY_CORE_POOL_SIZE = SERVER_PFX + "grizzly.core.pool.size";
