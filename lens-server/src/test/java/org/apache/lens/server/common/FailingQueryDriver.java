@@ -21,6 +21,7 @@ package org.apache.lens.server.common;
 
 import javax.ws.rs.NotFoundException;
 
+import org.apache.lens.api.query.QueryHandle;
 import org.apache.lens.server.api.driver.DriverQueryPlan;
 import org.apache.lens.server.api.driver.MockDriver;
 import org.apache.lens.server.api.error.LensException;
@@ -62,6 +63,11 @@ public class FailingQueryDriver extends MockDriver {
         // ignore interrupted exception
       }
     }
+    // simulate autocancel.
+    if (ctx.getUserQuery().contains("autocancel")) {
+      return;
+    }
     throw new LensException("Simulated Launch Failure");
   }
+
 }

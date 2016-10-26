@@ -1167,21 +1167,21 @@ public final class LensConfConstants {
   /**
    * This is the configuration to specify to timeout a query after running for sometime.
    */
-  public static final String QUERY_TIMEOUT = QUERY_PFX + "timeout.minutes";
+  public static final String QUERY_TIMEOUT = QUERY_PFX + "timeout.millis";
 
   /**
    * This is the default timeout for query to get killed after running for configured time.
    */
-  public static final int DEFAULT_QUERY_TIMEOUT = 24 * 60; // 1day
+  public static final int DEFAULT_QUERY_TIMEOUT = 24 * 60 * 60 * 1000; // 1day
 
   /**
    * Specifies how often query expiry will run
    */
-  public static final String QUERY_EXPIRY_INTERVAL_SECONDS = SERVER_PFX + "query.expiry.interval.seconds";
+  public static final String QUERY_EXPIRY_INTERVAL_MILLIS = SERVER_PFX + "query.expiry.interval.millis";
   /**
    * Default value for query expiry interval
    */
-  public static final long DEFAULT_QUERY_EXPIRY_INTERVAL_SECONDS = 1 * 60 * 60  ; // 1 hour
+  public static final long DEFAULT_QUERY_EXPIRY_INTERVAL_MILLIS = 1 * 60 * 60 * 1000  ; // 1 hour
 
   /**
    * The Constant GRIZZLY_CORE_POOL_SIZE.

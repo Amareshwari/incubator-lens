@@ -159,7 +159,7 @@ Lens server configuration
 *--+--+---+--+
 |66|lens.server.query.acceptors| |Query Acceptors configured. Query acceptors are consulted first, before anything happens for the given query. They can either return null or return a messaging indicating why the given query shouldn't be accepted. These can be used to filter out queries at the earliest.|
 *--+--+---+--+
-|67|lens.server.query.expiry.interval.seconds|10000|The interval(milliseconds) with which purger to run periodically. Default 10 sec.|
+|67|lens.server.query.expiry.interval.millis|3600000|The interval(milliseconds) with which query expiry will run periodically. Default is 1 hour.|
 *--+--+---+--+
 |68|lens.server.query.launching.constraint.factories|org.apache.lens.server.query.constraint.TotalQueryCostCeilingConstraintFactory|Factories used to instantiate constraints enforced on queries by lens. Every Factory should be an implementation of org.apache.lens.server.api.common.ConfigBasedObjectCreationFactory and create an implementation of org.apache.lens.server.api.query.constraint.QueryLaunchingConstraint. A query will be launched only if all constraints pass.|
 *--+--+---+--+
@@ -175,7 +175,7 @@ Lens server configuration
 *--+--+---+--+
 |73|lens.server.query.ws.resource.impl|org.apache.lens.server.query.QueryServiceResource|Implementation class for Query Resource|
 *--+--+---+--+
-|74|lens.server.querypurger.sleep.interval|3600|The interval(seconds) with which query expiry will run periodically. Default is 1 hour.|
+|74|lens.server.querypurger.sleep.interval|10000|The interval(milliseconds) with which purger to run periodically. Default 10 sec.|
 *--+--+---+--+
 |75|lens.server.quota.service.impl|org.apache.lens.server.quota.QuotaServiceImpl|Implementation class for quota service|
 *--+--+---+--+

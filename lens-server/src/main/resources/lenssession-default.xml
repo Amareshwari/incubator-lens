@@ -269,8 +269,8 @@
   </property>
 
   <property>
-    <name>lens.query.timeout.minutes</name>
-    <value>1440</value>
+    <name>lens.query.timeout.millis</name>
+    <value>86400000</value>
     <description>The runtime(minutes) of the query after which query will be timedout and cancelled. Default is 1 day.
     </description>
   </property>

@@ -1621,7 +1621,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
       .priority(Thread.NORM_PRIORITY)
       .build();
     queryExpirer = Executors.newSingleThreadScheduledExecutor(factory);
-    long expiryRunInterval = conf.getLong(QUERY_EXPIRY_INTERVAL_SECONDS, DEFAULT_QUERY_EXPIRY_INTERVAL_SECONDS);
+    long expiryRunInterval = conf.getLong(QUERY_EXPIRY_INTERVAL_MILLIS, DEFAULT_QUERY_EXPIRY_INTERVAL_MILLIS);
     queryExpirer.scheduleWithFixedDelay(new Runnable() {
       @Override
       public void run() {
@@ -1632,7 +1632,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
           log.error("Unable to expire queries", e);
         }
       }
-    }, expiryRunInterval, expiryRunInterval, TimeUnit.SECONDS);
+    }, expiryRunInterval, expiryRunInterval, TimeUnit.MILLISECONDS);
     log.info("Enabled periodic exipry of queries at {} seconds interval", expiryRunInterval);
   }
 
