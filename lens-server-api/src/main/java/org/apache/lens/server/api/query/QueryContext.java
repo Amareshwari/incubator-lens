@@ -620,7 +620,7 @@ public class QueryContext extends AbstractQueryContext implements FailureContext
   public boolean hasTimedout() {
     if (status.running()) {
       long runtimeMillis = System.currentTimeMillis() - launchTime;
-      long timeoutMillis = conf.getInt(QUERY_TIMEOUT, DEFAULT_QUERY_TIMEOUT);
+      long timeoutMillis = getSelectedDriverConf().getInt(QUERY_TIMEOUT_MILLIS, DEFAULT_QUERY_TIMEOUT_MILLIS);
       return runtimeMillis > timeoutMillis;
     }
     return false;

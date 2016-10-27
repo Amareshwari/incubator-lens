@@ -1831,17 +1831,17 @@ public class TestQueryService extends LensJerseyTest {
     MetricRegistry reg = LensMetricsRegistry.getStaticRegistry();
 
     assertTrue(reg.getGauges().keySet().containsAll(Arrays.asList(
-        "lens.MethodMetricGauge." + gaugeKey + "-DRIVER_SELECTION",
-        "lens.MethodMetricGauge." + gaugeKey + "-hive/hive1-CUBE_REWRITE",
-        "lens.MethodMetricGauge." + gaugeKey + "-hive/hive1-DRIVER_ESTIMATE",
-        "lens.MethodMetricGauge." + gaugeKey + "-hive/hive1-RewriteUtil-rewriteQuery",
-        "lens.MethodMetricGauge." + gaugeKey + "-hive/hive2-CUBE_REWRITE",
-        "lens.MethodMetricGauge." + gaugeKey + "-hive/hive2-DRIVER_ESTIMATE",
-        "lens.MethodMetricGauge." + gaugeKey + "-hive/hive2-RewriteUtil-rewriteQuery",
-        "lens.MethodMetricGauge." + gaugeKey + "-jdbc/jdbc1-CUBE_REWRITE",
-        "lens.MethodMetricGauge." + gaugeKey + "-jdbc/jdbc1-DRIVER_ESTIMATE",
-        "lens.MethodMetricGauge." + gaugeKey + "-jdbc/jdbc1-RewriteUtil-rewriteQuery",
-        "lens.MethodMetricGauge." + gaugeKey + "-PARALLEL_ESTIMATE")),
+      "lens.MethodMetricGauge." + gaugeKey + "-DRIVER_SELECTION",
+      "lens.MethodMetricGauge." + gaugeKey + "-hive/hive1-CUBE_REWRITE",
+      "lens.MethodMetricGauge." + gaugeKey + "-hive/hive1-DRIVER_ESTIMATE",
+      "lens.MethodMetricGauge." + gaugeKey + "-hive/hive1-RewriteUtil-rewriteQuery",
+      "lens.MethodMetricGauge." + gaugeKey + "-hive/hive2-CUBE_REWRITE",
+      "lens.MethodMetricGauge." + gaugeKey + "-hive/hive2-DRIVER_ESTIMATE",
+      "lens.MethodMetricGauge." + gaugeKey + "-hive/hive2-RewriteUtil-rewriteQuery",
+      "lens.MethodMetricGauge." + gaugeKey + "-jdbc/jdbc1-CUBE_REWRITE",
+      "lens.MethodMetricGauge." + gaugeKey + "-jdbc/jdbc1-DRIVER_ESTIMATE",
+      "lens.MethodMetricGauge." + gaugeKey + "-jdbc/jdbc1-RewriteUtil-rewriteQuery",
+      "lens.MethodMetricGauge." + gaugeKey + "-PARALLEL_ESTIMATE")),
       reg.getGauges().keySet().toString());
   }
 
@@ -2010,7 +2010,7 @@ public class TestQueryService extends LensJerseyTest {
   public void testQueryTimeoutOnWaitingQuery() throws Exception {
     String query = "select mock, fail, autocancel from " + TEST_TABLE;
     LensConf lconf = new LensConf();
-    lconf.addProperty(LensConfConstants.QUERY_TIMEOUT, 300);
+    lconf.addProperty(LensConfConstants.QUERY_TIMEOUT_MILLIS, 300);
     QueryHandle handle = executeAndGetHandle(target(), Optional.of(lensSessionId), Optional.of(query),
       Optional.of(lconf), defaultMT);
     // query should have been cancelled, as query timeout is 1 second

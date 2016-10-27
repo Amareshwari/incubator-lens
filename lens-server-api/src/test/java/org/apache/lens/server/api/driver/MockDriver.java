@@ -181,7 +181,7 @@ public class MockDriver extends AbstractLensDriver {
       }
     }
     if (context.getUserQuery().contains("autocancel")) {
-      if (cancel == false) {
+      if (!cancel) {
         context.getDriverStatus().setState(DriverQueryState.RUNNING);
       } else {
         context.getDriverStatus().setState(DriverQueryState.CANCELED);
@@ -332,6 +332,7 @@ public class MockDriver extends AbstractLensDriver {
    */
   @Override
   public void executeAsync(QueryContext context) throws LensException {
+    cancel = false;
     this.query = context.getSelectedDriverQuery();
   }
 
