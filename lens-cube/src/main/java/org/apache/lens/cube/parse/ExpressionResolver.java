@@ -206,6 +206,7 @@ class ExpressionResolver implements ContextRewriter {
     @Getter
     @Setter
     private DenormalizationResolver.DenormalizationContext deNormCtx;
+    private ASTNode reWrittenAST;
 
     ExprSpecContext(ExprSpec exprSpec, CubeQueryContext cubeql) throws LensException {
       // replaces table names in expression with aliases in the query
@@ -224,6 +225,20 @@ class ExpressionResolver implements ContextRewriter {
       finalAST = AliasReplacer.replaceAliases(finalAST, 0, cubeql.getColToTableAlias());
     }
 
+    public void initRewrittenAST(boolean copyFinal) {
+      if (copyFinal) {
+        reWrittenAST = MetastoreUtil.copyAST(finalAST);
+      } else {
+        reWrittenAST = finalAST;
+      }
+    }
+    ASTNode getRewrittenAST() {
+      return reWrittenAST;
+    }
+
+    void nulliFyRewrittenAST() {
+      reWrittenAST = null;
+    }
     void resolveColumns(CubeQueryContext cubeql) throws LensException {
       // finds all columns and table aliases in the expression
       ColumnResolver.getColsForTree(cubeql, finalAST, this, false);
@@ -270,6 +285,7 @@ class ExpressionResolver implements ContextRewriter {
     public String toString() {
       return HQLParser.getString(finalAST);
     }
+
   }
 
   @AllArgsConstructor
@@ -400,15 +416,22 @@ class ExpressionResolver implements ContextRewriter {
         for (Set<PickedExpression> peSet : pickedExpressions.values()) {
           for (PickedExpression pe : peSet) {
             exprDims.addAll(pe.pickedCtx.exprDims);
+            pe.pickedCtx.initRewrittenAST(pe.pickedCtx.deNormCtx.hasReferences());
             exprDims.addAll(pe.pickedCtx.deNormCtx.rewriteDenormctxInExpression(cubeql, cfact, dimsToQuery,
-              pe.pickedCtx));
+              pe.pickedCtx.getRewrittenAST()));
           }
         }
         // Replace picked expressions in all the base trees
         replacePickedExpressions(cfact, queryAST);
+        for (Set<PickedExpression> peSet : pickedExpressions.values()) {
+          for (PickedExpression pe : peSet) {
+            pe.pickedCtx.nulliFyRewrittenAST();
+          }
+        }
       }
 
       pickedExpressions.clear();
+
       return exprDims;
     }
 
@@ -454,7 +477,7 @@ class ExpressionResolver implements ContextRewriter {
               if (pickedExpressions.containsKey(column)) {
                 PickedExpression expr = getPickedExpression(column, tabident.getText().toLowerCase());
                 if (expr != null) {
-                  node.setChild(i, replaceAlias(expr.pickedCtx.finalAST, cubeql));
+                  node.setChild(i, replaceAlias(expr.pickedCtx.getRewrittenAST(), cubeql));
                 }
               }
             }

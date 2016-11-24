@@ -190,8 +190,11 @@ public class DenormalizationResolver implements ContextRewriter {
       return refTbls;
     }
 
+    public boolean hasReferences() {
+      return !tableToRefCols.isEmpty();
+    }
     public Set<Dimension> rewriteDenormctxInExpression(CubeQueryContext cubeql, CandidateFact cfact, Map<Dimension,
-      CandidateDim> dimsToQuery, ExprSpecContext esc) throws LensException {
+      CandidateDim> dimsToQuery, ASTNode exprAST) throws LensException {
       Set<Dimension> refTbls = new HashSet<>();
 
       if (!tableToRefCols.isEmpty()) {
@@ -206,7 +209,7 @@ public class DenormalizationResolver implements ContextRewriter {
           }
         }
         // Replace picked reference in expression ast
-        resolveClause(esc.getFinalAST());
+        resolveClause(exprAST);
 
         // Add the picked references to dimsToQuery
         for (PickedReference picked : pickedRefs) {
@@ -266,18 +269,19 @@ public class DenormalizationResolver implements ContextRewriter {
             ChainRefCol reference = iter.next();
             if (cubeql.getAutoJoinCtx() == null || !cubeql.getAutoJoinCtx().isReachableDim(
               (Dimension) cubeql.getCubeTableForAlias(reference.getChainName()), reference.getChainName())) {
+              log.info("{} is not reachable", reference.getChainName());
               iter.remove();
             }
           }
           if (rqc.chainRefCols.isEmpty()) {
-            log.info("The refernced column: {} is not reachable", rqc.col.getName());
+            log.info("The referenced column: {} is not reachable", rqc.col.getName());
             iterator.remove();
             continue;
           }
           // do column life validation
           for (TimeRange range : cubeql.getTimeRanges()) {
             if (!rqc.col.isColumnAvailableInTimeRange(range)) {
-              log.info("The refernced column: {} is not in the range queried", rqc.col.getName());
+              log.info("The referenced column: {} is not in the range queried", rqc.col.getName());
               iterator.remove();
               break;
             }
@@ -385,7 +389,6 @@ public class DenormalizationResolver implements ContextRewriter {
   private static DenormalizationContext getDeNormCtx(TrackDenormContext tdc) {
     DenormalizationContext denormCtx = tdc.getDeNormCtx();
     if (denormCtx == null) {
-      // Adds all the reference dimensions as eligible for denorm fields
       denormCtx = new DenormalizationContext();
       tdc.setDeNormCtx(denormCtx);
     }
