@@ -154,7 +154,7 @@ class ExpressionResolver implements ContextRewriter {
     void addEvaluable(CubeQueryContext cubeql, CandidateTable cTable, ExprSpecContext esc) throws LensException {
       Set<ExprSpecContext> evalSet = evaluableExpressions.get(cTable);
       if (evalSet == null) {
-        evalSet = new LinkedHashSet<ExprSpecContext>();
+        evalSet = new LinkedHashSet<>();
         evaluableExpressions.put(cTable, evalSet);
       }
       // add optional dimensions involved in expressions
@@ -196,13 +196,16 @@ class ExpressionResolver implements ContextRewriter {
     }
   }
 
-  static class ExprSpecContext extends TracksQueriedColumns {
+  static class ExprSpecContext extends TracksQueriedColumns implements TrackDenormContext {
     private Set<ExprSpec> exprSpecs = new LinkedHashSet<>();
     @Getter
     @Setter
     private ASTNode finalAST;
     @Getter
     private Set<Dimension> exprDims = new HashSet<>();
+    @Getter
+    @Setter
+    private DenormalizationResolver.DenormalizationContext deNormCtx;
 
     ExprSpecContext(ExprSpec exprSpec, CubeQueryContext cubeql) throws LensException {
       // replaces table names in expression with aliases in the query
@@ -357,7 +360,7 @@ class ExpressionResolver implements ContextRewriter {
           boolean isEvaluable = true;
           for (String col : columns) {
             if (!cTable.getColumns().contains(col.toLowerCase())) {
-              if (!cubeql.getDeNormCtx().addRefUsage(cTable, col, cTable.getBaseTable().getName())) {
+              if (!esc.getDeNormCtx().addRefUsage(cubeql, cTable, col, cTable.getBaseTable().getName())) {
                 // check if it is available as reference, if not expression is not evaluable
                 log.debug("{} = {} is not evaluable in {}", expr, esc, cTable);
                 isEvaluable = false;
@@ -379,48 +382,8 @@ class ExpressionResolver implements ContextRewriter {
       return ec.isEvaluable(cTable);
     }
 
-    /**
-     *
-     * @param exprs
-     * @return
-     */
-    public boolean allNotEvaluable(Set<String> exprs, CandidateTable cTable) {
-      for (String expr : exprs) {
-        if (isEvaluable(expr, cTable)) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    public Collection<String> coveringExpressions(Set<String> exprs, CandidateTable cTable) {
-      Set<String> coveringSet = new HashSet<String>();
-      for (String expr : exprs) {
-        if (isEvaluable(expr, cTable)) {
-          coveringSet.add(expr);
-        }
-      }
-      return coveringSet;
-    }
-
-    /**
-     * Returns true if all passed expressions are evaluable
-     *
-     * @param cTable
-     * @param exprs
-     * @return
-     */
-    public boolean allEvaluable(CandidateTable cTable, Set<String> exprs) {
-      for (String expr : exprs) {
-        if (!isEvaluable(expr, cTable)) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    public Set<Dimension> rewriteExprCtx(CandidateFact cfact, Map<Dimension, CandidateDim> dimsToQuery,
-      QueryAST queryAST) throws LensException {
+    public Set<Dimension> rewriteExprCtx(CubeQueryContext cubeql, CandidateFact cfact, Map<Dimension,
+      CandidateDim> dimsToQuery, QueryAST queryAST) throws LensException {
       Set<Dimension> exprDims = new HashSet<Dimension>();
       if (!allExprsQueried.isEmpty()) {
         // pick expressions for fact
@@ -433,15 +396,18 @@ class ExpressionResolver implements ContextRewriter {
             pickExpressionsForTable(cdim);
           }
         }
-        // Replace picked expressions in all the base trees
-        replacePickedExpressions(cfact, queryAST);
         log.debug("Picked expressions: {}", pickedExpressions);
         for (Set<PickedExpression> peSet : pickedExpressions.values()) {
           for (PickedExpression pe : peSet) {
             exprDims.addAll(pe.pickedCtx.exprDims);
+            exprDims.addAll(pe.pickedCtx.deNormCtx.rewriteDenormctxInExpression(cubeql, cfact, dimsToQuery,
+              pe.pickedCtx));
           }
         }
+        // Replace picked expressions in all the base trees
+        replacePickedExpressions(cfact, queryAST);
       }
+
       pickedExpressions.clear();
       return exprDims;
     }
@@ -543,6 +509,21 @@ class ExpressionResolver implements ContextRewriter {
             for (Dimension exprDim : esc.exprDims) {
               if (cubeql.getCandidateDims().get(exprDim) == null || cubeql.getCandidateDims().get(exprDim).isEmpty()) {
                 log.info("Removing expression {} as {} it does not have any candidate tables", esc, exprDim);
+                iterator.remove();
+                removedEsc.add(esc);
+                removed = true;
+                break;
+              }
+            }
+            if (removed) {
+              continue;
+            }
+            // Remove expressions for which denormalized columns are no more reachable
+            esc.getDeNormCtx().pruneReferences(cubeql);
+            for (String table : esc.getDeNormCtx().getTableToRefCols().keySet()) {
+              Set<String> nonReachableFields = esc.getDeNormCtx().getNonReachableFields(table);
+              if (!nonReachableFields.isEmpty()) {
+                log.info("Removing expression {} as columns {} are not available", esc, nonReachableFields);
                 iterator.remove();
                 removedEsc.add(esc);
                 removed = true;
