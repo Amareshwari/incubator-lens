@@ -164,7 +164,7 @@ public class DenormalizationResolver implements ContextRewriter {
     public Set<Dimension> rewriteDenormctx(CubeQueryContext cubeql, CandidateFact cfact, Map<Dimension,
       CandidateDim> dimsToQuery, boolean replaceFact) throws LensException {
       Set<Dimension> refTbls = new HashSet<>();
-      log.debug("Doing denorm changes for fact :{}", cfact);
+      log.info("Doing denorm changes for fact :{}", cfact);
 
       if (!tableToRefCols.isEmpty()) {
         // pick referenced columns for fact
@@ -200,7 +200,7 @@ public class DenormalizationResolver implements ContextRewriter {
       CandidateDim> dimsToQuery, ASTNode exprAST) throws LensException {
       Set<Dimension> refTbls = new HashSet<>();
 
-      log.debug("Doing denorm changes for expressions in fact :{}", cfact);
+      log.info("Doing denorm changes for expressions in fact :{}", cfact);
       if (!tableToRefCols.isEmpty()) {
         // pick referenced columns for fact
         if (cfact != null) {
@@ -223,6 +223,8 @@ public class DenormalizationResolver implements ContextRewriter {
           }
         }
       }
+      pickedReferences.clear();
+      pickedRefs.clear();
       return refTbls;
     }
     // checks if the reference if picked for facts and dimsToQuery passed

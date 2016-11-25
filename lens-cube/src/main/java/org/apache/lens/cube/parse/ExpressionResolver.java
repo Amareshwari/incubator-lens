@@ -399,7 +399,7 @@ class ExpressionResolver implements ContextRewriter {
     public Set<Dimension> rewriteExprCtx(CubeQueryContext cubeql, CandidateFact cfact, Map<Dimension,
       CandidateDim> dimsToQuery, QueryAST queryAST) throws LensException {
       Set<Dimension> exprDims = new HashSet<Dimension>();
-      log.debug("Picking expressions for fact {} ", cfact);
+      log.info("Picking expressions for fact {} ", cfact);
       if (!allExprsQueried.isEmpty()) {
         // pick expressions for fact
         if (cfact != null) {
@@ -411,7 +411,7 @@ class ExpressionResolver implements ContextRewriter {
             pickExpressionsForTable(cdim);
           }
         }
-        log.debug("Picked expressions: {}", pickedExpressions);
+        log.info("Picked expressions: {}", pickedExpressions);
         for (Set<PickedExpression> peSet : pickedExpressions.values()) {
           for (PickedExpression pe : peSet) {
             exprDims.addAll(pe.pickedCtx.exprDims);
