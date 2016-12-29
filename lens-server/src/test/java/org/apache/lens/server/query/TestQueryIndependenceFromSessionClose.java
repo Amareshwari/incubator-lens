@@ -28,7 +28,6 @@ import javax.ws.rs.core.Application;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.lens.api.LensConf;
 import org.apache.lens.api.LensSessionHandle;
 import org.apache.lens.api.query.LensQuery;
@@ -51,8 +50,10 @@ import org.apache.lens.server.common.RestAPITestUtil;
 import org.apache.lens.server.common.TestResourceFile;
 import org.apache.lens.server.error.LensServerErrorCode;
 import org.apache.lens.server.session.HiveSessionService;
-
 import org.apache.lens.server.session.LensSessionImpl;
+
+import org.apache.hadoop.hive.conf.HiveConf;
+
 import org.glassfish.jersey.test.TestProperties;
 import org.testng.annotations.*;
 
@@ -289,9 +290,9 @@ public class TestQueryIndependenceFromSessionClose extends LensJerseyTest {
     QueryHandle handle = RestAPITestUtil.executeAndGetHandle(target(),
       Optional.of(sessionHandle), Optional.of("select * from " + TEST_TABLE), Optional.of(conf), defaultMT);
     assertTrue(session.isActive());
-    session.setLastAccessTime(session.getLastAccessTime() - 2000
-      * getServerConf().getLong(LensConfConstants.SESSION_TIMEOUT_SECONDS,
-      LensConfConstants.SESSION_TIMEOUT_SECONDS_DEFAULT));
+    session.setLastAccessTime(
+      session.getLastAccessTime() - 2000 * getServerConf().getLong(LensConfConstants.SESSION_TIMEOUT_SECONDS,
+        LensConfConstants.SESSION_TIMEOUT_SECONDS_DEFAULT));
     assertTrue(session.isActive());
     assertFalse(session.isMarkedForClose());
 
