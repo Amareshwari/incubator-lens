@@ -367,7 +367,7 @@ public class HiveSessionService extends BaseLensService implements SessionServic
         LensSessionHandle sessionHandle = persistInfo.getSessionHandle();
         restoreSession(sessionHandle, persistInfo.getUsername(), persistInfo.getPassword());
         LensSessionImpl session = getSession(sessionHandle);
-        session.setLastAccessTime(persistInfo.getLastAccessTime());
+        session.getLensSessionPersistInfo().setLastAccessTime(persistInfo.getLastAccessTime());
         session.getLensSessionPersistInfo().setConfig(persistInfo.getConfig());
         session.getLensSessionPersistInfo().setResources(persistInfo.getResources());
         session.setCurrentDatabase(persistInfo.getDatabase());
@@ -504,7 +504,7 @@ public class HiveSessionService extends BaseLensService implements SessionServic
     }
   }
 
-  Runnable getSessionExpiryRunnable() {
+  public Runnable getSessionExpiryRunnable() {
     return sessionExpiryRunnable;
   }
 
@@ -517,7 +517,7 @@ public class HiveSessionService extends BaseLensService implements SessionServic
      * Run internal.
      */
     public void runInternal() {
-      List<LensSessionHandle> sessionsToRemove = new ArrayList<LensSessionHandle>(SESSION_MAP.values());
+      List<LensSessionHandle> sessionsToRemove = new ArrayList<>(SESSION_MAP.values());
       Iterator<LensSessionHandle> itr = sessionsToRemove.iterator();
       while (itr.hasNext()) {
         LensSessionHandle sessionHandle = itr.next();
