@@ -284,7 +284,11 @@ public class TestQueryIndependenceFromSessionClose extends LensJerseyTest {
 
   @Test
   public void testSessionExpiryWithActiveOperation() throws Exception {
+    LensSessionHandle oldSession = getSession();
+    assertTrue(sessionService.getSession(oldSession).isActive());
     restartLensServerWithLowerExpiry();
+    assertFalse(sessionService.getSession(oldSession).isActive());
+    // create a new session and launch a query
     LensSessionHandle sessionHandle = getSession();
     LensSessionImpl session = sessionService.getSession(sessionHandle);
     QueryHandle handle = RestAPITestUtil.executeAndGetHandle(target(),
@@ -313,6 +317,13 @@ public class TestQueryIndependenceFromSessionClose extends LensJerseyTest {
       sessionService.getSession(sessionHandle);
       // should throw exception since session should be expired by now
       fail("Expected get session to fail for session " + sessionHandle.getPublicId());
+    } catch (Exception e) {
+      // pass
+    }
+    try {
+      sessionService.getSession(oldSession);
+      // should throw exception since session should be expired by now
+      fail("Expected get session to fail for session " + oldSession.getPublicId());
     } catch (Exception e) {
       // pass
     }

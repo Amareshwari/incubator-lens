@@ -280,7 +280,7 @@ public class LensSessionImpl extends HiveSessionImpl implements AutoCloseable {
     // session is active, if any active operations are present.
     // If no active operations are present, session is active if timeout is not reached and session is not
     // marked for close
-    return activeOperationsPresent() || (System.currentTimeMillis() - persistInfo.lastAccessTime < sessionTimeout
+    return activeOperationsPresent() || ((System.currentTimeMillis() - persistInfo.lastAccessTime < sessionTimeout)
       && !persistInfo.markedForClose);
   }
 
