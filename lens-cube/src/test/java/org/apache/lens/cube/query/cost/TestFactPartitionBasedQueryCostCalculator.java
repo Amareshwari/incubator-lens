@@ -67,8 +67,9 @@ public class TestFactPartitionBasedQueryCostCalculator {
     when(queryContext.getTableWeights(driver)).thenReturn(tableWeights);
 
     HashMap<String, Set<?>> partitions = new HashMap<>();
-    partitions.put("st1", Sets.newHashSet(fp1, fp2, latest));
+    partitions.put("st1", Sets.newHashSet(fp1, fp2));
     partitions.put("st2", Sets.newHashSet(fp3, fp4));
+    partitions.put("st3", Sets.newHashSet(latest));
     DriverQueryPlan plan = mock(DriverQueryPlan.class);
     when(queryContext.getDriverRewriterPlan(driver)).thenReturn(plan);
     when(plan.getPartitions()).thenReturn(partitions);
@@ -100,7 +101,6 @@ public class TestFactPartitionBasedQueryCostCalculator {
     when(queryContext2.getDriverRewriterPlan(driver)).thenReturn(plan);
     when(plan.getPartitions()).thenReturn(partitions);
     when(calculator.getAllPartitions(queryContext2, driver)).thenReturn(partitions);
-
     QueryCost cost = calculator.calculateCost(queryContext2, driver);
     assertTrue(cost.getEstimatedResourceUsage() == 2.0, "Estimated resource usage:" + cost.getEstimatedResourceUsage());
   }
